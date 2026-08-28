@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+runtime="${1:?MotionModule runtime path is required}"
+project="${2:?Student robot.py path is required}"
+python="$runtime/.venv/bin/python"
+
+[ -x "$python" ] || { printf '[MotionModule ERROR] Runtime Python is missing: %s\n' "$python" >&2; exit 1; }
+[ -f "$project" ] || { printf '[MotionModule ERROR] Student project is missing: %s\n' "$project" >&2; exit 1; }
+
+if [ -f "$runtime/motion_module/dashboard.py" ]; then
+    exec "$python" -m motion_module.dashboard --project "$project"
+fi
+
+# Releases installed before Dashboard 0.2.0 hosted their page from robot.py.
+# Keeping this fallback makes explicit rollback to one of those releases work.
+printf '[MotionModule] Legacy release detected; starting its project web server.\n'
+exec "$python" -m motion_module.runner "$project"

@@ -1,21 +1,25 @@
 # Coding robots on MotionModule
 
-The system service loads exactly one student entry point:
+The system dashboard loads exactly one optional student drive hook:
 
 ```text
 ~/MotionModule/Mecanum/robot.py
 ```
 
-That file must define:
+The starter file defines:
 
 ```python
-def run(module, stop_event):
-    ...
+from mecanum import MecanumDrive
+
+def create_drive(module):
+    return MecanumDrive(module)
 ```
 
-`module` is the hardware controller. `stop_event` becomes set during service
-shutdown. Return from `run` when it is set; MotionModule stops every motor and
-releases servo pulses even if student code raises an exception.
+The returned object implements `drive(forward, strafe, rotate, speed)` and
+`stop()`. `module` is the hardware controller. MotionModule owns the web server,
+network setup, and cleanup, so runtime updates do not overwrite the student
+folder. Existing projects with the original `MecanumDrive` class remain
+compatible even when they do not yet define `create_drive`.
 
 ## Motors
 
@@ -89,4 +93,3 @@ python -m unittest discover -s tests -v
 
 Non-Pi computers automatically simulate GPIO and PCA9685 state. On a Pi, set
 `MOTIONMODULE_MOCK=1` before a manual run to avoid touching hardware.
-

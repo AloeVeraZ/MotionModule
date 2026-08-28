@@ -1,7 +1,7 @@
 import unittest
 
 from motion_module.config import load_config
-from motion_module.pinout import motor_rows
+from motion_module.pinout import header_rows, motor_rows
 
 
 class DefaultConfigTests(unittest.TestCase):
@@ -32,7 +32,15 @@ class DefaultConfigTests(unittest.TestCase):
         self.assertEqual(config.servos.addresses, (0x40,))
         self.assertEqual(config.servos.i2c_bus, 1)
 
+    def test_driver_labels_and_full_header_match_documented_harness(self):
+        config = load_config()
+        rows = motor_rows(config)
+        self.assertEqual([(row["driver"], row["output"]) for row in rows[:4]], [(2, "A"), (2, "B"), (1, "A"), (1, "B")])
+        header = header_rows(config)
+        self.assertEqual(len(header), 40)
+        self.assertEqual(header[26]["category"], "reserved")
+        self.assertEqual(header[39]["role"], "Driver 1 A IN2 · Motor 3")
+
 
 if __name__ == "__main__":
     unittest.main()
-

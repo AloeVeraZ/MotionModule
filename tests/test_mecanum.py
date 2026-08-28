@@ -1,9 +1,6 @@
-import importlib.util
 import sys
-import threading
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 
 PROJECT_DIR = Path(__file__).resolve().parents[1] / "Mecanum"
@@ -26,33 +23,6 @@ class FakeModule:
 
     def snapshot(self):
         return {"motors": self.outputs or {}, "watchdog_tripped": False}
-
-
-class FakeNetwork:
-    def __init__(self):
-        self.hotspot_payload = None
-        self.called = threading.Event()
-
-    def status(self):
-        return {
-            "ok": True,
-            "wifi": {"mode": "client", "ssid": "Workshop"},
-            "addresses": [{"interface": "wlan0", "address": "192.0.2.10"}],
-            "local_url": "http://motionmodule.local:8080",
-        }
-
-    def scan(self):
-        return [{"ssid": "Workshop", "signal": 80, "security_kind": "personal"}]
-
-    def start_hotspot(self, payload):
-        self.hotspot_payload = payload
-        self.called.set()
-
-    def connect(self, payload):
-        self.called.set()
-
-    def activate_preferred(self):
-        self.called.set()
 
 
 class MecanumTests(unittest.TestCase):
@@ -83,58 +53,6 @@ class MecanumTests(unittest.TestCase):
         drive = MecanumDrive(module)
         drive.drive(0, 0, 1, speed=0.5)
         self.assertEqual(module.outputs, {1: 0.5, 2: 0.5, 3: -0.5, 4: -0.5})
-
-    @unittest.skipUnless(importlib.util.find_spec("flask"), "Flask is installed by the Pi installer")
-    def test_browser_api_uses_correct_rotation_and_rejects_stale_packets(self):
-        from robot import create_app
-
-        module = FakeModule()
-        client = create_app(module).test_client()
-        response = client.post(
-            "/api/drive",
-            json={"sequence": 3, "forward": 0, "strafe": 0, "rotate": 1, "speed": 0.4},
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(module.outputs, {1: 0.4, 2: 0.4, 3: -0.4, 4: -0.4})
-
-        stale = client.post(
-            "/api/drive",
-            json={"sequence": 2, "forward": 1, "strafe": 0, "rotate": 0, "speed": 1},
-        )
-        self.assertEqual(stale.get_json()["ignored"], "stale sequence")
-        self.assertEqual(module.outputs, {1: 0.4, 2: 0.4, 3: -0.4, 4: -0.4})
-
-    @unittest.skipUnless(importlib.util.find_spec("flask"), "Flask is installed by the Pi installer")
-    def test_network_api_requires_page_token_and_stops_before_hotspot_switch(self):
-        from robot import create_app
-
-        module = FakeModule()
-        network = FakeNetwork()
-        app = create_app(module, network_client=network)
-        client = app.test_client()
-
-        page = client.get("/")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn(b"Network settings", page.data)
-        self.assertEqual(client.get("/api/network/status").get_json()["wifi"]["ssid"], "Workshop")
-        denied = client.post(
-            "/api/network/hotspot",
-            json={"ssid": "Robot", "password": "safe-pass"},
-        )
-        self.assertEqual(denied.status_code, 403)
-
-        with patch("robot.time.sleep", return_value=None):
-            accepted = client.post(
-                "/api/network/hotspot",
-                headers={"X-MotionModule-Token": app.config["NETWORK_CSRF_TOKEN"]},
-                json={"ssid": "Robot", "password": ""},
-            )
-            self.assertEqual(accepted.status_code, 202)
-            self.assertTrue(network.called.wait(1))
-
-        self.assertTrue(module.stopped)
-        self.assertEqual(network.hotspot_payload, {"ssid": "Robot"})
-
 
 if __name__ == "__main__":
     unittest.main()

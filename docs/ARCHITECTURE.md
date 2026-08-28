@@ -3,10 +3,9 @@
 ## Control path
 
 ```text
-browser / student code
-        |
-        v
-~/MotionModule/Mecanum/robot.py
+browser ---> nginx :80 ---> versioned dashboard :8080
+                              |
+student Mecanum/robot.py ---- drive hook
         |
         v
 motion_module.MotionModule
@@ -44,6 +43,9 @@ Installing a new Git tag/ref builds and tests a new release before switching
 code/config. `motionmodule rollback` swaps `current` and `previous` and restarts
 the service. Rollback changes the backend runtime, not student files; students
 should also use Git in `~/MotionModule` when they need revisions of robot code.
+The stable service launcher detects releases from before Dashboard 0.2.0 and
+runs their original project-hosted server, so Nginx and explicit rollback stay
+compatible across that boundary.
 
 ## Connectivity choice
 
@@ -69,8 +71,13 @@ saved Raspberry Pi Imager / preferred Wi-Fi ---- connected ----> .local + DHCP I
   |
   | no connection for 30 seconds
   v
-MotionModule hotspot ----> 10.42.0.1:8080
+MotionModule hotspot ----> http://10.42.0.1
 ```
+
+Nginx is the stable front door on port 80, so a beginner can enter the bare Pi
+IP or `.local` name. The dashboard application listens on port 8080 behind that
+proxy and owns the live APIs. It is packaged with each versioned release; the
+student drive hook is loaded from the persistent project.
 
 The hotspot profile has autoconnect disabled. A manual hotspot therefore stays
 active for the current boot, while a reboot always gives saved client Wi-Fi the

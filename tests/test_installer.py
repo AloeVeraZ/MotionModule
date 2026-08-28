@@ -31,6 +31,16 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("--no-reboot)", self.script)
         self.assertIn('if [ "$REBOOT_SYSTEM" = true ]', self.script)
 
+    def test_dashboard_runs_from_versioned_runtime_and_nginx_exposes_port_80(self):
+        self.assertIn("/usr/local/sbin/motionmodule-dashboard", self.script)
+        launcher = (INSTALLER.parent / "dashboard_launcher").read_text(encoding="utf-8")
+        self.assertIn("-m motion_module.dashboard --project", launcher)
+        self.assertIn("-m motion_module.runner", launcher)
+        self.assertIn("listen 80 default_server", self.script)
+        self.assertIn("proxy_pass http://127.0.0.1:8080", self.script)
+        self.assertIn("sudo nginx -t", self.script)
+        self.assertIn("http://%s.local (or type the Pi IP directly)", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()

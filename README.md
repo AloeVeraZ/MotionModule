@@ -43,11 +43,11 @@ See the complete [pinout and power boundaries](docs/PINOUT.md) before wiring.
 
 ```text
 MotionModule/
-├── Mecanum/                  # Student robot.py, wheel math, browser controls
+├── Mecanum/                  # Persistent student drive hook and wheel math
 ├── config/default.toml       # Eight-motor and PCA9685 reference configuration
 ├── docs/                     # Pinout, setup, coding, and architecture
 ├── installer/                # Pi installer, services, version CLI, Wi-Fi controller
-├── motion_module/            # Reusable motor/servo/safety runtime
+├── motion_module/            # Runtime, safety API, and versioned web dashboard
 ├── tests/                    # Hardware-independent validation
 ├── install.sh                # Local and one-line installation entry point
 └── pyproject.toml
@@ -105,16 +105,22 @@ motionmodule restart
 motionmodule logs
 ```
 
-Open `http://motionmodule.local:8080` for the Mecanum browser driver station.
-The gear button opens network settings: it shows the current IP, scans nearby
-networks, saves a new preferred network, and can start the robot hotspot.
+Open `http://motionmodule.local` or type the Pi's IP address directly into a
+browser. Nginx accepts normal HTTP on port 80 and forwards it to the versioned
+MotionModule dashboard. The interface includes live robot health, Mecanum drive,
+the complete 40-pin diagram, four-driver/servo wiring, guarded bench tests,
+Doctor results and service logs, Wi-Fi setup, and coding instructions.
 
 At every boot the Pi first uses the Wi-Fi configured in Raspberry Pi Imager (or
 the most recently saved network). If no client Wi-Fi connects within 30 seconds,
 it automatically creates the protected `MotionModule` hotspot. Join it with the
-fresh-install password `motionrobot`, then open `http://10.42.0.1:8080`. A
+fresh-install password `motionrobot`, then open `http://10.42.0.1`. A
 manually requested hotspot lasts for the current boot; rebooting tries preferred
 Wi-Fi first again.
+
+The dashboard belongs to the active versioned runtime. Updating or rolling back
+MotionModule changes the interface and backend together, while the existing
+`~/MotionModule/Mecanum` student project remains untouched.
 
 Read [setup and commissioning](docs/SETUP.md) and the [coding guide](docs/CODING.md)
 for the full workflow.

@@ -33,7 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install
 The script requests sudo only for APT, GPIO/I2C groups, SSH/mDNS, hostname, and
 the systemd service. It performs these operations in order:
 
-1. installs `lgpio`, I2C, Python, NetworkManager, SSH, and mDNS packages;
+1. installs `lgpio`, I2C, Python, NetworkManager, Nginx, SSH, and mDNS packages;
 2. enables I2C and adds the installing user to the `gpio`/`i2c` groups;
 3. copies the requested code into a new timestamped release directory;
 4. creates an isolated Python environment and runs the complete unit test suite;
@@ -41,7 +41,7 @@ the systemd service. It performs these operations in order:
 6. creates the persistent hardware config only when it does not already exist;
 7. switches the `current` symlink only after validation succeeds;
 8. records the active Raspberry Pi Imager Wi-Fi as the preferred network;
-9. enables the robot runtime and the 30-second Wi-Fi failover service;
+9. enables the dashboard/runtime, port-80 proxy, and 30-second Wi-Fi failover service;
 10. runs the non-moving `motionmodule doctor` check and prints its results;
 11. links to the GitHub pinout as its final message, then reboots automatically.
 
@@ -125,10 +125,13 @@ motionmodule restart
 motionmodule logs
 ```
 
-The browser driver station is `http://motionmodule-01.local:8080`. A network
+The complete dashboard is `http://motionmodule-01.local`; the Pi's current IP
+address also works directly without adding a port. A network
 disconnect stops motor output after 500 ms even if the browser stop request
-never reaches the Pi. Open the gear button for the active network, IP addresses,
-nearby Wi-Fi scan, and hotspot controls. Opening Settings also stops the motors.
+never reaches the Pi. Open **Network** for the active network, IP addresses,
+nearby Wi-Fi scan, and hotspot controls. Every network change stops the motors.
+The **Hardware** page has the pin diagram and guarded motor/servo bench tests;
+**Doctor** has non-moving checks and service logs.
 
 ## 7. Wi-Fi and automatic standalone hotspot
 
@@ -139,7 +142,7 @@ does not have a working client connection within 30 seconds, it creates:
 
 - SSID: `MotionModule`
 - password: `motionrobot` on a fresh install
-- robot address: `http://10.42.0.1:8080`
+- robot address: `http://10.42.0.1`
 
 Change the hotspot name/password from the browser Settings screen before using
 it in a shared classroom. Settings can also scan and join open, WPA personal,
@@ -163,8 +166,8 @@ connected while the Wi-Fi adapter serves the hotspot.
 
 ### Finding the address after changing Wi-Fi
 
-Settings shows every current IPv4 address and the stable mDNS name
-`http://HOSTNAME.local:8080`. When the Pi switches away from its hotspot, the
+The Network page shows every current IPv4 address and the stable mDNS name
+`http://HOSTNAME.local`. When the Pi switches away from its hotspot, the
 old browser loses contact before it can learn the new DHCP address; that is a
 normal one-radio handoff. Join the destination Wi-Fi on the laptop and open the
 `.local` name. If `.local` is unavailable on that laptop/network, find the Pi in
@@ -181,6 +184,18 @@ sudo journalctl -u motionmodule.service -n 100 --no-pager
 
 A syntax error in student `robot.py`, a GPIO already claimed by another process,
 or active SPI on expansion pins are common causes.
+
+### The Pi is online but the dashboard does not open
+
+Use `http://` rather than `https://`, then check both services:
+
+```bash
+sudo systemctl status nginx motionmodule.service --no-pager
+curl http://127.0.0.1:8080/healthz
+sudo nginx -t
+```
+
+Port 8080 is the private dashboard process; Nginx exposes it as normal port 80.
 
 ### `.local` address does not resolve
 

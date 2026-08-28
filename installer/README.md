@@ -33,8 +33,15 @@ It also installs the root-owned constrained network helper and
 `motionmodule-network.service`. The helper records the active Imager-created
 Wi-Fi during installation. At boot, the service allows saved client Wi-Fi 30
 seconds to connect before starting the protected `MotionModule` hotspot. The
-student web process can invoke only the helper's fixed status, scan, connect,
+versioned dashboard can invoke only the helper's fixed status, scan, connect,
 preferred-network, and hotspot operations through a dedicated sudoers rule.
+
+Nginx is installed as a port-80 reverse proxy to the dashboard on
+`127.0.0.1:8080`. This makes both `http://HOSTNAME.local` and a bare Pi IP work
+without asking students to remember a port number.
+The stable dashboard launcher falls back to the original `motion_module.runner`
+for pre-0.2.0 releases, preserving explicit rollback after the service unit has
+been upgraded.
 
 After activation, the installer automatically runs the non-moving
 `motionmodule doctor` check, prints its results, and reboots so the new GPIO/I2C

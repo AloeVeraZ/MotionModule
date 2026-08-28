@@ -93,7 +93,7 @@ apt_get() {
     done
 }
 
-say "Installing Raspberry Pi, GPIO, I2C, SSH, and Python dependencies..."
+say "Installing Raspberry Pi, GPIO, I2C, SSH, web, and Python dependencies..."
 apt_get update
 apt_get install -y \
     avahi-daemon \
@@ -103,6 +103,7 @@ apt_get install -y \
     i2c-tools \
     iproute2 \
     network-manager \
+    nginx \
     openssh-server \
     python3 \
     python3-lgpio \
@@ -168,10 +169,11 @@ before the first powered test.
 EOF
 fi
 
-say "Installing the service, management command, and Wi-Fi failover controller..."
+say "Installing the dashboard, service, management command, and Wi-Fi failover controller..."
 sudo install -m 0755 "$release_dir/installer/motionmodule" /usr/local/bin/motionmodule
 sudo install -m 0755 "$release_dir/installer/network_manager.py" /usr/local/sbin/motionmodule-network
 sudo install -m 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionmodule-hotspot
+sudo install -m 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
 
 sudoers_temp="$(mktemp)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-network *\n' "$USER" > "$sudoers_temp"
@@ -202,10 +204,37 @@ EOF
 sudo install -m 0644 "$network_service_temp" /etc/systemd/system/motionmodule-network.service
 rm -f "$network_service_temp"
 
+nginx_temp="$(mktemp)"
+cat > "$nginx_temp" <<'EOF'
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    client_max_body_size 2m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 65s;
+    }
+}
+EOF
+sudo install -m 0644 "$nginx_temp" /etc/nginx/sites-available/motionmodule
+rm -f "$nginx_temp"
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sfn /etc/nginx/sites-available/motionmodule /etc/nginx/sites-enabled/motionmodule
+sudo nginx -t
+sudo systemctl enable nginx.service
+
 service_temp="$(mktemp)"
 cat > "$service_temp" <<EOF
 [Unit]
-Description=MotionModule student robot runtime
+Description=MotionModule robot dashboard and runtime
 After=motionmodule-network.service
 Wants=motionmodule-network.service
 
@@ -215,7 +244,7 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR/Mecanum
 Environment=PYTHONUNBUFFERED=1
 Environment=MOTIONMODULE_CONFIG=$CONFIG_FILE
-ExecStart=$CURRENT_LINK/.venv/bin/python -m motion_module.runner $PROJECT_DIR/Mecanum/robot.py
+ExecStart=/usr/local/sbin/motionmodule-dashboard "$CURRENT_LINK" "$PROJECT_DIR/Mecanum/robot.py"
 Restart=on-failure
 RestartSec=2
 KillSignal=SIGINT
@@ -255,8 +284,10 @@ if [ "$START_SERVICE" = true ]; then
         else
             sudo systemctl stop motionmodule.service || true
         fi
+        sudo systemctl restart nginx.service || true
         fail "The new service did not start; the previous release was restored when available. Check journalctl."
     fi
+    sudo systemctl restart nginx.service
 fi
 
 say "Running the automatic non-moving hardware check..."
@@ -268,7 +299,7 @@ say "Installation complete. No automatic updater was enabled."
 printf 'Active release: %s\n' "$release_id"
 printf 'Student code:   %s/Mecanum\n' "$PROJECT_DIR"
 printf 'Configuration:  %s\n' "$CONFIG_FILE"
-printf 'Browser drive:  http://%s.local:8080\n' "${TARGET_HOSTNAME:-$(hostname)}"
+printf 'Robot dashboard: http://%s.local (or type the Pi IP directly)\n' "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'SSH / VS Code:  ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'Wi-Fi fallback: MotionModule hotspot after 30 seconds offline\n'
 if [ "$REBOOT_SYSTEM" = true ]; then

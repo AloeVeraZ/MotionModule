@@ -117,6 +117,10 @@ class MotionModule:
                 "watchdog_ms": self.config.watchdog_ms,
                 "watchdog_armed": self._watchdog_armed,
                 "watchdog_tripped": self._watchdog_tripped,
+                "servos": {
+                    f"{board}:{channel}": angle
+                    for (board, channel), angle in self._servos.angles.items()
+                },
                 "servo_boards": [
                     {
                         "index": index,
@@ -145,4 +149,3 @@ class MotionModule:
 
     def __exit__(self, _type, _value, _traceback):
         self.close()
-
