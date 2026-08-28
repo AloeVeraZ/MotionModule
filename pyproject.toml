@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "motionmodule"
+version = "0.1.0"
+description = "Raspberry Pi control runtime for eight brushed motors and PCA9685 servos"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "Flask>=3.1,<4",
+  "smbus2>=0.5,<1",
+]
+
+[project.scripts]
+motionmodule-python = "motion_module.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["motion_module*"]
+

@@ -1,0 +1,71 @@
+# MotionModule uses BCM GPIO numbers in software. See docs/PINOUT.md for the
+# matching physical-header numbers. Never place two motor legs on one GPIO.
+
+[module]
+pwm_hz = 1000
+deadtime_ms = 15
+watchdog_ms = 500
+
+# Drivers 1 and 2 preserve the tested physical-pin 30-40 wiring. The first
+# four channels are inverted so positive wheel speed matches the City Tech
+# chassis' installed motor polarity. Change an individual `inverted` value if
+# that wheel is physically reversed; do not change the mecanum math.
+
+[motors.1]
+name = "front_left"
+forward_gpio = 12
+reverse_gpio = 6
+inverted = true
+
+[motors.2]
+name = "rear_left"
+forward_gpio = 19
+reverse_gpio = 16
+inverted = true
+
+[motors.3]
+name = "front_right"
+forward_gpio = 20
+reverse_gpio = 21
+inverted = true
+
+[motors.4]
+name = "rear_right"
+forward_gpio = 26
+reverse_gpio = 13
+inverted = true
+
+# Driver 3 is inside the requested physical-pin 20-29 block.
+[motors.5]
+name = "driver3_a"
+forward_gpio = 5
+reverse_gpio = 25
+inverted = false
+
+[motors.6]
+name = "driver3_b"
+forward_gpio = 9
+reverse_gpio = 11
+inverted = false
+
+# Driver 4 uses the last two safe GPIOs in that block plus physical 16 and 18.
+[motors.7]
+name = "driver4_a"
+forward_gpio = 8
+reverse_gpio = 7
+inverted = false
+
+[motors.8]
+name = "driver4_b"
+forward_gpio = 23
+reverse_gpio = 24
+inverted = false
+
+[servos]
+enabled = true
+i2c_bus = 1
+frequency_hz = 50
+addresses = [0x40]
+minimum_pulse_us = 500
+maximum_pulse_us = 2500
+

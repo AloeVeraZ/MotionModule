@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
+RELEASES_DIR="$INSTALL_ROOT/releases"
+CURRENT_LINK="$INSTALL_ROOT/current"
+PREVIOUS_LINK="$INSTALL_ROOT/previous"
+RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
+
+fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 1; }
+runtime_python() {
+    [ -x "$CURRENT_LINK/.venv/bin/python" ] || fail "No complete MotionModule runtime is active."
+    printf '%s' "$CURRENT_LINK/.venv/bin/python"
+}
+restart_if_installed() {
+    if systemctl list-unit-files motionmodule.service >/dev/null 2>&1; then
+        sudo systemctl restart motionmodule.service
+    fi
+}
+validate_release() {
+    local target="$1"
+    [ -d "$target" ] && [ -f "$target/.complete" ] || fail "Release is incomplete or missing: $target"
+    case "$(readlink -f "$target")" in
+        "$(readlink -f "$RELEASES_DIR")"/*) ;;
+        *) fail "Refusing a release outside $RELEASES_DIR" ;;
+    esac
+}
+
+command="${1:-help}"
+shift || true
+case "$command" in
+    status)
+        systemctl status motionmodule.service --no-pager
+        ;;
+    logs)
+        exec sudo journalctl -u motionmodule.service -f "$@"
+        ;;
+    start|stop|restart)
+        sudo systemctl "$command" motionmodule.service
+        ;;
+    doctor|pinout|test-motor|test-servo)
+        exec "$(runtime_python)" -m motion_module "$command" "$@"
+        ;;
+    versions)
+        current="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+        previous="$(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)"
+        for release in "$RELEASES_DIR"/*; do
+            [ -f "$release/.complete" ] || continue
+            marker=" "
+            [ "$(readlink -f "$release")" = "$current" ] && marker="*"
+            [ "$(readlink -f "$release")" = "$previous" ] && marker="p"
+            printf '%s %s\n' "$marker" "$(basename "$release")"
+        done
+        ;;
+    activate)
+        [ "$#" -eq 1 ] || fail "Usage: motionmodule activate RELEASE_NAME"
+        target="$RELEASES_DIR/$1"
+        validate_release "$target"
+        if [ -L "$CURRENT_LINK" ]; then
+            ln -sfn "$(readlink -f "$CURRENT_LINK")" "$PREVIOUS_LINK"
+        fi
+        ln -s "$target" "$INSTALL_ROOT/current.new.$$"
+        mv -Tf "$INSTALL_ROOT/current.new.$$" "$CURRENT_LINK"
+        restart_if_installed
+        printf 'Activated %s\n' "$1"
+        ;;
+    rollback)
+        previous="$(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)"
+        current="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+        validate_release "$previous"
+        validate_release "$current"
+        ln -s "$previous" "$INSTALL_ROOT/current.new.$$"
+        mv -Tf "$INSTALL_ROOT/current.new.$$" "$CURRENT_LINK"
+        ln -sfn "$current" "$PREVIOUS_LINK"
+        restart_if_installed
+        printf 'Rolled back to %s\n' "$(basename "$previous")"
+        ;;
+    install)
+        [ "$#" -eq 1 ] || fail "Usage: motionmodule install VERSION_OR_GIT_REF"
+        curl -fsSL "$RAW_INSTALL" | bash -s -- --version "$1"
+        ;;
+    hotspot)
+        exec sudo /usr/local/sbin/motionmodule-hotspot "$@"
+        ;;
+    edit)
+        printf 'Connect VS Code Remote - SSH to: %s@%s.local\n' "$USER" "$(hostname)"
+        printf 'Then open: %s/MotionModule\n' "$HOME"
+        ;;
+    help|-h|--help)
+        cat <<'EOF'
+MotionModule commands:
+  status | logs | start | stop | restart
+  doctor | pinout
+  test-motor CHANNEL [--power 0.15] [--seconds 0.5]
+  test-servo CHANNEL [--board 0] [--angle 90]
+  versions | activate RELEASE_NAME | rollback
+  install VERSION_OR_GIT_REF       explicit, opt-in install/update
+  hotspot on [SSID] [PASSWORD] | hotspot off | hotspot status
+                                  off reconnects the saved preferred Wi-Fi
+  edit
+EOF
+        ;;
+    *)
+        fail "Unknown command: $command (run motionmodule help)"
+        ;;
+esac
