@@ -82,8 +82,10 @@ The installer creates:
 | Saved network settings | `/etc/motionmodule/network.json` |
 
 It never enables automatic updates and never overwrites an existing student
-`Mecanum` folder or hardware configuration. Reboot once after the initial
-install, then run `motionmodule doctor` before applying motor power.
+`Mecanum` folder or hardware configuration. At the end it automatically runs
+`motionmodule doctor`, links to the GitHub pinout, and reboots. Use
+`--no-reboot` only when another provisioning step must run first. Rerun the
+doctor check after wiring and before applying motor power.
 
 ## Connect, edit, and run
 

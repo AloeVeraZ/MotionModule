@@ -41,18 +41,24 @@ the systemd service. It performs these operations in order:
 6. creates the persistent hardware config only when it does not already exist;
 7. switches the `current` symlink only after validation succeeds;
 8. records the active Raspberry Pi Imager Wi-Fi as the preferred network;
-9. enables the robot runtime and the 30-second Wi-Fi failover service.
+9. enables the robot runtime and the 30-second Wi-Fi failover service;
+10. runs the non-moving `motionmodule doctor` check and prints its results;
+11. links to the GitHub pinout as its final message, then reboots automatically.
 
-It does not reboot automatically. Reboot once so group membership and boot-time
-I2C settings are guaranteed to be active:
+The SSH connection closes when the automatic reboot begins. Wait for the Pi to
+come back online before reconnecting. For a provisioning workflow that still
+has additional work to do, skip only the reboot with:
 
 ```bash
-sudo reboot
+curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
+  bash -s -- --no-reboot
 ```
 
 ## 3. Non-moving checks
 
-Reconnect and run:
+The installer already ran `doctor` before reboot. After wiring against
+[PINOUT.md](PINOUT.md), reconnect and run the checks again before applying motor
+power:
 
 ```bash
 motionmodule status

@@ -5,6 +5,7 @@ SOURCE_DIR=""
 VERSION_REF="${MOTIONMODULE_VERSION:-main}"
 TARGET_HOSTNAME="__default__"
 START_SERVICE=true
+REBOOT_SYSTEM=true
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -26,6 +27,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-start)
             START_SERVICE=false
+            shift
+            ;;
+        --no-reboot)
+            REBOOT_SYSTEM=false
             shift
             ;;
         *)
@@ -254,6 +259,11 @@ if [ "$START_SERVICE" = true ]; then
     fi
 fi
 
+say "Running the automatic non-moving hardware check..."
+if ! /usr/local/bin/motionmodule doctor; then
+    say "Doctor found a problem. The installation will finish and reboot; review the result above before applying motor or servo power."
+fi
+
 say "Installation complete. No automatic updater was enabled."
 printf 'Active release: %s\n' "$release_id"
 printf 'Student code:   %s/Mecanum\n' "$PROJECT_DIR"
@@ -261,4 +271,14 @@ printf 'Configuration:  %s\n' "$CONFIG_FILE"
 printf 'Browser drive:  http://%s.local:8080\n' "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'SSH / VS Code:  ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'Wi-Fi fallback: MotionModule hotspot after 30 seconds offline\n'
-printf '\nRun "motionmodule doctor", then reboot before the first hardware test.\n'
+if [ "$REBOOT_SYSTEM" = true ]; then
+    say "Rebooting automatically in 3 seconds so GPIO/I2C group membership and boot settings take effect."
+else
+    say "Automatic reboot skipped. Reboot manually before the first hardware test."
+fi
+printf '\nCheck GitHub for the proper pinout before wiring the robot: https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md\n'
+
+if [ "$REBOOT_SYSTEM" = true ]; then
+    sleep 3
+    sudo systemctl reboot
+fi

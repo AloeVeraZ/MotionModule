@@ -21,6 +21,7 @@ Options:
 | `--hostname NAME` | Set the Pi's mDNS hostname |
 | `--no-hostname` | Preserve the current hostname |
 | `--no-start` | Install and enable the service without starting it |
+| `--no-reboot` | Skip the default automatic reboot |
 
 The bootstrap downloads the requested ref to a temporary directory. The main
 installer installs system dependencies, copies that source into a new release,
@@ -34,6 +35,12 @@ Wi-Fi during installation. At boot, the service allows saved client Wi-Fi 30
 seconds to connect before starting the protected `MotionModule` hotspot. The
 student web process can invoke only the helper's fixed status, scan, connect,
 preferred-network, and hotspot operations through a dedicated sudoers rule.
+
+After activation, the installer automatically runs the non-moving
+`motionmodule doctor` check, prints its results, and reboots so the new GPIO/I2C
+group membership and boot configuration take effect. Its final message links
+directly to the GitHub pinout. Use `--no-reboot` only when another provisioning
+step must run before rebooting.
 
 The first install defaults to hostname `motionmodule`. Later installs preserve
 the active hostname unless `--hostname` is explicitly supplied.
