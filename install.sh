@@ -11,7 +11,11 @@ for ((index = 0; index < ${#args[@]}; index++)); do
     fi
 done
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+script_path="${BASH_SOURCE[0]:-}"
+script_dir=""
+if [ -n "$script_path" ]; then
+    script_dir="$(cd -- "$(dirname -- "$script_path")" 2>/dev/null && pwd || true)"
+fi
 if [ -n "$script_dir" ] && [ -f "$script_dir/MotionModule/installer/install.sh" ] && [ -f "$script_dir/MotionModule/pyproject.toml" ]; then
     exec bash "$script_dir/MotionModule/installer/install.sh" --source "$script_dir/MotionModule" "$@"
 fi

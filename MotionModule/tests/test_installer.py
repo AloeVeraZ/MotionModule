@@ -43,7 +43,10 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("http://%s.local (or type the Pi IP directly)", self.script)
 
     def test_root_bootstrap_enters_the_central_system_folder(self):
+        if not BOOTSTRAP.is_file():
+            self.skipTest("repository bootstrap is intentionally outside the packaged Pi release")
         bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+        self.assertIn('${BASH_SOURCE[0]:-}', bootstrap)
         self.assertIn("MotionModule/installer/install.sh", bootstrap)
         self.assertIn('--source "$script_dir/MotionModule"', bootstrap)
         self.assertIn('--source "$temporary/source/MotionModule"', bootstrap)
