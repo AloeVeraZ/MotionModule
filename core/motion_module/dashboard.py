@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import secrets
 import shutil
@@ -27,6 +28,93 @@ from .runner import load_project
 
 DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
 PAGE_ALIASES = {"drive": "code", "hardware": "diagnostics", "network": "diagnostics"}
+
+
+def servo_profiles(config) -> list[dict]:
+    """Profiles exposed by the guarded dashboard servo commissioning tool."""
+
+    common = {"zero": 0, "step": 1}
+    return [
+        {
+            **common,
+            "id": "gobilda_300_position",
+            "label": "goBILDA 25-2 · 300° positional",
+            "kind": "position",
+            "minimum": 0,
+            "maximum": 300,
+            "unit": "°",
+            "minimum_pulse_us": 500,
+            "maximum_pulse_us": 2500,
+        },
+        {
+            **common,
+            "id": "gobilda_5_turn_position",
+            "label": "goBILDA 25-2 · 5-turn positional",
+            "kind": "position",
+            "minimum": 0,
+            "maximum": 1800,
+            "unit": "°",
+            "minimum_pulse_us": 500,
+            "maximum_pulse_us": 2500,
+        },
+        {
+            **common,
+            "id": "gobilda_continuous",
+            "label": "goBILDA 25-2 · continuous rotation",
+            "kind": "continuous",
+            "minimum": -100,
+            "maximum": 100,
+            "unit": "%",
+            "minimum_pulse_us": 900,
+            "maximum_pulse_us": 2100,
+        },
+        {
+            **common,
+            "id": "generic_180_position",
+            "label": "Generic · 180° positional",
+            "kind": "position",
+            "minimum": 0,
+            "maximum": 180,
+            "unit": "°",
+            "minimum_pulse_us": config.minimum_pulse_us,
+            "maximum_pulse_us": config.maximum_pulse_us,
+        },
+        {
+            **common,
+            "id": "generic_360_position",
+            "label": "Generic · 360° positional",
+            "kind": "position",
+            "minimum": 0,
+            "maximum": 360,
+            "unit": "°",
+            "minimum_pulse_us": config.minimum_pulse_us,
+            "maximum_pulse_us": config.maximum_pulse_us,
+        },
+    ]
+
+
+def servo_profile_command(config, profile_id: str, value: float) -> tuple[dict, float]:
+    profiles = {profile["id"]: profile for profile in servo_profiles(config)}
+    if profile_id not in profiles:
+        raise ValueError("Unknown servo profile")
+    profile = profiles[profile_id]
+    value = float(value)
+    if not math.isfinite(value) or not profile["minimum"] <= value <= profile["maximum"]:
+        raise ValueError(
+            f"{profile['label']} value must be from {profile['minimum']} through "
+            f"{profile['maximum']}{profile['unit']}"
+        )
+    span = profile["maximum"] - profile["minimum"]
+    ratio = (value - profile["minimum"]) / span
+    pulse_us = profile["minimum_pulse_us"] + ratio * (
+        profile["maximum_pulse_us"] - profile["minimum_pulse_us"]
+    )
+    if not config.minimum_pulse_us <= pulse_us <= config.maximum_pulse_us:
+        raise ValueError(
+            f"Profile requires {pulse_us:.0f} microseconds, outside the configured "
+            f"{config.minimum_pulse_us}-{config.maximum_pulse_us} microsecond safety envelope"
+        )
+    return profile, pulse_us
 
 
 class IdleDrive:
@@ -126,6 +214,7 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
     network_lock = threading.Lock()
     servo_lock = threading.Lock()
     servo_timers: dict[tuple[int, int], threading.Timer] = {}
+    servo_commands: dict[tuple[int, int], dict] = {}
     network_state = {"busy": False, "last_error": ""}
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
@@ -156,7 +245,13 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
     def status():
         system = system_snapshot()
         system["active_project"] = project_name
-        return jsonify({"ok": True, "robot": module.snapshot(), "system": system})
+        robot = module.snapshot()
+        with servo_lock:
+            robot["servo_commands"] = {
+                f"{board}:{channel}": dict(command)
+                for (board, channel), command in servo_commands.items()
+            }
+        return jsonify({"ok": True, "robot": robot, "system": system})
 
     @app.get("/api/config")
     def configuration():
@@ -179,6 +274,8 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
                     "addresses": [f"0x{address:02x}" for address in servo.addresses],
                     "minimum_pulse_us": servo.minimum_pulse_us,
                     "maximum_pulse_us": servo.maximum_pulse_us,
+                    "channels": list(range(16)),
+                    "profiles": servo_profiles(servo),
                 },
                 "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md",
                 "bom_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/BOM.md",
@@ -262,6 +359,7 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
             pass
         with servo_lock:
             servo_timers.pop((board, channel), None)
+            servo_commands.pop((board, channel), None)
 
     @app.post("/api/servos/set")
     def set_servo():
@@ -273,19 +371,46 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
         try:
             board = int(body.get("board", 0))
             channel = int(body.get("channel", 0))
-            angle = float(body.get("angle", 90))
-            module.servo(channel=channel, board=board).set_angle(angle)
+            legacy_angle = "profile" not in body and "value" not in body
+            profile_id = str(body.get("profile", "generic_180_position"))
+            value = float(body.get("angle", 90) if legacy_angle else body.get("value"))
+            profile, pulse_us = servo_profile_command(module.config.servos, profile_id, value)
+            servo = module.servo(channel=channel, board=board)
+            if legacy_angle:
+                servo.set_angle(value)
+            else:
+                servo.set_pulse_us(pulse_us)
         except (MotionModuleError, TypeError, ValueError) as error:
             return jsonify({"ok": False, "error": str(error)}), 400
         key = (board, channel)
         with servo_lock:
             if key in servo_timers:
                 servo_timers[key].cancel()
+            servo_commands[key] = {
+                "profile": profile_id,
+                "profile_label": profile["label"],
+                "kind": profile["kind"],
+                "value": value,
+                "unit": profile["unit"],
+                "pulse_us": round(pulse_us, 1),
+            }
             timer = threading.Timer(1.5, release_servo, args=key)
             timer.daemon = True
             servo_timers[key] = timer
             timer.start()
-        return jsonify({"ok": True, "board": board, "channel": channel, "angle": angle, "auto_release_seconds": 1.5})
+        response = {
+            "ok": True,
+            "board": board,
+            "channel": channel,
+            "profile": profile_id,
+            "value": value,
+            "unit": profile["unit"],
+            "pulse_us": round(pulse_us, 1),
+            "auto_release_seconds": 1.5,
+        }
+        if legacy_angle:
+            response["angle"] = value
+        return jsonify(response)
 
     @app.post("/api/servos/release")
     def release_servo_route():

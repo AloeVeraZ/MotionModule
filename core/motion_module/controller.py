@@ -121,6 +121,10 @@ class MotionModule:
                     f"{board}:{channel}": angle
                     for (board, channel), angle in self._servos.angles.items()
                 },
+                "servo_outputs": {
+                    f"{board}:{channel}": {"pulse_us": pulse_us}
+                    for (board, channel), pulse_us in getattr(self._servos, "pulses", {}).items()
+                },
                 "servo_boards": [
                     {
                         "index": index,

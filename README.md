@@ -123,7 +123,10 @@ browser. Nginx accepts normal HTTP on port 80 and forwards it to the versioned
 MotionModule dashboard. Overview shows live motor, servo, controller, and
 network state. Debug combines the complete 40-pin diagram, four-driver/servo
 wiring, guarded bench tests, Doctor warnings, service logs, and Wi-Fi setup.
-Code contains the editing workflow and guarded manual drive controls.
+Its servo test selects PCA9685 channels 0–15 and includes goBILDA 300°,
+5-turn/1800°, continuous-rotation, and generic positional profiles, plus a
+dedicated zero/neutral command. Code contains the editing workflow and guarded
+manual drive controls.
 
 At every boot the Pi first uses the Wi-Fi configured in Raspberry Pi Imager (or
 the most recently saved network). If no client Wi-Fi connects within 30 seconds,

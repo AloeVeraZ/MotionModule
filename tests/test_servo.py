@@ -42,6 +42,22 @@ class ServoTests(unittest.TestCase):
         controller.release(0, 2)
         self.assertEqual(bus.blocks[-1][2][3] & 0x10, 0x10)
 
+    def test_calibrated_pulse_supports_all_sixteen_channels(self):
+        config = load_config().servos
+        bus = FakeBus()
+        controller = PCA9685Controller(config, bus=bus)
+        controller.set_pulse_us(0, 15, 2100)
+        address, register, payload = bus.blocks[-1]
+        counts = payload[2] | ((payload[3] & 0x0F) << 8)
+        self.assertEqual(address, 0x40)
+        self.assertEqual(register, LED0_ON_L + 4 * 15)
+        self.assertEqual(counts, round(2100 * 50 * 4096 / 1_000_000))
+        self.assertEqual(controller.pulses[(0, 15)], 2100)
+        with self.assertRaisesRegex(ValueError, "0 through 15"):
+            controller.set_pulse_us(0, 16, 1500)
+        with self.assertRaisesRegex(ValueError, "500 through 2500"):
+            controller.set_pulse_us(0, 0, 3000)
+
 
 if __name__ == "__main__":
     unittest.main()

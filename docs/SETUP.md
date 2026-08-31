@@ -102,7 +102,7 @@ motionmodule start
 ## 5. Servo commissioning
 
 Set the external servo regulator with a multimeter before attaching a servo.
-Start with mechanical linkage disconnected and a centered command:
+Start with mechanical linkage disconnected and a centered generic command:
 
 ```bash
 motionmodule stop
@@ -113,6 +113,33 @@ If the board is not found, run `i2cdetect -y 1`. The default board should appear
 at `40`. Check SDA/SCL orientation, 3.3 V logic VCC, common ground, and address
 pads. A servo may still fail to move with a detected board if its separate V+
 rail is absent.
+
+The dashboard **Debug → Servo pulse test** provides board selection and all 16
+PCA9685 outputs, numbered `0` through `15`. Choose the servo behavior before
+sending a pulse:
+
+| Dashboard profile | Command range | PWM range |
+| --- | ---: | ---: |
+| goBILDA 25-2 positional | 0–300° | 500–2500 µs |
+| goBILDA 25-2 5-turn positional | 0–1800° | 500–2500 µs |
+| goBILDA 25-2 continuous | −100% to +100%; 0% stops | 900–2100 µs |
+| Generic positional | 0–180° or 0–360° | Configured servo pulse range |
+
+The profiles follow goBILDA's published specifications for the
+[300° Dual Mode Servo](https://www.gobilda.com/2000-series-dual-mode-servo-25-2-torque/)
+and [5-Turn Dual Mode Servo](https://www.gobilda.com/2000-series-5-turn-dual-mode-servo-25-2-torque/).
+Continuous behavior works only after the servo itself has been changed into
+continuous mode with the supported programmer. The **Zero servo** button sends
+0° for a positional profile or the neutral 0% command for continuous mode. For
+a positional servo, 0° can be a mechanical endpoint—disconnect the linkage and
+confirm the full travel path first. Every dashboard command automatically
+releases the PCA9685 output after 1.5 seconds.
+
+The profile changes only PWM behavior; it does not set supply voltage or
+reprogram the servo. Both linked goBILDA models specify 4.8–7.4 V, so set and
+verify the separate regulated V+ rail for the actual servo before connecting
+it. Do not choose the generic 360° positional profile for a continuous-rotation
+servo—continuous PWM represents direction and speed, not an absolute angle.
 
 ## 6. Student editing
 

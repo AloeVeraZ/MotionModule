@@ -41,6 +41,10 @@ class FakeModule:
             "watchdog_armed": any(self.outputs.values()),
             "watchdog_tripped": False,
             "servos": {f"{board}:{channel}": angle for (board, channel), angle in self._servos.angles.items()},
+            "servo_outputs": {
+                f"{board}:{channel}": {"pulse_us": pulse_us}
+                for (board, channel), pulse_us in self._servos.pulses.items()
+            },
             "servo_boards": [{"index": 0, "address": "0x40", "available": True, "error": None}],
         }
 
@@ -106,6 +110,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"robots/Mecanum/robot.py", code)
         overview = self.client.get("/").data
         self.assertIn(b"Servo activity", overview)
+        self.assertIn(b'id="servoChannel"', debug)
+        self.assertIn(b'id="servoProfile"', debug)
+        self.assertIn(b"Zero servo", debug)
 
     def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
         for path, active in (("/drive", b'data-page="code"'), ("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
@@ -117,6 +124,18 @@ class DashboardTests(unittest.TestCase):
         data = self.client.get("/api/config").get_json()
         self.assertEqual(data["project"], "Mecanum")
         self.assertTrue(data["bom_url"].endswith("/BOM.md"))
+        self.assertEqual(data["servos"]["channels"], list(range(16)))
+        profile_ids = {profile["id"] for profile in data["servos"]["profiles"]}
+        self.assertEqual(
+            profile_ids,
+            {
+                "gobilda_300_position",
+                "gobilda_5_turn_position",
+                "gobilda_continuous",
+                "generic_180_position",
+                "generic_360_position",
+            },
+        )
         self.assertEqual(len(data["header"]), 40)
         by_motor = {item["motor"]: item for item in data["motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))
@@ -182,12 +201,76 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.module._servos.angles[(0, 3)], 90)
+        self.assertEqual(
+            self.client.get("/api/status").get_json()["robot"]["servo_commands"]["0:3"]["value"],
+            90,
+        )
         release = self.client.post(
             "/api/servos/release", headers=self.headers,
             json={"board": 0, "channel": 3},
         )
         self.assertEqual(release.status_code, 200)
         self.assertNotIn((0, 3), self.module._servos.angles)
+        self.assertNotIn((0, 3), self.module._servos.pulses)
+        self.assertNotIn(
+            "0:3", self.client.get("/api/status").get_json()["robot"]["servo_commands"]
+        )
+
+    def test_servo_profiles_map_go_bilda_position_and_continuous_modes(self):
+        position = self.client.post(
+            "/api/servos/set",
+            headers=self.headers,
+            json={
+                "board": 0,
+                "channel": 15,
+                "profile": "gobilda_5_turn_position",
+                "value": 900,
+                "confirmed": True,
+            },
+        )
+        self.assertEqual(position.status_code, 200)
+        self.assertEqual(position.get_json()["pulse_us"], 1500)
+        self.assertEqual(self.module._servos.pulses[(0, 15)], 1500)
+
+        stopped = self.client.post(
+            "/api/servos/set",
+            headers=self.headers,
+            json={
+                "board": 0,
+                "channel": 2,
+                "profile": "gobilda_continuous",
+                "value": 0,
+                "confirmed": True,
+            },
+        )
+        self.assertEqual(stopped.status_code, 200)
+        self.assertEqual(stopped.get_json()["pulse_us"], 1500)
+        self.assertEqual(stopped.get_json()["unit"], "%")
+
+        out_of_range = self.client.post(
+            "/api/servos/set",
+            headers=self.headers,
+            json={
+                "board": 0,
+                "channel": 2,
+                "profile": "gobilda_300_position",
+                "value": 301,
+                "confirmed": True,
+            },
+        )
+        self.assertEqual(out_of_range.status_code, 400)
+        invalid_channel = self.client.post(
+            "/api/servos/set",
+            headers=self.headers,
+            json={
+                "board": 0,
+                "channel": 16,
+                "profile": "gobilda_300_position",
+                "value": 150,
+                "confirmed": True,
+            },
+        )
+        self.assertEqual(invalid_channel.status_code, 400)
 
     def test_network_api_stops_outputs_before_switch(self):
         self.module.outputs[1] = 0.4

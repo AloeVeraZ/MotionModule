@@ -32,6 +32,7 @@ class PCA9685Controller:
         self.available: set[int] = set()
         self.errors: dict[int, str] = {}
         self.angles: dict[tuple[int, int], float] = {}
+        self.pulses: dict[tuple[int, int], float] = {}
         if not config.enabled:
             return
         try:
@@ -86,14 +87,32 @@ class PCA9685Controller:
         angle = float(angle)
         if not math.isfinite(angle) or not 0 <= angle <= 180:
             raise ValueError("Servo angle must be a finite value from 0 through 180")
-        address = self._address(board)
         pulse_us = self.config.minimum_pulse_us + (
             self.config.maximum_pulse_us - self.config.minimum_pulse_us
         ) * angle / 180.0
+        self.set_pulse_us(board, channel, pulse_us)
+        with self._lock:
+            self.angles[(board, channel)] = angle
+
+    def set_pulse_us(self, board: int, channel: int, pulse_us: float) -> None:
+        """Send a calibrated servo pulse within the configured safety envelope."""
+
+        if not 0 <= channel <= 15:
+            raise ValueError("Servo channel must be from 0 through 15")
+        pulse_us = float(pulse_us)
+        if not math.isfinite(pulse_us) or not (
+            self.config.minimum_pulse_us <= pulse_us <= self.config.maximum_pulse_us
+        ):
+            raise ValueError(
+                "Servo pulse must be a finite value from "
+                f"{self.config.minimum_pulse_us} through {self.config.maximum_pulse_us} microseconds"
+            )
+        address = self._address(board)
         counts = round(pulse_us * self.config.frequency_hz * 4096 / 1_000_000)
         with self._lock:
             self._write_counts(address, channel, 0, min(4095, counts))
-            self.angles[(board, channel)] = angle
+            self.angles.pop((board, channel), None)
+            self.pulses[(board, channel)] = pulse_us
 
     def release(self, board: int, channel: int) -> None:
         if not 0 <= channel <= 15:
@@ -102,6 +121,7 @@ class PCA9685Controller:
         with self._lock:
             self._write_counts(address, channel, 0, 0, full_off=True)
             self.angles.pop((board, channel), None)
+            self.pulses.pop((board, channel), None)
 
     def close(self) -> None:
         if self._bus is None:
@@ -127,6 +147,7 @@ class MockServoController:
         self.available = set(config.addresses) if config.enabled else set()
         self.errors: dict[int, str] = {}
         self.angles: dict[tuple[int, int], float] = {}
+        self.pulses: dict[tuple[int, int], float] = {}
 
     def set_angle(self, board: int, channel: int, angle: float) -> None:
         if not 0 <= board < len(self.config.addresses):
@@ -137,12 +158,33 @@ class MockServoController:
         if not math.isfinite(angle) or not 0 <= angle <= 180:
             raise ValueError("Servo angle must be a finite value from 0 through 180")
         self.angles[(board, channel)] = angle
+        self.pulses[(board, channel)] = self.config.minimum_pulse_us + (
+            self.config.maximum_pulse_us - self.config.minimum_pulse_us
+        ) * angle / 180.0
+
+    def set_pulse_us(self, board: int, channel: int, pulse_us: float) -> None:
+        if not 0 <= board < len(self.config.addresses):
+            raise ValueError(f"Servo board {board} is not configured")
+        if not 0 <= channel <= 15:
+            raise ValueError("Servo channel must be from 0 through 15")
+        pulse_us = float(pulse_us)
+        if not math.isfinite(pulse_us) or not (
+            self.config.minimum_pulse_us <= pulse_us <= self.config.maximum_pulse_us
+        ):
+            raise ValueError(
+                "Servo pulse must be a finite value from "
+                f"{self.config.minimum_pulse_us} through {self.config.maximum_pulse_us} microseconds"
+            )
+        self.angles.pop((board, channel), None)
+        self.pulses[(board, channel)] = pulse_us
 
     def release(self, board: int, channel: int) -> None:
         self.angles.pop((board, channel), None)
+        self.pulses.pop((board, channel), None)
 
     def close(self) -> None:
         self.angles.clear()
+        self.pulses.clear()
 
 
 class Servo:
@@ -158,6 +200,8 @@ class Servo:
     def set_angle(self, angle: float) -> None:
         self._controller.set_angle(self.board, self.channel, angle)
 
+    def set_pulse_us(self, pulse_us: float) -> None:
+        self._controller.set_pulse_us(self.board, self.channel, pulse_us)
+
     def release(self) -> None:
         self._controller.release(self.board, self.channel)
-

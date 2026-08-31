@@ -79,6 +79,20 @@ claw.set_angle(110)
 claw.release()
 ```
 
+`set_angle()` is the generic 0–180° API. For a calibrated servo profile, the
+dashboard maps its logical position or continuous-rotation speed to a pulse and
+the low-level project API can send that pulse directly:
+
+```python
+claw.set_pulse_us(1500)  # midpoint / neutral for the configured servo
+```
+
+Direct pulses are restricted to the configured `minimum_pulse_us` and
+`maximum_pulse_us` safety envelope. The commissioning dashboard includes
+goBILDA 300°, goBILDA 5-turn/1800°, goBILDA continuous, generic 180°, and
+generic 360° profiles. A PCA9685 board has channels 0–15; channel 16 does not
+exist.
+
 `release()` turns that PWM output fully off; it does not physically move the
 servo to a safe pose first. Code the safe pose for the actual mechanism, wait
 for motion, then release if the mechanism should not hold torque.
