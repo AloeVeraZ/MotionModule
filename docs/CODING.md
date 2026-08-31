@@ -23,15 +23,16 @@ compatible even when they do not yet define `create_drive`.
 
 ## Robot project folders
 
-`Mecanum` is one example, not a required drivetrain. Create any direct folder
-under `~/MotionModule` and give it a `robot.py`:
+`Mecanum` is one example, not a required drivetrain. Create a project folder
+under `~/MotionModule/robots` and give it a `robot.py`:
 
 ```text
 ~/MotionModule/
-├── Mecanum/robot.py
-├── Swerve/robot.py
-├── WalkingRobot/robot.py
-└── active -> Mecanum/
+├── active -> robots/Mecanum/
+└── robots/
+    ├── Mecanum/robot.py
+    ├── Swerve/robot.py
+    └── WalkingRobot/robot.py
 ```
 
 The drive object returned by `create_drive(module)` can implement Mecanum,
@@ -110,7 +111,6 @@ or invert the `rotate` command once at the control boundary.
 On any development computer:
 
 ```bash
-cd MotionModule
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # Linux/macOS: source .venv/bin/activate

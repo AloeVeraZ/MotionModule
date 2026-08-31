@@ -3,7 +3,7 @@
 ## 1. Prepare Raspberry Pi OS
 
 Use Raspberry Pi Imager to install a current Raspberry Pi OS release on a
-Raspberry Pi 4, the tested hardware target. The
+Raspberry Pi 5, the current tested hardware target. The
 64-bit Lite image is sufficient; Desktop also works. In Imager customization:
 
 - create a normal username and strong password;
@@ -37,7 +37,7 @@ the systemd service. It performs these operations in order:
 2. enables I2C and adds the installing user to the `gpio`/`i2c` groups;
 3. copies the requested code into a new timestamped release directory;
 4. creates an isolated Python environment and runs the complete unit test suite;
-5. copies each bundled robot-project folder only when it does not already exist;
+5. copies each repository example into `~/MotionModule/robots` only when that project does not already exist;
 6. points `~/MotionModule/active` at the selected project and creates the persistent config;
 7. switches the `current` symlink only after validation succeeds;
 8. records the active Raspberry Pi Imager Wi-Fi as the preferred network;
@@ -117,8 +117,9 @@ rail is absent.
 ## 6. Student editing
 
 Install VS Code and the Microsoft Remote - SSH extension on the laptop. Connect
-to `YOUR_USER@motionmodule-01.local`, open `~/MotionModule`, and edit the
-active robot folder. The included default is `Mecanum`. Restart and watch logs
+to `YOUR_USER@motionmodule-01.local`, open
+`~/MotionModule/robots/Mecanum`, and edit that robot folder. The included
+default is `Mecanum`. Restart and watch logs
 from the VS Code terminal:
 
 ```bash
@@ -126,7 +127,7 @@ motionmodule restart
 motionmodule logs
 ```
 
-To add another robot, create `~/MotionModule/Swerve/robot.py` (or another
+To add another robot, create `~/MotionModule/robots/Swerve/robot.py` (or another
 project-named folder), then select it:
 
 ```bash
@@ -140,10 +141,10 @@ the runtime does not overwrite any existing robot project folder.
 The complete dashboard is `http://motionmodule-01.local`; the Pi's current IP
 address also works directly without adding a port. A network
 disconnect stops motor output after 500 ms even if the browser stop request
-never reaches the Pi. Open **Network** for the active network, IP addresses,
-nearby Wi-Fi scan, and hotspot controls. Every network change stops the motors.
-The **Hardware** page has the pin diagram and guarded motor/servo bench tests;
-**Doctor** has non-moving checks and service logs.
+never reaches the Pi. Open **Debug** for the pin diagram, live PCA9685
+detection, guarded motor/servo tests, Doctor warnings, service logs, active
+network, IP addresses, Wi-Fi scan, and hotspot controls. Every network change
+stops the motors. **Code** contains editing help and guarded manual drive.
 
 ## 7. Wi-Fi and automatic standalone hotspot
 
@@ -178,7 +179,7 @@ connected while the Wi-Fi adapter serves the hotspot.
 
 ### Finding the address after changing Wi-Fi
 
-The Network page shows every current IPv4 address and the stable mDNS name
+The Debug page shows every current IPv4 address and the stable mDNS name
 `http://HOSTNAME.local`. When the Pi switches away from its hotspot, the
 old browser loses contact before it can learn the new DHCP address; that is a
 normal one-radio handoff. Join the destination Wi-Fi on the laptop and open the

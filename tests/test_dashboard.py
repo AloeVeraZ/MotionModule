@@ -1,13 +1,19 @@
 import threading
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import load_config
 from motion_module.dashboard import create_app, load_drive
-from motion_module.mecanum import MecanumDrive
 from motion_module.servo import MockServoController, Servo
+
+EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+if str(EXAMPLE_DIR) not in sys.path:
+    sys.path.insert(0, str(EXAMPLE_DIR))
+
+from mecanum import MecanumDrive  # noqa: E402
 
 
 class FakeModule:
@@ -73,19 +79,44 @@ class DashboardTests(unittest.TestCase):
     def setUp(self):
         self.module = FakeModule()
         self.network = FakeNetwork()
-        self.app = create_app(self.module, MecanumDrive(self.module), self.network)
+        self.app = create_app(
+            self.module, MecanumDrive(self.module), self.network, project_name="Mecanum"
+        )
         self.client = self.app.test_client()
         self.headers = {"X-MotionModule-Token": self.app.config["DASHBOARD_TOKEN"]}
 
     def test_all_dashboard_pages_are_served_by_versioned_runtime(self):
-        for path in ("/", "/drive", "/hardware", "/diagnostics", "/network", "/code"):
+        for path in ("/", "/diagnostics", "/code"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertIn(b"MotionModule", response.data)
 
+    def test_dashboard_consolidates_debug_and_code_navigation(self):
+        debug = self.client.get("/diagnostics").data
+        self.assertIn(b"Four dual H-bridge drivers", debug)
+        self.assertIn(b"MotionModule Doctor", debug)
+        self.assertIn(b"Connect to Wi", debug)
+        self.assertNotIn(b'data-page="drive"', debug)
+        self.assertNotIn(b'data-page="hardware"', debug)
+        self.assertNotIn(b'data-page="network"', debug)
+        self.assertIn(b"activePage==='diagnostics'?'Debug'", debug)
+        code = self.client.get("/code").data
+        self.assertIn(b"Manual test control", code)
+        self.assertIn(b'id="driveEnable"', code)
+        self.assertIn(b"robots/Mecanum/robot.py", code)
+        overview = self.client.get("/").data
+        self.assertIn(b"Servo activity", overview)
+
+    def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
+        for path, active in (("/drive", b'data-page="code"'), ("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
+            response = self.client.get(path)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(active, response.data)
+
     def test_config_api_matches_driver_harness_and_complete_header(self):
         data = self.client.get("/api/config").get_json()
         self.assertEqual(data["project"], "Mecanum")
+        self.assertTrue(data["bom_url"].endswith("/BOM.md"))
         self.assertEqual(len(data["header"]), 40)
         by_motor = {item["motor"]: item for item in data["motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))

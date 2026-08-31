@@ -63,7 +63,7 @@ SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
     fail "Invalid robot project name: $ROBOT_PROJECT"
 fi
-[ -f "$SOURCE_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Robot project $ROBOT_PROJECT is missing robot.py."
+[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
 command -v sudo >/dev/null || fail "sudo is required for Raspberry Pi setup."
 
 INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
@@ -71,6 +71,7 @@ RELEASES_DIR="$INSTALL_ROOT/releases"
 CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
+ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
 CONFIG_FILE="$CONFIG_DIR/config.toml"
 
@@ -153,32 +154,65 @@ python3 -m venv --system-site-packages "$release_dir/.venv"
 touch "$release_dir/.complete"
 
 say "Creating the persistent student workspace and robot projects..."
-mkdir -p "$PROJECT_DIR" "$CONFIG_DIR"
-for robot_file in "$release_dir"/*/robot.py; do
+mkdir -p "$PROJECT_DIR" "$ROBOT_DIR" "$CONFIG_DIR"
+
+# Version 0.3 stored projects directly in ~/MotionModule. Move those folders
+# into the dedicated robots workspace while preserving the active project name.
+previous_active_name=""
+if [ -L "$PROJECT_DIR/active" ]; then
+    previous_active_target="$(readlink -f "$PROJECT_DIR/active" 2>/dev/null || true)"
+    [ -n "$previous_active_target" ] && previous_active_name="$(basename "$previous_active_target")"
+fi
+for old_robot_file in "$PROJECT_DIR"/*/robot.py; do
+    [ -f "$old_robot_file" ] || continue
+    old_robot_template="$(dirname "$old_robot_file")"
+    old_robot_name="$(basename "$old_robot_template")"
+    [ "$old_robot_name" = "active" ] && continue
+    if [ ! -e "$ROBOT_DIR/$old_robot_name" ]; then
+        mv "$old_robot_template" "$ROBOT_DIR/$old_robot_name"
+        say "Moved existing robot project to $ROBOT_DIR/$old_robot_name."
+    else
+        say "Keeping $ROBOT_DIR/$old_robot_name; the older $old_robot_template folder was left unchanged."
+    fi
+done
+
+for robot_file in "$release_dir"/examples/*/robot.py; do
     [ -f "$robot_file" ] || continue
     robot_template="$(dirname "$robot_file")"
     robot_name="$(basename "$robot_template")"
-    if [ ! -e "$PROJECT_DIR/$robot_name" ]; then
-        cp -a "$robot_template" "$PROJECT_DIR/$robot_name"
-        say "Created robot project $PROJECT_DIR/$robot_name. Future installs will not overwrite it."
+    if [ ! -e "$ROBOT_DIR/$robot_name" ]; then
+        cp -a "$robot_template" "$ROBOT_DIR/$robot_name"
+        say "Created robot project $ROBOT_DIR/$robot_name. Future installs will not overwrite it."
     else
-        say "Keeping existing robot project $PROJECT_DIR/$robot_name."
+        say "Keeping existing robot project $ROBOT_DIR/$robot_name."
     fi
 done
-[ -f "$PROJECT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
+[ -f "$ROBOT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
 
 ACTIVE_LINK="$PROJECT_DIR/active"
 if [ -e "$ACTIVE_LINK" ] && [ ! -L "$ACTIVE_LINK" ]; then
     fail "$ACTIVE_LINK must be a managed symlink; rename that file or directory and rerun the installer."
 fi
-if [ "$ROBOT_EXPLICIT" = true ] || [ ! -L "$ACTIVE_LINK" ] || [ ! -f "$ACTIVE_LINK/robot.py" ]; then
-    ln -s "$PROJECT_DIR/$ROBOT_PROJECT" "$PROJECT_DIR/active.new.$$"
+active_is_valid=false
+if [ -L "$ACTIVE_LINK" ]; then
+    candidate_target="$(readlink -f "$ACTIVE_LINK" 2>/dev/null || true)"
+    case "$candidate_target" in
+        "$(readlink -f "$ROBOT_DIR")"/*)
+            [ -f "$candidate_target/robot.py" ] && active_is_valid=true
+            ;;
+    esac
+fi
+if [ "$ROBOT_EXPLICIT" != true ] && [ "$active_is_valid" != true ] && [ -n "$previous_active_name" ] && [ -f "$ROBOT_DIR/$previous_active_name/robot.py" ]; then
+    ROBOT_PROJECT="$previous_active_name"
+fi
+if [ "$ROBOT_EXPLICIT" = true ] || [ "$active_is_valid" != true ]; then
+    ln -s "$ROBOT_DIR/$ROBOT_PROJECT" "$PROJECT_DIR/active.new.$$"
     mv -Tf "$PROJECT_DIR/active.new.$$" "$ACTIVE_LINK"
 fi
 active_target="$(readlink -f "$ACTIVE_LINK")"
 case "$active_target" in
-    "$(readlink -f "$PROJECT_DIR")"/*) ;;
-    *) fail "The active robot project points outside $PROJECT_DIR" ;;
+    "$(readlink -f "$ROBOT_DIR")"/*) ;;
+    *) fail "The active robot project points outside $ROBOT_DIR" ;;
 esac
 ACTIVE_PROJECT="$(basename "$active_target")"
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -187,12 +221,12 @@ else
     say "Keeping the existing hardware configuration at $CONFIG_FILE."
 fi
 
-if [ ! -f "$PROJECT_DIR/README.md" ]; then
+if [ ! -f "$PROJECT_DIR/README.md" ] || grep -q '^# MotionModule student workspace$' "$PROJECT_DIR/README.md"; then
 cat > "$PROJECT_DIR/README.md" <<EOF
 # MotionModule student workspace
 
-Each direct folder containing \`robot.py\` is a robot project. The installer
-starts with \`$ACTIVE_PROJECT\`. Edit that folder, then run:
+Every editable robot project has its own folder under \`robots/\`. The installer
+starts with \`robots/$ACTIVE_PROJECT\`. Edit that folder, then run:
 
 \`\`\`bash
 motionmodule restart
@@ -334,7 +368,7 @@ fi
 
 say "Installation complete. No automatic updater was enabled."
 printf 'Active release: %s\n' "$release_id"
-printf 'Active robot:   %s/%s\n' "$PROJECT_DIR" "$ACTIVE_PROJECT"
+printf 'Active robot:   %s/%s\n' "$ROBOT_DIR" "$ACTIVE_PROJECT"
 printf 'Configuration:  %s\n' "$CONFIG_FILE"
 printf 'Robot dashboard: http://%s.local (or type the Pi IP directly)\n' "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'SSH / VS Code:  ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
@@ -344,7 +378,7 @@ if [ "$REBOOT_SYSTEM" = true ]; then
 else
     say "Automatic reboot skipped. Reboot manually before the first hardware test."
 fi
-printf '\nCheck GitHub for the proper pinout before wiring the robot: https://github.com/AloeVeraZ/MotionModule/blob/main/MotionModule/docs/PINOUT.md\n'
+printf '\nCheck GitHub for the proper pinout before wiring the robot: https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md\n'
 
 if [ "$REBOOT_SYSTEM" = true ]; then
     sleep 3

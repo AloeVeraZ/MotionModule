@@ -19,7 +19,7 @@ Options:
 | --- | --- |
 | `--version REF` | Explicit Git branch, tag, or fetchable commit to install |
 | `--hostname NAME` | Set the Pi's mDNS hostname |
-| `--robot PROJECT` | Select a bundled robot-project folder; defaults to `Mecanum` |
+| `--robot PROJECT` | Select a folder from repository `examples/`; defaults to `Mecanum` |
 | `--no-hostname` | Preserve the current hostname |
 | `--no-start` | Install and enable the service without starting it |
 | `--no-reboot` | Skip the default automatic reboot |
@@ -30,10 +30,12 @@ creates a per-release virtual environment, runs unit tests, and marks the
 release complete. Only then is `current` switched. An error before activation
 leaves the previous service target unchanged.
 
-The central source directory may contain multiple direct child folders with
-`robot.py`. Each is copied once into `~/MotionModule`, while an `active` symlink
-selects the project loaded by the service. Existing robot folders are never
-overwritten. After installation, use `motionmodule project list` and
+The repository keeps reusable system code at its root and copyable robot styles
+under `examples/`. Each example is copied once into
+`~/MotionModule/robots/PROJECT_NAME`, while `~/MotionModule/active` selects the
+project loaded by the service. Existing robot folders are never overwritten.
+Version 0.4 also moves projects created by the earlier direct-folder layout
+into `robots/`. After installation, use `motionmodule project list` and
 `motionmodule project PROJECT_NAME` to inspect or switch them.
 
 It also installs the root-owned constrained network helper and

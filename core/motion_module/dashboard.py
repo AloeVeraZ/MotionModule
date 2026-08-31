@@ -20,13 +20,27 @@ from . import __version__
 from .controller import MotionModule
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
-from .mecanum import MecanumDrive
 from .network import NetworkClient
 from .pinout import header_rows, motor_rows
 from .runner import load_project
 
 
-DASHBOARD_PAGES = {"overview", "drive", "hardware", "diagnostics", "network", "code"}
+DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
+PAGE_ALIASES = {"drive": "code", "hardware": "diagnostics", "network": "diagnostics"}
+
+
+class IdleDrive:
+    """Safe drive used only when the dashboard is started without a robot project."""
+
+    def __init__(self, module) -> None:
+        self.module = module
+
+    def drive(self, _forward, _strafe, _rotate, _speed=0.5) -> dict:
+        self.module.stop_all()
+        return {"outputs": {}, "speed": 0.0}
+
+    def stop(self) -> None:
+        self.module.stop_all()
 
 
 def _memory_status() -> dict:
@@ -83,7 +97,7 @@ def load_drive(module, project_path: Path | None = None):
     """Load the student drive hook while supporting older Mecanum projects."""
 
     if project_path is None:
-        drive = MecanumDrive(module)
+        drive = IdleDrive(module)
     else:
         if not project_path.is_file():
             raise FileNotFoundError(f"Robot project was not found: {project_path}")
@@ -104,9 +118,9 @@ def load_drive(module, project_path: Path | None = None):
     return drive
 
 
-def create_app(module, drive=None, network_client=None, project_name: str = "Mecanum") -> Flask:
+def create_app(module, drive=None, network_client=None, project_name: str = "No project") -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
-    active_drive = drive or MecanumDrive(module)
+    active_drive = drive or IdleDrive(module)
     network = network_client or NetworkClient()
     command_lock = threading.Lock()
     network_lock = threading.Lock()
@@ -124,6 +138,7 @@ def create_app(module, drive=None, network_client=None, project_name: str = "Mec
     @app.get("/")
     @app.get("/<page>")
     def dashboard(page: str = "overview"):
+        page = PAGE_ALIASES.get(page, page)
         if page not in DASHBOARD_PAGES:
             return "Not found", 404
         return render_template(
@@ -165,7 +180,8 @@ def create_app(module, drive=None, network_client=None, project_name: str = "Mec
                     "minimum_pulse_us": servo.minimum_pulse_us,
                     "maximum_pulse_us": servo.maximum_pulse_us,
                 },
-                "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/MotionModule/docs/PINOUT.md",
+                "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md",
+                "bom_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/BOM.md",
             }
         )
 
@@ -389,7 +405,7 @@ def create_app(module, drive=None, network_client=None, project_name: str = "Mec
 
 
 def serve(module, stop_event: threading.Event, project_path: Path | None = None) -> None:
-    project_name = project_path.parent.name if project_path else "Built-in Mecanum"
+    project_name = project_path.parent.name if project_path else "No project"
     app = create_app(module, load_drive(module, project_path), project_name=project_name)
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.

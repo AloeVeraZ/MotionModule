@@ -2,6 +2,7 @@
 
 Software uses **BCM GPIO numbers**. Connector diagrams use **physical header
 numbers**. Every table below shows both; never assume they are interchangeable.
+Use this wiring guide together with the root-level [bill of materials](../BOM.md).
 
 ## Four dual H-bridge boards
 

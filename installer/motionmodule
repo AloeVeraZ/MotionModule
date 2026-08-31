@@ -6,6 +6,7 @@ RELEASES_DIR="$INSTALL_ROOT/releases"
 CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
+ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
 
 fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 1; }
@@ -85,11 +86,10 @@ case "$command" in
     project)
         if [ "$#" -eq 0 ] || [ "${1:-}" = "list" ]; then
             active="$(readlink -f "$PROJECT_DIR/active" 2>/dev/null || true)"
-            printf 'Robot projects in %s:\n' "$PROJECT_DIR"
-            for robot_file in "$PROJECT_DIR"/*/robot.py; do
+            printf 'Robot projects in %s:\n' "$ROBOT_DIR"
+            for robot_file in "$ROBOT_DIR"/*/robot.py; do
                 [ -f "$robot_file" ] || continue
                 target="$(dirname "$robot_file")"
-                [ "$(basename "$target")" = "active" ] && continue
                 marker=" "
                 [ "$(readlink -f "$target")" = "$active" ] && marker="*"
                 printf '%s %s\n' "$marker" "$(basename "$target")"
@@ -100,11 +100,11 @@ case "$command" in
         project_name="$1"
         printf '%s' "$project_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
         [ "$project_name" != "active" ] || fail "The name active is reserved for the selected-project symlink"
-        target="$PROJECT_DIR/$project_name"
+        target="$ROBOT_DIR/$project_name"
         [ -f "$target/robot.py" ] || fail "$target must contain robot.py"
         case "$(readlink -f "$target")" in
-            "$(readlink -f "$PROJECT_DIR")"/*) ;;
-            *) fail "Refusing a robot project outside $PROJECT_DIR" ;;
+            "$(readlink -f "$ROBOT_DIR")"/*) ;;
+            *) fail "Refusing a robot project outside $ROBOT_DIR" ;;
         esac
         ln -s "$target" "$PROJECT_DIR/active.new.$$"
         mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"
@@ -117,7 +117,7 @@ case "$command" in
     edit)
         printf 'Connect VS Code Remote - SSH to: %s@%s.local\n' "$USER" "$(hostname)"
         printf 'Then open: %s/MotionModule\n' "$HOME"
-        printf 'Active robot project: %s\n' "$(basename "$(readlink -f "$PROJECT_DIR/active")")"
+        printf 'Edit robot project: %s/%s\n' "$ROBOT_DIR" "$(basename "$(readlink -f "$PROJECT_DIR/active")")"
         ;;
     help|-h|--help)
         cat <<'EOF'

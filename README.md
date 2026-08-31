@@ -11,8 +11,8 @@ Python robot projects · raised-wheel diagnostics · wireless editing · explici
 MotionModule is an FTC-style teaching controller inspired by the direct
 deployment workflow of Systemcore/Motioncore, built around ordinary Raspberry
 Pi hardware. Four dual H-bridge boards control eight brushed DC motors; one or
-more I2C PCA9685 boards provide 16 servo channels each. The included `Mecanum`
-project is the student-editable example and fixes the City Tech robot's rotation
+more I2C PCA9685 boards provide 16 servo channels each. The included
+`examples/Mecanum` project is the student-editable example and fixes the City Tech robot's rotation
 mix by keeping wheel polarity in configuration instead of changing the
 kinematics.
 
@@ -23,11 +23,15 @@ kinematics.
 
 ## Hardware
 
+Start with the root-level **[bill of materials](BOM.md)**, which lists the exact
+Amazon motor and servo boards plus the still-to-be-sized power, fuse, wiring,
+and connector parts.
+
 The reference build uses the exact boards supplied for this project:
 
 - [GODIYMODULES 3–18 V, 10 A dual H-bridge motor driver](https://www.amazon.com/dp/B0FKH352D2), four boards for eight motors.
 - [AITRIP PCA9685 16-channel I2C servo controller](https://www.amazon.com/dp/B07WS5XY63), address `0x40` by default.
-- Raspberry Pi 4 with a 40-pin header and current Raspberry Pi OS (the tested target).
+- Raspberry Pi 5 with a 40-pin header and current Raspberry Pi OS (the current tested target).
 - Separate, fused motor and servo power rails sized for the actual stall current.
 - A 10 kΩ pull-down from every H-bridge input to signal ground so motors stay
   disabled while the Pi is booting or shut down.
@@ -37,28 +41,29 @@ uses 1 kHz and never energizes both directions of one motor simultaneously. The
 PCA9685 runs its 16 outputs without consuming 16 Pi pins and can be expanded by
 assigning unique I2C addresses.
 
-See the complete [pinout and power boundaries](MotionModule/docs/PINOUT.md) before wiring.
+See the complete [pinout and power boundaries](docs/PINOUT.md) before wiring.
 
 ## Repository layout
 
 ```text
 MotionModule repository/
-├── install.sh                     # The only root-level installation entry point
-├── README.md
-└── MotionModule/                  # The complete system lives here
-    ├── core/motion_module/        # Reusable motor, servo, safety, and web runtime
-    ├── installer/                 # Pi setup, services, Wi-Fi, versions, rollback
-    ├── Mecanum/                   # One robot project; future projects sit beside it
-    ├── config/default.toml        # Eight-motor and PCA9685 hardware defaults
-    ├── docs/                      # Pinout, setup, coding, and architecture
-    ├── tests/                     # Hardware-independent validation
-    ├── requirements.txt
-    └── pyproject.toml
+├── core/motion_module/        # Reusable motor, servo, safety, and web runtime
+├── installer/                 # Pi setup, services, Wi-Fi, versions, rollback
+├── config/default.toml        # Eight-motor and PCA9685 hardware defaults
+├── docs/                      # Pinout, setup, coding, and architecture
+├── tests/                     # Hardware-independent validation
+├── examples/                  # Copyable robot styles; not system code
+│   └── Mecanum/
+├── BOM.md                     # Complete reference hardware list
+├── install.sh                 # One-line and local installation entry point
+├── requirements.txt
+└── pyproject.toml
 ```
 
 `core/motion_module` is not robot-specific code. It is the installed Python
 engine that safely controls GPIO, motors, servos, the watchdog, networking, and
-the dashboard. `Mecanum` is just the first replaceable robot project.
+the dashboard. Everything needed to install and run MotionModule is visible at
+the repository root. `examples/Mecanum` is only a copyable starting project.
 
 ## Install on the Raspberry Pi
 
@@ -81,7 +86,7 @@ The installer creates:
 
 | Item | Location |
 | --- | --- |
-| Robot projects | `~/MotionModule/PROJECT_NAME` |
+| Robot projects | `~/MotionModule/robots/PROJECT_NAME` |
 | Active project | `~/MotionModule/active` symlink |
 | Persistent hardware config | `~/.config/motionmodule/config.toml` |
 | Versioned runtimes | `~/.local/share/motionmodule/releases` |
@@ -115,9 +120,10 @@ motionmodule logs
 
 Open `http://motionmodule.local` or type the Pi's IP address directly into a
 browser. Nginx accepts normal HTTP on port 80 and forwards it to the versioned
-MotionModule dashboard. The interface includes live robot health, active-project drive,
-the complete 40-pin diagram, four-driver/servo wiring, guarded bench tests,
-Doctor results and service logs, Wi-Fi setup, and coding instructions.
+MotionModule dashboard. Overview shows live motor, servo, controller, and
+network state. Debug combines the complete 40-pin diagram, four-driver/servo
+wiring, guarded bench tests, Doctor warnings, service logs, and Wi-Fi setup.
+Code contains the editing workflow and guarded manual drive controls.
 
 At every boot the Pi first uses the Wi-Fi configured in Raspberry Pi Imager (or
 the most recently saved network). If no client Wi-Fi connects within 30 seconds,
@@ -130,24 +136,26 @@ The dashboard belongs to the active versioned runtime. Updating or rolling back
 MotionModule changes the interface and backend together, while the existing
 robot project folders remain untouched.
 
-Read [setup and commissioning](MotionModule/docs/SETUP.md) and the
-[coding guide](MotionModule/docs/CODING.md)
+Read [setup and commissioning](docs/SETUP.md) and the
+[coding guide](docs/CODING.md)
 for the full workflow.
 
 ## Add or switch robot projects
 
-Every direct folder in `~/MotionModule` that contains `robot.py` is a robot
-project. `Mecanum` is installed as the default, but the runtime is reusable:
+Every direct folder in `~/MotionModule/robots` that contains `robot.py` is a
+robot project. `examples/Mecanum` is copied there as the default on first
+installation, but the runtime is reusable:
 
 ```text
 ~/MotionModule/
-├── active -> Swerve/
-├── Mecanum/
-│   └── robot.py
-├── Swerve/
-│   └── robot.py
-└── WalkingRobot/
-    └── robot.py
+├── active -> robots/Swerve/
+└── robots/
+    ├── Mecanum/
+    │   └── robot.py
+    ├── Swerve/
+    │   └── robot.py
+    └── WalkingRobot/
+        └── robot.py
 ```
 
 List or activate them without reinstalling the system:
@@ -157,7 +165,7 @@ motionmodule project list
 motionmodule project Swerve
 ```
 
-Bundled projects can also be selected during installation with
+Repository examples can also be selected during installation with
 `--robot PROJECT_NAME`. The selected project appears in the dashboard Code page.
 
 ## Diagnostics and versions
@@ -184,7 +192,6 @@ boards do acknowledge their addresses and are detected non-destructively.
 All safety and kinematics tests run without Raspberry Pi hardware:
 
 ```bash
-cd MotionModule
 python -m venv .venv
 python -m pip install -e .
 python -m unittest discover -s tests -v

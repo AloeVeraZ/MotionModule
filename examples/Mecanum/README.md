@@ -1,12 +1,12 @@
 # Mecanum example
 
-This is the student-editable robot project. The versioned MotionModule runtime
+This is a copyable student robot example. The versioned MotionModule runtime
 hosts the browser dashboard, while `robot.py` supplies its drive hook and
 `mecanum.py` contains the wheel math. Future installs update the dashboard
 without overwriting this folder.
 
-`Mecanum` is not required by the core. Add `Swerve`, `WalkingRobot`, or another
-folder beside it with its own `robot.py`, then run
+`Mecanum` is not required by the core. On the Pi, add `Swerve`, `WalkingRobot`,
+or another folder under `~/MotionModule/robots` with its own `robot.py`, then run
 `motionmodule project PROJECT_NAME` on the Pi to activate it.
 
 The first four motor channels are:
@@ -25,9 +25,10 @@ change the rotation signs to compensate for one reversed motor.
 
 Open `http://motionmodule.local` (or the Pi's IP address) after installation.
 Use W/S to move, A/D to strafe, Q/E to rotate, and Space to stop. The dashboard
-refreshes the 500 ms hardware watchdog every 80 ms while driving. Its Network
-page shows every Pi IP and provides Wi-Fi scan, preferred-network, and robot
-hotspot controls. Starting a network change stops all motors first.
+refreshes the 500 ms hardware watchdog every 80 ms while keyboard driving is
+explicitly enabled. The Debug page shows every Pi IP and provides wiring,
+Doctor, Wi-Fi, and hotspot controls. Starting a network change stops all motors
+first.
 
 After editing either file, run `motionmodule restart`. Older student folders
 that contain the original Flask server remain compatible: MotionModule loads

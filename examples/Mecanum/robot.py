@@ -4,7 +4,7 @@ from mecanum import MecanumDrive
 
 
 def create_drive(module):
-    """Return the drive object used by the dashboard's Drive page.
+    """Return the drive object used by the dashboard's Code/Drive section.
 
     Keep this tiny while getting started. You can change the channel mapping in
     ``mecanum.py`` or return your own object with ``drive(...)`` and ``stop()``

@@ -34,9 +34,9 @@ through OS lockups, regulator faults, broken wiring, or failed power electronics
 ├── previous -> releases/v0.1.0-...
 └── releases/                            # immutable installed copies
 
-~/MotionModule/active -> Mecanum/        # selected robot project
-~/MotionModule/Mecanum/                  # persistent student-owned code
-~/MotionModule/Swerve/                   # another possible robot project
+~/MotionModule/active -> robots/Mecanum/ # selected robot project
+~/MotionModule/robots/Mecanum/           # persistent student-owned code
+~/MotionModule/robots/Swerve/            # another possible robot project
 ~/.config/motionmodule/config.toml      # persistent hardware calibration
 ```
 
@@ -83,15 +83,15 @@ student drive hook is loaded from the persistent project.
 
 ## Source and robot-project boundaries
 
-The Git repository has one central `MotionModule/` system directory. Its
-`core/motion_module/` package owns hardware access, safety, the dashboard, and
-network APIs. Direct sibling folders containing `robot.py` are robot projects;
-`Mecanum` is the included example, not part of the core.
+The Git repository exposes all system components at its root.
+`core/motion_module/` owns hardware access, safety, the dashboard, and network
+APIs. `examples/` contains copyable robot styles; `examples/Mecanum` is the
+included example and is not part of the core package.
 
-During installation, every bundled robot project is copied once into
-`~/MotionModule/`. The `active` symlink selects the folder loaded by systemd.
-`motionmodule project PROJECT_NAME` switches that symlink and restarts the
-service. Runtime upgrades never overwrite those persistent project folders.
+During installation, every bundled example is copied once into
+`~/MotionModule/robots/`. The `active` symlink selects the folder loaded by
+systemd. `motionmodule project PROJECT_NAME` switches that symlink and restarts
+the service. Runtime upgrades never overwrite those persistent project folders.
 
 The hotspot profile has autoconnect disabled. A manual hotspot therefore stays
 active for the current boot, while a reboot always gives saved client Wi-Fi the
