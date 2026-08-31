@@ -126,7 +126,7 @@ wiring, guarded bench tests, Doctor warnings, service logs, and Wi-Fi setup.
 Its servo test selects PCA9685 channels 0–15 and includes goBILDA 300°,
 5-turn/1800°, continuous-rotation, and generic positional profiles, plus a
 dedicated zero/neutral command. Code contains the editing workflow and guarded
-manual drive controls.
+manual drive controls, followed by a time-limited Bash terminal at the bottom.
 
 At every boot the Pi first uses the Wi-Fi configured in Raspberry Pi Imager (or
 the most recently saved network). If no client Wi-Fi connects within 30 seconds,
@@ -138,6 +138,29 @@ Wi-Fi first again.
 The dashboard belongs to the active versioned runtime. Updating or rolling back
 MotionModule changes the interface and backend together, while the existing
 robot project folders remain untouched.
+
+### Web terminal
+
+The Code page contains a real PTY-backed Bash terminal, but it is locked by
+default so an open robot dashboard is not also an unauthenticated shell. Enable
+it from an SSH session for 15 minutes (or choose 1–120 minutes):
+
+```bash
+motionmodule terminal enable
+motionmodule terminal enable 30
+```
+
+Enter the printed temporary code in the website. The grant is bound to the
+current boot, the shell closes after five idle minutes, leaving the page closes
+the active shell, and this disables access immediately:
+
+```bash
+motionmodule terminal disable
+```
+
+The dashboard uses ordinary HTTP on the robot network. Do not type reusable
+passwords or other secrets into the web terminal, and never expose the
+dashboard directly to the public internet. Use SSH for privileged work.
 
 Read [setup and commissioning](docs/SETUP.md) and the
 [coding guide](docs/CODING.md)

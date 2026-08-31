@@ -67,6 +67,15 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("core/motion_module/dashboard.py", launcher)
         self.assertIn("runtime/motion_module/dashboard.py", launcher)
 
+    def test_manager_creates_time_limited_boot_scoped_terminal_access(self):
+        manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
+        self.assertIn("terminal enable [MINUTES]", manager)
+        self.assertIn("terminal-access.json", manager)
+        self.assertIn("/proc/sys/kernel/random/boot_id", manager)
+        self.assertIn("chmod 0600", manager)
+        self.assertIn('rm -f -- "$TERMINAL_ACCESS_FILE"', manager)
+        self.assertIn('minutes" -le 120', manager)
+
 
 if __name__ == "__main__":
     unittest.main()

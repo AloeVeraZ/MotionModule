@@ -4,7 +4,8 @@
 
 ```text
 browser ---> nginx :80 ---> versioned dashboard :8080
-                              |
+                              |              |
+                              |              +--> time-limited PTY Bash (Pi user)
 active robot/robot.py ------- drive hook
         |
         v
@@ -38,6 +39,7 @@ through OS lockups, regulator faults, broken wiring, or failed power electronics
 ~/MotionModule/robots/Mecanum/           # persistent student-owned code
 ~/MotionModule/robots/Swerve/            # another possible robot project
 ~/.config/motionmodule/config.toml      # persistent hardware calibration
+~/.config/motionmodule/terminal-access.json # temporary mode-0600 shell grant
 ```
 
 Installing a new Git tag/ref builds and tests a new release before switching
@@ -80,6 +82,14 @@ Nginx is the stable front door on port 80, so a beginner can enter the bare Pi
 IP or `.local` name. The dashboard application listens on port 8080 behind that
 proxy and owns the live APIs. It is packaged with each versioned release; the
 student drive hook is loaded from the persistent project.
+
+The terminal API requires both the per-page dashboard token and a second random
+access code created over SSH. Its access record is time-limited and bound to the
+current Linux boot ID. The backend owns one PTY session at a time, caps retained
+output and input size, closes idle sessions, and runs Bash with exactly the
+service user's permissions. Disabling or rotating the grant invalidates the
+active terminal on its next poll. The browser never persists the terminal token
+or access code.
 
 ## Source and robot-project boundaries
 

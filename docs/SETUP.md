@@ -154,6 +154,34 @@ motionmodule restart
 motionmodule logs
 ```
 
+### Browser terminal
+
+At the bottom of the dashboard Code page is a PTY-backed Bash terminal. It runs
+as the normal Pi user in the active robot project, so it can run scripts and
+normal shell commands but cannot silently bypass Linux permissions.
+
+It is deliberately locked until enabled from SSH:
+
+```bash
+motionmodule terminal enable       # 15 minutes
+motionmodule terminal enable 30    # choose 1–120 minutes
+motionmodule terminal status
+motionmodule terminal disable
+```
+
+Enter the printed access code in the Code page. The file containing that code
+is readable only by the Pi user, expires at the selected time, and includes the
+Linux boot ID so it cannot be reused after reboot. An active shell closes when
+the page is left, when access is disabled or expires, or after five minutes
+without browser activity. `Interrupt · Ctrl-C` stops a running command.
+
+The robot dashboard is HTTP, not end-to-end HTTPS. Use this terminal only on a
+trusted/private robot network, never expose port 80 to the public internet, and
+do not enter reusable passwords, access tokens, or other secrets. Use SSH for
+`sudo` and other privileged administration. Running `motionmodule restart`
+inside the page intentionally disconnects the terminal while the service
+restarts.
+
 To add another robot, create `~/MotionModule/robots/Swerve/robot.py` (or another
 project-named folder), then select it:
 

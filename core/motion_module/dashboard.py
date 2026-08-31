@@ -24,6 +24,7 @@ from .errors import MotionModuleError
 from .network import NetworkClient
 from .pinout import header_rows, motor_rows
 from .runner import load_project
+from .terminal import TerminalManager
 
 
 DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
@@ -206,15 +207,24 @@ def load_drive(module, project_path: Path | None = None):
     return drive
 
 
-def create_app(module, drive=None, network_client=None, project_name: str = "No project") -> Flask:
+def create_app(
+    module,
+    drive=None,
+    network_client=None,
+    project_name: str = "No project",
+    terminal_manager=None,
+) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
     active_drive = drive or IdleDrive(module)
     network = network_client or NetworkClient()
+    terminal = terminal_manager or TerminalManager()
     command_lock = threading.Lock()
     network_lock = threading.Lock()
     servo_lock = threading.Lock()
+    terminal_attempt_lock = threading.Lock()
     servo_timers: dict[tuple[int, int], threading.Timer] = {}
     servo_commands: dict[tuple[int, int], dict] = {}
+    terminal_attempts: dict[str, list[float]] = {}
     network_state = {"busy": False, "last_error": ""}
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
@@ -423,6 +433,81 @@ def create_app(module, drive=None, network_client=None, project_name: str = "No 
             release_servo(board, channel)
         except (TypeError, ValueError) as error:
             return jsonify({"ok": False, "error": str(error)}), 400
+        return jsonify({"ok": True})
+
+    def terminal_error(error: Exception, status_code: int = 400):
+        return jsonify({"ok": False, "error": str(error)}), status_code
+
+    def terminal_token() -> str:
+        return request.headers.get("X-MotionModule-Terminal", "")
+
+    @app.get("/api/terminal/status")
+    def terminal_status():
+        return jsonify({"ok": True, **terminal.status()})
+
+    @app.post("/api/terminal/start")
+    def terminal_start():
+        if not authorized():
+            return terminal_error(MotionModuleError("Invalid dashboard session"), 403)
+        client_address = request.headers.get("X-Real-IP", request.remote_addr or "unknown")
+        now = time.monotonic()
+        with terminal_attempt_lock:
+            recent = [attempt for attempt in terminal_attempts.get(client_address, []) if now - attempt < 60]
+            if len(recent) >= 10:
+                return terminal_error(
+                    MotionModuleError("Too many terminal unlock attempts; wait one minute"), 429
+                )
+            recent.append(now)
+            terminal_attempts[client_address] = recent
+        body = request.get_json(silent=True) or {}
+        try:
+            result = terminal.start(body.get("access_code", ""), Path.cwd())
+        except MotionModuleError as error:
+            return terminal_error(error, 403)
+        with terminal_attempt_lock:
+            terminal_attempts.pop(client_address, None)
+        return jsonify({"ok": True, **result})
+
+    @app.post("/api/terminal/output")
+    def terminal_output():
+        if not authorized():
+            return terminal_error(MotionModuleError("Invalid dashboard session"), 403)
+        body = request.get_json(silent=True) or {}
+        try:
+            result = terminal.read(terminal_token(), body.get("cursor", 0))
+        except MotionModuleError as error:
+            return terminal_error(error, 403)
+        return jsonify({"ok": True, **result})
+
+    @app.post("/api/terminal/input")
+    def terminal_input():
+        if not authorized():
+            return terminal_error(MotionModuleError("Invalid dashboard session"), 403)
+        body = request.get_json(silent=True) or {}
+        try:
+            terminal.write(terminal_token(), body.get("input", ""))
+        except MotionModuleError as error:
+            return terminal_error(error, 403)
+        return jsonify({"ok": True})
+
+    @app.post("/api/terminal/interrupt")
+    def terminal_interrupt():
+        if not authorized():
+            return terminal_error(MotionModuleError("Invalid dashboard session"), 403)
+        try:
+            terminal.interrupt(terminal_token())
+        except MotionModuleError as error:
+            return terminal_error(error, 403)
+        return jsonify({"ok": True})
+
+    @app.post("/api/terminal/stop")
+    def terminal_stop():
+        if not authorized():
+            return terminal_error(MotionModuleError("Invalid dashboard session"), 403)
+        try:
+            terminal.stop(terminal_token())
+        except MotionModuleError as error:
+            return terminal_error(error, 403)
         return jsonify({"ok": True})
 
     def network_error(error: Exception, status_code: int = 503):

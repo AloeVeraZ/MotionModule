@@ -7,6 +7,8 @@ CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
 ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
+CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
+TERMINAL_ACCESS_FILE="${MOTIONMODULE_TERMINAL_ACCESS:-$CONFIG_DIR/terminal-access.json}"
 RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
 
 fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 1; }
@@ -114,6 +116,60 @@ case "$command" in
     hotspot)
         exec sudo /usr/local/sbin/motionmodule-hotspot "$@"
         ;;
+    terminal)
+        terminal_command="${1:-status}"
+        [ "$#" -eq 0 ] || shift
+        case "$terminal_command" in
+            enable)
+                minutes="${1:-15}"
+                [ "$#" -le 1 ] || fail "Usage: motionmodule terminal enable [MINUTES]"
+                printf '%s' "$minutes" | grep -Eq '^[0-9]+$' || fail "Terminal minutes must be a whole number from 1 through 120"
+                [ "$minutes" -ge 1 ] && [ "$minutes" -le 120 ] || fail "Terminal minutes must be from 1 through 120"
+                mkdir -p "$(dirname "$TERMINAL_ACCESS_FILE")"
+                code="$("$(runtime_python)" -c 'import secrets; print(secrets.token_hex(6))')"
+                expires_at="$("$(runtime_python)" -c 'import sys, time; print(int(time.time()) + int(sys.argv[1]) * 60)' "$minutes")"
+                boot_id="$(tr -d '\n' < /proc/sys/kernel/random/boot_id)"
+                access_temp="$TERMINAL_ACCESS_FILE.new.$$"
+                umask 077
+                printf '{"code":"%s","expires_at":%s,"boot_id":"%s"}\n' "$code" "$expires_at" "$boot_id" > "$access_temp"
+                chmod 0600 "$access_temp"
+                mv -f "$access_temp" "$TERMINAL_ACCESS_FILE"
+                printf 'Web terminal enabled for %s minute(s).\n' "$minutes"
+                printf 'Access code: %s\n' "$code"
+                printf 'Open the dashboard Code page and enter this code. Do not share it.\n'
+                ;;
+            disable)
+                [ "$#" -eq 0 ] || fail "Usage: motionmodule terminal disable"
+                rm -f -- "$TERMINAL_ACCESS_FILE"
+                printf 'Web terminal disabled. Any active session will close on its next request.\n'
+                ;;
+            status)
+                [ "$#" -eq 0 ] || fail "Usage: motionmodule terminal status"
+                "$(runtime_python)" - "$TERMINAL_ACCESS_FILE" <<'PY'
+import json
+import sys
+import time
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    record = json.loads(path.read_text(encoding="utf-8"))
+    boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="utf-8").strip()
+    remaining = max(0, int(float(record["expires_at"]) - time.time()))
+    enabled = bool(remaining and record.get("boot_id") == boot_id)
+except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+    enabled = False
+    remaining = 0
+print(f"Web terminal: {'enabled' if enabled else 'disabled'}")
+if enabled:
+    print(f"Expires in: {remaining // 60}m {remaining % 60}s")
+PY
+                ;;
+            *)
+                fail "Usage: motionmodule terminal [enable [MINUTES]|disable|status]"
+                ;;
+        esac
+        ;;
     edit)
         printf 'Connect VS Code Remote - SSH to: %s@%s.local\n' "$USER" "$(hostname)"
         printf 'Then open: %s/MotionModule\n' "$HOME"
@@ -132,6 +188,8 @@ MotionModule commands:
   project [list|PROJECT_NAME]      list or switch robot code folders
   hotspot on [SSID] [PASSWORD] | hotspot off | hotspot status
                                   off reconnects the saved preferred Wi-Fi
+  terminal enable [MINUTES] | terminal disable | terminal status
+                                  time-limited access to the Code-page Bash terminal
   edit
 EOF
         ;;

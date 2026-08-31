@@ -79,12 +79,64 @@ class FakeNetwork:
         self.called.set()
 
 
+class FakeTerminal:
+    def __init__(self):
+        self.token = "terminal-session"
+        self.commands = []
+        self.interrupted = False
+        self.stopped = False
+
+    def status(self):
+        return {
+            "available": True,
+            "enabled": True,
+            "expires_in_seconds": 900,
+            "active": bool(self.commands) and not self.stopped,
+            "idle_timeout_seconds": 300,
+        }
+
+    def start(self, access_code, working_directory):
+        if access_code != "test-code":
+            from motion_module.errors import MotionModuleError
+
+            raise MotionModuleError("Invalid terminal access code")
+        self.working_directory = working_directory
+        return {"token": self.token, "cursor": 0}
+
+    def read(self, token, cursor):
+        self._check(token)
+        return {"output": "motionmodule:$ ", "cursor": cursor + 15, "reset": False, "active": True}
+
+    def write(self, token, value):
+        self._check(token)
+        self.commands.append(value)
+
+    def interrupt(self, token):
+        self._check(token)
+        self.interrupted = True
+
+    def stop(self, token):
+        self._check(token)
+        self.stopped = True
+
+    def _check(self, token):
+        if token != self.token:
+            from motion_module.errors import MotionModuleError
+
+            raise MotionModuleError("Invalid terminal session")
+
+
 class DashboardTests(unittest.TestCase):
     def setUp(self):
         self.module = FakeModule()
         self.network = FakeNetwork()
+        self.terminal = FakeTerminal()
         self.app = create_app(
-            self.module, MecanumDrive(self.module), self.network, project_name="Mecanum"
+            self.module,
+            MecanumDrive(self.module),
+            self.network,
+            project_name="Mecanum",
+            terminal_manager=self.terminal,
         )
         self.client = self.app.test_client()
         self.headers = {"X-MotionModule-Token": self.app.config["DASHBOARD_TOKEN"]}
@@ -108,6 +160,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Manual test control", code)
         self.assertIn(b'id="driveEnable"', code)
         self.assertIn(b"robots/Mecanum/robot.py", code)
+        self.assertIn(b"Time-limited robot shell", code)
+        self.assertIn(b'id="terminalCommand"', code)
+        self.assertGreater(code.index(b"Time-limited robot shell"), code.index(b"Manual test control"))
         overview = self.client.get("/").data
         self.assertIn(b"Servo activity", overview)
         self.assertIn(b'id="servoChannel"', debug)
@@ -271,6 +326,64 @@ class DashboardTests(unittest.TestCase):
             },
         )
         self.assertEqual(invalid_channel.status_code, 400)
+
+    def test_web_terminal_requires_both_dashboard_and_temporary_session_tokens(self):
+        no_dashboard_token = self.client.post(
+            "/api/terminal/start", json={"access_code": "test-code"}
+        )
+        self.assertEqual(no_dashboard_token.status_code, 403)
+        wrong_code = self.client.post(
+            "/api/terminal/start",
+            headers=self.headers,
+            json={"access_code": "wrong"},
+        )
+        self.assertEqual(wrong_code.status_code, 403)
+        started = self.client.post(
+            "/api/terminal/start",
+            headers=self.headers,
+            json={"access_code": "test-code"},
+        )
+        self.assertEqual(started.status_code, 200)
+        token = started.get_json()["token"]
+        missing_terminal_token = self.client.post(
+            "/api/terminal/input",
+            headers=self.headers,
+            json={"input": "pwd\n"},
+        )
+        self.assertEqual(missing_terminal_token.status_code, 403)
+        terminal_headers = {**self.headers, "X-MotionModule-Terminal": token}
+        written = self.client.post(
+            "/api/terminal/input",
+            headers=terminal_headers,
+            json={"input": "pwd\n"},
+        )
+        self.assertEqual(written.status_code, 200)
+        self.assertEqual(self.terminal.commands, ["pwd\n"])
+        output = self.client.post(
+            "/api/terminal/output",
+            headers=terminal_headers,
+            json={"cursor": 0},
+        ).get_json()
+        self.assertIn("motionmodule", output["output"])
+        self.client.post("/api/terminal/interrupt", headers=terminal_headers, json={})
+        self.assertTrue(self.terminal.interrupted)
+        self.client.post("/api/terminal/stop", headers=terminal_headers, json={})
+        self.assertTrue(self.terminal.stopped)
+
+    def test_web_terminal_rate_limits_access_code_guesses(self):
+        for _ in range(10):
+            response = self.client.post(
+                "/api/terminal/start",
+                headers=self.headers,
+                json={"access_code": "wrong"},
+            )
+            self.assertEqual(response.status_code, 403)
+        limited = self.client.post(
+            "/api/terminal/start",
+            headers=self.headers,
+            json={"access_code": "test-code"},
+        )
+        self.assertEqual(limited.status_code, 429)
 
     def test_network_api_stops_outputs_before_switch(self):
         self.module.outputs[1] = 0.4

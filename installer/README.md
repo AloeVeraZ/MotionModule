@@ -52,6 +52,12 @@ The stable dashboard launcher falls back to the original `motion_module.runner`
 for pre-0.2.0 releases, preserving explicit rollback after the service unit has
 been upgraded.
 
+The Code-page Bash terminal is installed with the dashboard but remains locked
+until the Pi user runs `motionmodule terminal enable [MINUTES]` over SSH. That
+command creates a mode-0600, boot-scoped access grant under
+`~/.config/motionmodule`; `motionmodule terminal disable` revokes it. The shell
+runs as the service user and receives no additional sudo permission.
+
 After activation, the installer automatically runs the non-moving
 `motionmodule doctor` check, prints its results, and reboots so the new GPIO/I2C
 group membership and boot configuration take effect. Its final message links
