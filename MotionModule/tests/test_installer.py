@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 INSTALLER = Path(__file__).resolve().parents[1] / "installer" / "install.sh"
+BOOTSTRAP = Path(__file__).resolve().parents[2] / "install.sh"
 
 
 class InstallerFinishTests(unittest.TestCase):
@@ -20,7 +21,7 @@ class InstallerFinishTests(unittest.TestCase):
     def test_pinout_link_is_the_final_printed_message(self):
         message = (
             "Check GitHub for the proper pinout before wiring the robot: "
-            "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md"
+            "https://github.com/AloeVeraZ/MotionModule/blob/main/MotionModule/docs/PINOUT.md"
         )
         self.assertIn(message, self.script)
         after_message = self.script.split(message, 1)[1]
@@ -40,6 +41,27 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("proxy_pass http://127.0.0.1:8080", self.script)
         self.assertIn("sudo nginx -t", self.script)
         self.assertIn("http://%s.local (or type the Pi IP directly)", self.script)
+
+    def test_root_bootstrap_enters_the_central_system_folder(self):
+        bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+        self.assertIn("MotionModule/installer/install.sh", bootstrap)
+        self.assertIn('--source "$script_dir/MotionModule"', bootstrap)
+        self.assertIn('--source "$temporary/source/MotionModule"', bootstrap)
+
+    def test_robot_projects_are_discovered_and_selected_through_active_symlink(self):
+        self.assertIn('--robot)', self.script)
+        self.assertIn('for robot_file in "$release_dir"/*/robot.py', self.script)
+        self.assertIn('ACTIVE_LINK="$PROJECT_DIR/active"', self.script)
+        self.assertIn('WorkingDirectory=$PROJECT_DIR/active', self.script)
+        manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
+        self.assertIn('project)', manager)
+        self.assertIn('motionmodule project [list|PROJECT_NAME]', manager)
+        self.assertIn('mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"', manager)
+
+    def test_launcher_recognizes_new_core_layout_and_older_releases(self):
+        launcher = (INSTALLER.parent / "dashboard_launcher").read_text(encoding="utf-8")
+        self.assertIn("core/motion_module/dashboard.py", launcher)
+        self.assertIn("runtime/motion_module/dashboard.py", launcher)
 
 
 if __name__ == "__main__":

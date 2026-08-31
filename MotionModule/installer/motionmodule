@@ -5,6 +5,7 @@ INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
 RELEASES_DIR="$INSTALL_ROOT/releases"
 CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
+PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
 RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
 
 fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 1; }
@@ -76,8 +77,39 @@ case "$command" in
         printf 'Rolled back to %s\n' "$(basename "$previous")"
         ;;
     install)
-        [ "$#" -eq 1 ] || fail "Usage: motionmodule install VERSION_OR_GIT_REF"
-        curl -fsSL "$RAW_INSTALL" | bash -s -- --version "$1"
+        [ "$#" -ge 1 ] || fail "Usage: motionmodule install VERSION_OR_GIT_REF [--robot PROJECT]"
+        ref="$1"
+        shift
+        curl -fsSL "$RAW_INSTALL" | bash -s -- --version "$ref" "$@"
+        ;;
+    project)
+        if [ "$#" -eq 0 ] || [ "${1:-}" = "list" ]; then
+            active="$(readlink -f "$PROJECT_DIR/active" 2>/dev/null || true)"
+            printf 'Robot projects in %s:\n' "$PROJECT_DIR"
+            for robot_file in "$PROJECT_DIR"/*/robot.py; do
+                [ -f "$robot_file" ] || continue
+                target="$(dirname "$robot_file")"
+                [ "$(basename "$target")" = "active" ] && continue
+                marker=" "
+                [ "$(readlink -f "$target")" = "$active" ] && marker="*"
+                printf '%s %s\n' "$marker" "$(basename "$target")"
+            done
+            exit 0
+        fi
+        [ "$#" -eq 1 ] || fail "Usage: motionmodule project [list|PROJECT_NAME]"
+        project_name="$1"
+        printf '%s' "$project_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
+        [ "$project_name" != "active" ] || fail "The name active is reserved for the selected-project symlink"
+        target="$PROJECT_DIR/$project_name"
+        [ -f "$target/robot.py" ] || fail "$target must contain robot.py"
+        case "$(readlink -f "$target")" in
+            "$(readlink -f "$PROJECT_DIR")"/*) ;;
+            *) fail "Refusing a robot project outside $PROJECT_DIR" ;;
+        esac
+        ln -s "$target" "$PROJECT_DIR/active.new.$$"
+        mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"
+        restart_if_installed
+        printf 'Activated robot project %s\n' "$project_name"
         ;;
     hotspot)
         exec sudo /usr/local/sbin/motionmodule-hotspot "$@"
@@ -85,6 +117,7 @@ case "$command" in
     edit)
         printf 'Connect VS Code Remote - SSH to: %s@%s.local\n' "$USER" "$(hostname)"
         printf 'Then open: %s/MotionModule\n' "$HOME"
+        printf 'Active robot project: %s\n' "$(basename "$(readlink -f "$PROJECT_DIR/active")")"
         ;;
     help|-h|--help)
         cat <<'EOF'
@@ -94,7 +127,9 @@ MotionModule commands:
   test-motor CHANNEL [--power 0.15] [--seconds 0.5]
   test-servo CHANNEL [--board 0] [--angle 90]
   versions | activate RELEASE_NAME | rollback
-  install VERSION_OR_GIT_REF       explicit, opt-in install/update
+  install VERSION_OR_GIT_REF [--robot PROJECT]
+                                  explicit, opt-in install/update
+  project [list|PROJECT_NAME]      list or switch robot code folders
   hotspot on [SSID] [PASSWORD] | hotspot off | hotspot status
                                   off reconnects the saved preferred Wi-Fi
   edit

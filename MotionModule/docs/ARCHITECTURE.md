@@ -5,7 +5,7 @@
 ```text
 browser ---> nginx :80 ---> versioned dashboard :8080
                               |
-student Mecanum/robot.py ---- drive hook
+active robot/robot.py ------- drive hook
         |
         v
 motion_module.MotionModule
@@ -34,7 +34,9 @@ through OS lockups, regulator faults, broken wiring, or failed power electronics
 ├── previous -> releases/v0.1.0-...
 └── releases/                            # immutable installed copies
 
-~/MotionModule/Mecanum/                 # persistent student-owned code
+~/MotionModule/active -> Mecanum/        # selected robot project
+~/MotionModule/Mecanum/                  # persistent student-owned code
+~/MotionModule/Swerve/                   # another possible robot project
 ~/.config/motionmodule/config.toml      # persistent hardware calibration
 ```
 
@@ -78,6 +80,18 @@ Nginx is the stable front door on port 80, so a beginner can enter the bare Pi
 IP or `.local` name. The dashboard application listens on port 8080 behind that
 proxy and owns the live APIs. It is packaged with each versioned release; the
 student drive hook is loaded from the persistent project.
+
+## Source and robot-project boundaries
+
+The Git repository has one central `MotionModule/` system directory. Its
+`core/motion_module/` package owns hardware access, safety, the dashboard, and
+network APIs. Direct sibling folders containing `robot.py` are robot projects;
+`Mecanum` is the included example, not part of the core.
+
+During installation, every bundled robot project is copied once into
+`~/MotionModule/`. The `active` symlink selects the folder loaded by systemd.
+`motionmodule project PROJECT_NAME` switches that symlink and restarts the
+service. Runtime upgrades never overwrite those persistent project folders.
 
 The hotspot profile has autoconnect disabled. A manual hotspot therefore stays
 active for the current boot, while a reboot always gives saved client Wi-Fi the

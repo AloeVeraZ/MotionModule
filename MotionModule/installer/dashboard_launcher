@@ -8,7 +8,7 @@ python="$runtime/.venv/bin/python"
 [ -x "$python" ] || { printf '[MotionModule ERROR] Runtime Python is missing: %s\n' "$python" >&2; exit 1; }
 [ -f "$project" ] || { printf '[MotionModule ERROR] Student project is missing: %s\n' "$project" >&2; exit 1; }
 
-if [ -f "$runtime/motion_module/dashboard.py" ]; then
+if [ -f "$runtime/core/motion_module/dashboard.py" ] || [ -f "$runtime/motion_module/dashboard.py" ]; then
     exec "$python" -m motion_module.dashboard --project "$project"
 fi
 

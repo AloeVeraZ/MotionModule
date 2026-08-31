@@ -5,6 +5,10 @@ hosts the browser dashboard, while `robot.py` supplies its drive hook and
 `mecanum.py` contains the wheel math. Future installs update the dashboard
 without overwriting this folder.
 
+`Mecanum` is not required by the core. Add `Swerve`, `WalkingRobot`, or another
+folder beside it with its own `robot.py`, then run
+`motionmodule project PROJECT_NAME` on the Pi to activate it.
+
 The first four motor channels are:
 
 | Wheel | Channel |

@@ -1,9 +1,9 @@
 # Coding robots on MotionModule
 
-The system dashboard loads exactly one optional student drive hook:
+The system dashboard loads exactly one active robot project's drive hook:
 
 ```text
-~/MotionModule/Mecanum/robot.py
+~/MotionModule/active/robot.py
 ```
 
 The starter file defines:
@@ -20,6 +20,32 @@ The returned object implements `drive(forward, strafe, rotate, speed)` and
 network setup, and cleanup, so runtime updates do not overwrite the student
 folder. Existing projects with the original `MecanumDrive` class remain
 compatible even when they do not yet define `create_drive`.
+
+## Robot project folders
+
+`Mecanum` is one example, not a required drivetrain. Create any direct folder
+under `~/MotionModule` and give it a `robot.py`:
+
+```text
+~/MotionModule/
+├── Mecanum/robot.py
+├── Swerve/robot.py
+├── WalkingRobot/robot.py
+└── active -> Mecanum/
+```
+
+The drive object returned by `create_drive(module)` can implement Mecanum,
+swerve, tank, walking, or another mechanism. It only needs `drive(...)` and
+`stop()` methods compatible with the dashboard controls. List and switch
+projects with:
+
+```bash
+motionmodule project list
+motionmodule project Swerve
+```
+
+The switch restarts the service. Hardware configuration remains shared at
+`~/.config/motionmodule/config.toml`; project code remains independent.
 
 ## Motors
 
@@ -84,6 +110,7 @@ or invert the `rotate` command once at the control boundary.
 On any development computer:
 
 ```bash
+cd MotionModule
 python -m venv .venv
 # Windows: .venv\Scripts\activate
 # Linux/macOS: source .venv/bin/activate

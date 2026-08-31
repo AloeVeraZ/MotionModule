@@ -12,8 +12,8 @@ for ((index = 0; index < ${#args[@]}; index++)); do
 done
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
-if [ -n "$script_dir" ] && [ -f "$script_dir/installer/install.sh" ] && [ -f "$script_dir/pyproject.toml" ]; then
-    exec bash "$script_dir/installer/install.sh" --source "$script_dir" "$@"
+if [ -n "$script_dir" ] && [ -f "$script_dir/MotionModule/installer/install.sh" ] && [ -f "$script_dir/MotionModule/pyproject.toml" ]; then
+    exec bash "$script_dir/MotionModule/installer/install.sh" --source "$script_dir/MotionModule" "$@"
 fi
 
 temporary="$(mktemp -d)"
@@ -29,4 +29,4 @@ fi
 git clone --filter=blob:none --no-checkout "$REPO_URL" "$temporary/source"
 git -C "$temporary/source" fetch --depth=1 origin "$REF"
 git -C "$temporary/source" checkout --detach FETCH_HEAD
-bash "$temporary/source/installer/install.sh" --source "$temporary/source" "$@"
+bash "$temporary/source/MotionModule/installer/install.sh" --source "$temporary/source/MotionModule" "$@"

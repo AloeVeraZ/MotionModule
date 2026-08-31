@@ -82,18 +82,29 @@ def system_snapshot() -> dict:
 def load_drive(module, project_path: Path | None = None):
     """Load the student drive hook while supporting older Mecanum projects."""
 
-    if project_path and project_path.is_file():
+    if project_path is None:
+        drive = MecanumDrive(module)
+    else:
+        if not project_path.is_file():
+            raise FileNotFoundError(f"Robot project was not found: {project_path}")
         project = load_project(project_path)
         factory = getattr(project, "create_drive", None)
-        if callable(factory):
-            return factory(module)
         legacy_drive = getattr(project, "MecanumDrive", None)
-        if callable(legacy_drive):
-            return legacy_drive(module)
-    return MecanumDrive(module)
+        if callable(factory):
+            drive = factory(module)
+        elif callable(legacy_drive):
+            drive = legacy_drive(module)
+        else:
+            raise RuntimeError(
+                f"{project_path} must define create_drive(module) returning a drive object"
+            )
+
+    if not callable(getattr(drive, "drive", None)) or not callable(getattr(drive, "stop", None)):
+        raise RuntimeError("The active robot drive object must define drive(...) and stop()")
+    return drive
 
 
-def create_app(module, drive=None, network_client=None) -> Flask:
+def create_app(module, drive=None, network_client=None, project_name: str = "Mecanum") -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
     active_drive = drive or MecanumDrive(module)
     network = network_client or NetworkClient()
@@ -115,7 +126,12 @@ def create_app(module, drive=None, network_client=None) -> Flask:
     def dashboard(page: str = "overview"):
         if page not in DASHBOARD_PAGES:
             return "Not found", 404
-        return render_template("dashboard.html", dashboard_token=dashboard_token, active_page=page)
+        return render_template(
+            "dashboard.html",
+            dashboard_token=dashboard_token,
+            active_page=page,
+            project_name=project_name,
+        )
 
     @app.get("/healthz")
     def health():
@@ -123,7 +139,9 @@ def create_app(module, drive=None, network_client=None) -> Flask:
 
     @app.get("/api/status")
     def status():
-        return jsonify({"ok": True, "robot": module.snapshot(), "system": system_snapshot()})
+        system = system_snapshot()
+        system["active_project"] = project_name
+        return jsonify({"ok": True, "robot": module.snapshot(), "system": system})
 
     @app.get("/api/config")
     def configuration():
@@ -131,6 +149,7 @@ def create_app(module, drive=None, network_client=None) -> Flask:
         return jsonify(
             {
                 "ok": True,
+                "project": project_name,
                 "module": {
                     "pwm_hz": module.config.pwm_hz,
                     "deadtime_ms": module.config.deadtime_ms,
@@ -146,7 +165,7 @@ def create_app(module, drive=None, network_client=None) -> Flask:
                     "minimum_pulse_us": servo.minimum_pulse_us,
                     "maximum_pulse_us": servo.maximum_pulse_us,
                 },
-                "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md",
+                "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/MotionModule/docs/PINOUT.md",
             }
         )
 
@@ -370,7 +389,8 @@ def create_app(module, drive=None, network_client=None) -> Flask:
 
 
 def serve(module, stop_event: threading.Event, project_path: Path | None = None) -> None:
-    app = create_app(module, load_drive(module, project_path))
+    project_name = project_path.parent.name if project_path else "Built-in Mecanum"
+    app = create_app(module, load_drive(module, project_path), project_name=project_name)
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.
     server = make_server("127.0.0.1", 8080, app, threaded=True)

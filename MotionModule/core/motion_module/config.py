@@ -10,7 +10,7 @@ from pathlib import Path
 from .errors import ConfigurationError
 
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "default.toml"
+DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.toml"
 RESERVED_ID_GPIOS = {0, 1}
 I2C_GPIOS = {2, 3}
 VALID_BCM_GPIOS = set(range(28))
@@ -148,4 +148,3 @@ def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
     except (KeyError, TypeError, ValueError) as error:
         raise ConfigurationError(f"Missing or invalid configuration value in {selected}: {error}") from error
     return _validate(config)
-

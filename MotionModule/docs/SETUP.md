@@ -37,8 +37,8 @@ the systemd service. It performs these operations in order:
 2. enables I2C and adds the installing user to the `gpio`/`i2c` groups;
 3. copies the requested code into a new timestamped release directory;
 4. creates an isolated Python environment and runs the complete unit test suite;
-5. creates `~/MotionModule/Mecanum` only when it does not already exist;
-6. creates the persistent hardware config only when it does not already exist;
+5. copies each bundled robot-project folder only when it does not already exist;
+6. points `~/MotionModule/active` at the selected project and creates the persistent config;
 7. switches the `current` symlink only after validation succeeds;
 8. records the active Raspberry Pi Imager Wi-Fi as the preferred network;
 9. enables the dashboard/runtime, port-80 proxy, and 30-second Wi-Fi failover service;
@@ -118,12 +118,24 @@ rail is absent.
 
 Install VS Code and the Microsoft Remote - SSH extension on the laptop. Connect
 to `YOUR_USER@motionmodule-01.local`, open `~/MotionModule`, and edit the
-`Mecanum` folder. Restart and watch logs from the VS Code terminal:
+active robot folder. The included default is `Mecanum`. Restart and watch logs
+from the VS Code terminal:
 
 ```bash
 motionmodule restart
 motionmodule logs
 ```
+
+To add another robot, create `~/MotionModule/Swerve/robot.py` (or another
+project-named folder), then select it:
+
+```bash
+motionmodule project list
+motionmodule project Swerve
+```
+
+The dashboard's Code page shows the active project. Reinstalling or updating
+the runtime does not overwrite any existing robot project folder.
 
 The complete dashboard is `http://motionmodule-01.local`; the Pi's current IP
 address also works directly without adding a port. A network

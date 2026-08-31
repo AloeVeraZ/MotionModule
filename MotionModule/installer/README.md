@@ -10,7 +10,7 @@ Or after the repository is published:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
-  bash -s -- --version v0.1.0 --hostname motionmodule-01
+  bash -s -- --version main --hostname motionmodule-01
 ```
 
 Options:
@@ -19,6 +19,7 @@ Options:
 | --- | --- |
 | `--version REF` | Explicit Git branch, tag, or fetchable commit to install |
 | `--hostname NAME` | Set the Pi's mDNS hostname |
+| `--robot PROJECT` | Select a bundled robot-project folder; defaults to `Mecanum` |
 | `--no-hostname` | Preserve the current hostname |
 | `--no-start` | Install and enable the service without starting it |
 | `--no-reboot` | Skip the default automatic reboot |
@@ -28,6 +29,12 @@ installer installs system dependencies, copies that source into a new release,
 creates a per-release virtual environment, runs unit tests, and marks the
 release complete. Only then is `current` switched. An error before activation
 leaves the previous service target unchanged.
+
+The central source directory may contain multiple direct child folders with
+`robot.py`. Each is copied once into `~/MotionModule`, while an `active` symlink
+selects the project loaded by the service. Existing robot folders are never
+overwritten. After installation, use `motionmodule project list` and
+`motionmodule project PROJECT_NAME` to inspect or switch them.
 
 It also installs the root-owned constrained network helper and
 `motionmodule-network.service`. The helper records the active Imager-created

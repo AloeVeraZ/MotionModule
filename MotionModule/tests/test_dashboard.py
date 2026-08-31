@@ -1,9 +1,11 @@
 import threading
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import load_config
-from motion_module.dashboard import create_app
+from motion_module.dashboard import create_app, load_drive
 from motion_module.mecanum import MecanumDrive
 from motion_module.servo import MockServoController, Servo
 
@@ -83,11 +85,30 @@ class DashboardTests(unittest.TestCase):
 
     def test_config_api_matches_driver_harness_and_complete_header(self):
         data = self.client.get("/api/config").get_json()
+        self.assertEqual(data["project"], "Mecanum")
         self.assertEqual(len(data["header"]), 40)
         by_motor = {item["motor"]: item for item in data["motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))
         self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (1, "A"))
         self.assertEqual(data["header"][39]["role"], "Driver 1 A IN2 · Motor 3")
+
+    def test_dashboard_reports_custom_active_project(self):
+        app = create_app(
+            self.module, MecanumDrive(self.module), self.network, project_name="WalkingRobot"
+        )
+        client = app.test_client()
+        self.assertEqual(client.get("/api/status").get_json()["system"]["active_project"], "WalkingRobot")
+        code_page = client.get("/code").data
+        self.assertIn(b"ACTIVE \xc2\xb7 WalkingRobot", code_page)
+        self.assertIn(b"class RobotDrive", code_page)
+        self.assertNotIn(b"from mecanum import MecanumDrive", code_page)
+
+    def test_custom_project_requires_the_documented_drive_factory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "robot.py"
+            project.write_text("name = 'missing factory'\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "must define create_drive"):
+                load_drive(self.module, project)
 
     def test_drive_requires_session_token_and_ignores_stale_packets(self):
         denied = self.client.post("/api/drive", json={"sequence": 1})

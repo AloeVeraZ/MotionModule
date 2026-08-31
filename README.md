@@ -37,21 +37,28 @@ uses 1 kHz and never energizes both directions of one motor simultaneously. The
 PCA9685 runs its 16 outputs without consuming 16 Pi pins and can be expanded by
 assigning unique I2C addresses.
 
-See the complete [pinout and power boundaries](docs/PINOUT.md) before wiring.
+See the complete [pinout and power boundaries](MotionModule/docs/PINOUT.md) before wiring.
 
 ## Repository layout
 
 ```text
-MotionModule/
-├── Mecanum/                  # Persistent student drive hook and wheel math
-├── config/default.toml       # Eight-motor and PCA9685 reference configuration
-├── docs/                     # Pinout, setup, coding, and architecture
-├── installer/                # Pi installer, services, version CLI, Wi-Fi controller
-├── motion_module/            # Runtime, safety API, and versioned web dashboard
-├── tests/                    # Hardware-independent validation
-├── install.sh                # Local and one-line installation entry point
-└── pyproject.toml
+MotionModule repository/
+├── install.sh                     # The only root-level installation entry point
+├── README.md
+└── MotionModule/                  # The complete system lives here
+    ├── core/motion_module/        # Reusable motor, servo, safety, and web runtime
+    ├── installer/                 # Pi setup, services, Wi-Fi, versions, rollback
+    ├── Mecanum/                   # One robot project; future projects sit beside it
+    ├── config/default.toml        # Eight-motor and PCA9685 hardware defaults
+    ├── docs/                      # Pinout, setup, coding, and architecture
+    ├── tests/                     # Hardware-independent validation
+    ├── requirements.txt
+    └── pyproject.toml
 ```
+
+`core/motion_module` is not robot-specific code. It is the installed Python
+engine that safely controls GPIO, motors, servos, the watchdog, networking, and
+the dashboard. `Mecanum` is just the first replaceable robot project.
 
 ## Install on the Raspberry Pi
 
@@ -74,15 +81,16 @@ The installer creates:
 
 | Item | Location |
 | --- | --- |
-| Student code | `~/MotionModule/Mecanum` |
+| Robot projects | `~/MotionModule/PROJECT_NAME` |
+| Active project | `~/MotionModule/active` symlink |
 | Persistent hardware config | `~/.config/motionmodule/config.toml` |
 | Versioned runtimes | `~/.local/share/motionmodule/releases` |
 | Active system service | `motionmodule.service` |
 | Wi-Fi failover service | `motionmodule-network.service` |
 | Saved network settings | `/etc/motionmodule/network.json` |
 
-It never enables automatic updates and never overwrites an existing student
-`Mecanum` folder or hardware configuration. At the end it automatically runs
+It never enables automatic updates and never overwrites an existing robot
+project folder or hardware configuration. At the end it automatically runs
 `motionmodule doctor`, links to the GitHub pinout, and reboots. Use
 `--no-reboot` only when another provisioning step must run first. Rerun the
 doctor check after wiring and before applying motor power.
@@ -107,7 +115,7 @@ motionmodule logs
 
 Open `http://motionmodule.local` or type the Pi's IP address directly into a
 browser. Nginx accepts normal HTTP on port 80 and forwards it to the versioned
-MotionModule dashboard. The interface includes live robot health, Mecanum drive,
+MotionModule dashboard. The interface includes live robot health, active-project drive,
 the complete 40-pin diagram, four-driver/servo wiring, guarded bench tests,
 Doctor results and service logs, Wi-Fi setup, and coding instructions.
 
@@ -120,10 +128,37 @@ Wi-Fi first again.
 
 The dashboard belongs to the active versioned runtime. Updating or rolling back
 MotionModule changes the interface and backend together, while the existing
-`~/MotionModule/Mecanum` student project remains untouched.
+robot project folders remain untouched.
 
-Read [setup and commissioning](docs/SETUP.md) and the [coding guide](docs/CODING.md)
+Read [setup and commissioning](MotionModule/docs/SETUP.md) and the
+[coding guide](MotionModule/docs/CODING.md)
 for the full workflow.
+
+## Add or switch robot projects
+
+Every direct folder in `~/MotionModule` that contains `robot.py` is a robot
+project. `Mecanum` is installed as the default, but the runtime is reusable:
+
+```text
+~/MotionModule/
+├── active -> Swerve/
+├── Mecanum/
+│   └── robot.py
+├── Swerve/
+│   └── robot.py
+└── WalkingRobot/
+    └── robot.py
+```
+
+List or activate them without reinstalling the system:
+
+```bash
+motionmodule project list
+motionmodule project Swerve
+```
+
+Bundled projects can also be selected during installation with
+`--robot PROJECT_NAME`. The selected project appears in the dashboard Code page.
 
 ## Diagnostics and versions
 
@@ -132,8 +167,9 @@ motionmodule pinout
 motionmodule doctor
 motionmodule test-motor 1
 motionmodule test-servo 0 --board 0 --angle 90
+motionmodule project list
 motionmodule versions
-motionmodule install v0.1.0
+motionmodule install main
 motionmodule rollback
 motionmodule hotspot status
 ```
@@ -148,6 +184,9 @@ boards do acknowledge their addresses and are detected non-destructively.
 All safety and kinematics tests run without Raspberry Pi hardware:
 
 ```bash
+cd MotionModule
+python -m venv .venv
+python -m pip install -e .
 python -m unittest discover -s tests -v
 python -m motion_module pinout
 python -m motion_module doctor

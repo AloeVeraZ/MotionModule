@@ -75,18 +75,29 @@
       </section>
 
       <section class="view" data-view="code" hidden>
-        <div class="hero"><div><p class="eyebrow">Student workspace</p><h1>Code</h1><p>Edit the robot over Wi‑Fi or Ethernet. Installer upgrades replace the versioned runtime and dashboard without overwriting your Mecanum project.</p></div><span class="pill">~/MotionModule</span></div>
+        <div class="hero"><div><p class="eyebrow">Student workspace</p><h1>Code</h1><p>Edit the robot over Wi‑Fi or Ethernet. Installer upgrades replace the versioned runtime and dashboard without overwriting any robot project.</p></div><span class="pill">ACTIVE · {{ project_name }}</span></div>
         <div class="grid equal"><div class="stack"><article class="card"><div class="panel-head"><h2>VS Code over SSH</h2><span>Recommended</span></div><div class="panel-body steps"><div class="step"><strong>Install Remote – SSH</strong><p>Add Microsoft’s Remote – SSH extension to VS Code on your computer.</p></div><div class="step"><strong>Connect to the Pi</strong><p>Use your Pi username and <code id="sshHost">motionmodule.local</code>, then open <code>~/MotionModule</code>.</p></div><div class="step"><strong>Apply saved code</strong><p>In the VS Code terminal, run <code>motionmodule restart</code>, then <code>motionmodule logs</code>.</p></div></div></article><article class="card"><div class="panel-head"><h2>Useful commands</h2><span>Pi terminal</span></div><div class="panel-body"><div class="code-block"><button class="copy" type="button">Copy</button><pre>motionmodule doctor
 motionmodule pinout
 motionmodule restart
 motionmodule logs
 motionmodule versions
 motionmodule rollback</pre></div></div></article></div>
-          <div class="stack"><article class="card"><div class="panel-head"><h2>Student drive hook</h2><span>Mecanum/robot.py</span></div><div class="panel-body"><div class="code-block"><button class="copy" type="button">Copy</button><pre>from mecanum import MecanumDrive
+          <div class="stack"><article class="card"><div class="panel-head"><h2>Student drive hook</h2><span>{{ project_name }}/robot.py</span></div><div class="panel-body"><div class="code-block"><button class="copy" type="button">Copy</button><pre>{% if project_name == "Mecanum" %}from mecanum import MecanumDrive
 
 def create_drive(module):
-    # Change wheel channels or return your own drive class.
-    return MecanumDrive(module)</pre></div></div></article><article class="card"><div class="panel-head"><h2>Motor and servo API</h2><span>Python</span></div><div class="panel-body"><div class="code-block"><button class="copy" type="button">Copy</button><pre># Motor channel: -1.0 reverse to +1.0 forward
+    return MecanumDrive(module){% else %}class RobotDrive:
+    def __init__(self, module):
+        self.module = module
+
+    def drive(self, forward, strafe, rotate, speed):
+        # Convert dashboard commands for this robot here.
+        return {"outputs": {}}
+
+    def stop(self):
+        self.module.stop_all()
+
+def create_drive(module):
+    return RobotDrive(module){% endif %}</pre></div></div></article><article class="card"><div class="panel-head"><h2>Motor and servo API</h2><span>Python</span></div><div class="panel-body"><div class="code-block"><button class="copy" type="button">Copy</button><pre># Motor channel: -1.0 reverse to +1.0 forward
 module.motor(5).set(0.25)
 module.motor(5).stop()
 

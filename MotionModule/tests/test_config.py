@@ -1,6 +1,7 @@
 import unittest
+from pathlib import Path
 
-from motion_module.config import load_config
+from motion_module.config import DEFAULT_CONFIG_PATH, load_config
 from motion_module.pinout import header_rows, motor_rows
 
 
@@ -15,6 +16,10 @@ class DefaultConfigTests(unittest.TestCase):
         ]
         self.assertEqual(len(pins), 16)
         self.assertEqual(len(set(pins)), 16)
+
+    def test_default_config_resolves_outside_the_core_package(self):
+        expected = Path(__file__).resolve().parents[1] / "config" / "default.toml"
+        self.assertEqual(DEFAULT_CONFIG_PATH, expected)
 
     def test_existing_and_expansion_physical_pin_assignments(self):
         rows = motor_rows(load_config())

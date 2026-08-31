@@ -6,6 +6,12 @@ VERSION_REF="${MOTIONMODULE_VERSION:-main}"
 TARGET_HOSTNAME="__default__"
 START_SERVICE=true
 REBOOT_SYSTEM=true
+ROBOT_PROJECT="${MOTIONMODULE_ROBOT_PROJECT:-Mecanum}"
+ROBOT_EXPLICIT=false
+
+if [ -n "${MOTIONMODULE_ROBOT_PROJECT:-}" ]; then
+    ROBOT_EXPLICIT=true
+fi
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -19,6 +25,11 @@ while [ "$#" -gt 0 ]; do
             ;;
         --hostname)
             TARGET_HOSTNAME="$2"
+            shift 2
+            ;;
+        --robot)
+            ROBOT_PROJECT="$2"
+            ROBOT_EXPLICIT=true
             shift 2
             ;;
         --no-hostname)
@@ -49,7 +60,10 @@ trap 'fail "Installation stopped on line $LINENO. Read the error above and rerun
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 [ -f "$SOURCE_DIR/pyproject.toml" ] || fail "pyproject.toml is missing from $SOURCE_DIR"
 [ -f "$SOURCE_DIR/config/default.toml" ] || fail "The default hardware configuration is missing."
-[ -f "$SOURCE_DIR/Mecanum/robot.py" ] || fail "The Mecanum example is missing."
+if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
+    fail "Invalid robot project name: $ROBOT_PROJECT"
+fi
+[ -f "$SOURCE_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Robot project $ROBOT_PROJECT is missing robot.py."
 command -v sudo >/dev/null || fail "sudo is required for Raspberry Pi setup."
 
 INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
@@ -138,14 +152,35 @@ python3 -m venv --system-site-packages "$release_dir/.venv"
 "$release_dir/.venv/bin/python" -m unittest discover -s "$release_dir/tests" -v
 touch "$release_dir/.complete"
 
-say "Creating the persistent student workspace..."
+say "Creating the persistent student workspace and robot projects..."
 mkdir -p "$PROJECT_DIR" "$CONFIG_DIR"
-if [ ! -e "$PROJECT_DIR/Mecanum" ]; then
-    cp -a "$release_dir/Mecanum" "$PROJECT_DIR/Mecanum"
-    say "Created $PROJECT_DIR/Mecanum. Future installs will not overwrite student code there."
-else
-    say "Keeping the existing student code at $PROJECT_DIR/Mecanum."
+for robot_file in "$release_dir"/*/robot.py; do
+    [ -f "$robot_file" ] || continue
+    robot_template="$(dirname "$robot_file")"
+    robot_name="$(basename "$robot_template")"
+    if [ ! -e "$PROJECT_DIR/$robot_name" ]; then
+        cp -a "$robot_template" "$PROJECT_DIR/$robot_name"
+        say "Created robot project $PROJECT_DIR/$robot_name. Future installs will not overwrite it."
+    else
+        say "Keeping existing robot project $PROJECT_DIR/$robot_name."
+    fi
+done
+[ -f "$PROJECT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
+
+ACTIVE_LINK="$PROJECT_DIR/active"
+if [ -e "$ACTIVE_LINK" ] && [ ! -L "$ACTIVE_LINK" ]; then
+    fail "$ACTIVE_LINK must be a managed symlink; rename that file or directory and rerun the installer."
 fi
+if [ "$ROBOT_EXPLICIT" = true ] || [ ! -L "$ACTIVE_LINK" ] || [ ! -f "$ACTIVE_LINK/robot.py" ]; then
+    ln -s "$PROJECT_DIR/$ROBOT_PROJECT" "$PROJECT_DIR/active.new.$$"
+    mv -Tf "$PROJECT_DIR/active.new.$$" "$ACTIVE_LINK"
+fi
+active_target="$(readlink -f "$ACTIVE_LINK")"
+case "$active_target" in
+    "$(readlink -f "$PROJECT_DIR")"/*) ;;
+    *) fail "The active robot project points outside $PROJECT_DIR" ;;
+esac
+ACTIVE_PROJECT="$(basename "$active_target")"
 if [ ! -f "$CONFIG_FILE" ]; then
     install -m 0644 "$release_dir/config/default.toml" "$CONFIG_FILE"
 else
@@ -156,11 +191,13 @@ if [ ! -f "$PROJECT_DIR/README.md" ]; then
 cat > "$PROJECT_DIR/README.md" <<EOF
 # MotionModule student workspace
 
-Edit \`Mecanum/robot.py\` and \`Mecanum/mecanum.py\`, then run:
+Each direct folder containing \`robot.py\` is a robot project. The installer
+starts with \`$ACTIVE_PROJECT\`. Edit that folder, then run:
 
 \`\`\`bash
 motionmodule restart
 motionmodule logs
+motionmodule project list
 \`\`\`
 
 Hardware configuration lives at \`$CONFIG_FILE\` and is intentionally outside
@@ -241,10 +278,10 @@ Wants=motionmodule-network.service
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$PROJECT_DIR/Mecanum
+WorkingDirectory=$PROJECT_DIR/active
 Environment=PYTHONUNBUFFERED=1
 Environment=MOTIONMODULE_CONFIG=$CONFIG_FILE
-ExecStart=/usr/local/sbin/motionmodule-dashboard "$CURRENT_LINK" "$PROJECT_DIR/Mecanum/robot.py"
+ExecStart=/usr/local/sbin/motionmodule-dashboard "$CURRENT_LINK" "$PROJECT_DIR/active/robot.py"
 Restart=on-failure
 RestartSec=2
 KillSignal=SIGINT
@@ -297,7 +334,7 @@ fi
 
 say "Installation complete. No automatic updater was enabled."
 printf 'Active release: %s\n' "$release_id"
-printf 'Student code:   %s/Mecanum\n' "$PROJECT_DIR"
+printf 'Active robot:   %s/%s\n' "$PROJECT_DIR" "$ACTIVE_PROJECT"
 printf 'Configuration:  %s\n' "$CONFIG_FILE"
 printf 'Robot dashboard: http://%s.local (or type the Pi IP directly)\n' "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'SSH / VS Code:  ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
@@ -307,7 +344,7 @@ if [ "$REBOOT_SYSTEM" = true ]; then
 else
     say "Automatic reboot skipped. Reboot manually before the first hardware test."
 fi
-printf '\nCheck GitHub for the proper pinout before wiring the robot: https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md\n'
+printf '\nCheck GitHub for the proper pinout before wiring the robot: https://github.com/AloeVeraZ/MotionModule/blob/main/MotionModule/docs/PINOUT.md\n'
 
 if [ "$REBOOT_SYSTEM" = true ]; then
     sleep 3

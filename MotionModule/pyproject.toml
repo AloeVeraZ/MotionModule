@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "motionmodule"
-version = "0.2.0"
+version = "0.3.0"
 description = "Raspberry Pi control runtime for eight brushed motors and PCA9685 servos"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -17,6 +17,7 @@ dependencies = [
 motionmodule-python = "motion_module.cli:main"
 
 [tool.setuptools.packages.find]
+where = ["core"]
 include = ["motion_module*"]
 
 [tool.setuptools.package-data]
