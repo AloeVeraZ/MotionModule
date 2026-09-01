@@ -7,6 +7,7 @@ CURRENT_LINK="$INSTALL_ROOT/current"
 PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
 ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
+BACKUP_DIR="${MOTIONMODULE_BACKUP_DIR:-$PROJECT_DIR/backups}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
 TERMINAL_ACCESS_FILE="${MOTIONMODULE_TERMINAL_ACCESS:-$CONFIG_DIR/terminal-access.json}"
 RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
@@ -84,6 +85,36 @@ case "$command" in
         ref="$1"
         shift
         curl -fsSL "$RAW_INSTALL" | bash -s -- --version "$ref" "$@"
+        ;;
+    deploy)
+        [ "$#" -eq 2 ] || fail "Usage: motionmodule deploy PROJECT_NAME UPLOADED_ARCHIVE"
+        project_name="$1"
+        printf '%s' "$project_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
+        [ "$project_name" != "active" ] || fail "The name active is reserved for the selected-project symlink"
+        upload_dir="$PROJECT_DIR/.uploads"
+        mkdir -p "$upload_dir" "$ROBOT_DIR" "$BACKUP_DIR"
+        upload_root="$(readlink -f "$upload_dir")"
+        archive="$(readlink -f "$2" 2>/dev/null || true)"
+        [ -n "$archive" ] && [ -f "$archive" ] || fail "Uploaded project archive was not found"
+        case "$archive" in
+            "$upload_root"/*.tar.gz) ;;
+            *) fail "Uploaded project archive must be inside $upload_dir" ;;
+        esac
+        if ! deploy_output="$("$(runtime_python)" -m motion_module.deploy "$archive" "$ROBOT_DIR" "$BACKUP_DIR" "$project_name" 2>&1)"; then
+            rm -f -- "$archive"
+            fail "$deploy_output"
+        fi
+        rm -f -- "$archive"
+        printf '%s\n' "$deploy_output"
+        target="$ROBOT_DIR/$project_name"
+        ln -s "$target" "$PROJECT_DIR/active.new.$$"
+        mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"
+        restart_if_installed
+        if systemctl list-unit-files motionmodule.service >/dev/null 2>&1; then
+            sleep 1
+            systemctl is-active --quiet motionmodule.service || fail "The project was installed, but MotionModule did not stay running. Run motionmodule logs over SSH."
+        fi
+        printf 'Activated %s and restarted MotionModule. The uploaded code is now running.\n' "$project_name"
         ;;
     project)
         if [ "$#" -eq 0 ] || [ "${1:-}" = "list" ]; then
@@ -185,6 +216,8 @@ MotionModule commands:
   versions | activate RELEASE_NAME | rollback
   install VERSION_OR_GIT_REF [--robot PROJECT]
                                   explicit, opt-in install/update
+  deploy PROJECT_NAME UPLOADED_ARCHIVE
+                                  validate, activate, and run an uploaded project
   project [list|PROJECT_NAME]      list or switch robot code folders
   hotspot on [SSID] [PASSWORD] | hotspot off | hotspot status
                                   off reconnects the saved preferred Wi-Fi

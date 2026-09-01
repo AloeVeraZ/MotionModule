@@ -12,25 +12,25 @@ watchdog_ms = 500
 # that wheel is physically reversed; do not change the mecanum math.
 
 [motors.1]
-name = "front_left"
+name = "driver2_a"
 forward_gpio = 12
 reverse_gpio = 6
 inverted = true
 
 [motors.2]
-name = "rear_left"
+name = "driver2_b"
 forward_gpio = 19
 reverse_gpio = 16
 inverted = true
 
 [motors.3]
-name = "front_right"
+name = "driver1_a"
 forward_gpio = 20
 reverse_gpio = 21
 inverted = true
 
 [motors.4]
-name = "rear_right"
+name = "driver1_b"
 forward_gpio = 26
 reverse_gpio = 13
 inverted = true
@@ -68,4 +68,3 @@ frequency_hz = 50
 addresses = [0x40]
 minimum_pulse_us = 500
 maximum_pulse_us = 2500
-

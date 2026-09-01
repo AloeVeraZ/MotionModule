@@ -44,7 +44,23 @@ class DefaultConfigTests(unittest.TestCase):
         header = header_rows(config)
         self.assertEqual(len(header), 40)
         self.assertEqual(header[26]["category"], "reserved")
-        self.assertEqual(header[39]["role"], "Driver 1 A IN2 · Motor 3")
+        self.assertEqual(header[39]["role"], "Driver 1A IN2")
+
+    def test_default_motor_names_describe_generic_driver_outputs(self):
+        config = load_config()
+        self.assertEqual(
+            {motor.channel: motor.name for motor in config.motors},
+            {
+                1: "driver2_a",
+                2: "driver2_b",
+                3: "driver1_a",
+                4: "driver1_b",
+                5: "driver3_a",
+                6: "driver3_b",
+                7: "driver4_a",
+                8: "driver4_b",
+            },
+        )
 
 
 if __name__ == "__main__":

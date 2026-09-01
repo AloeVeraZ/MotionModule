@@ -143,16 +143,38 @@ servo—continuous PWM represents direction and speed, not an absolute angle.
 
 ## 6. Student editing
 
-Install VS Code and the Microsoft Remote - SSH extension on the laptop. Connect
-to `YOUR_USER@motionmodule-01.local`, open
-`~/MotionModule/robots/Mecanum`, and edit that robot folder. The included
-default is `Mecanum`. Restart and watch logs
-from the VS Code terminal:
+Use VS Code for robot code. There are two supported connection modes.
+
+### Option A: edit directly on the Pi
+
+Install the Microsoft Remote - SSH extension in VS Code. Connect to
+`YOUR_USER@motionmodule-01.local`, then open
+`~/MotionModule/robots/Mecanum`. Saving edits the robot's copy directly. Restart
+and watch logs from the VS Code terminal:
 
 ```bash
 motionmodule restart
 motionmodule logs
 ```
+
+### Option B: edit locally and push
+
+Open a local clone of this repository in VS Code. Copy `examples/Mecanum` into
+a new local folder such as `robots/MyRobot`; every project must contain
+`robot.py`. Edit locally without touching the robot, then choose **Terminal →
+Run Task → MotionModule: Push robot project**. Enter the project folder and a
+target such as `YOUR_USER@motionmodule-01.local`.
+
+The same operation can be run directly from the VS Code terminal:
+
+```bash
+python tools/push_robot.py robots/MyRobot --host YOUR_USER@motionmodule-01.local
+```
+
+The push uses SSH, validates all Python syntax, saves the previous Pi copy in
+`~/MotionModule/backups`, activates `MyRobot`, and restarts MotionModule. Only
+the successfully pushed copy runs on the robot. Install the operating system's
+OpenSSH client if the `ssh` or `scp` command is missing.
 
 ### Browser terminal
 
@@ -197,9 +219,11 @@ The complete dashboard is `http://motionmodule-01.local`; the Pi's current IP
 address also works directly without adding a port. A network
 disconnect stops motor output after 500 ms even if the browser stop request
 never reaches the Pi. Open **Debug** for the pin diagram, live PCA9685
-detection, guarded motor/servo tests, Doctor warnings, service logs, active
+detection, guarded motor/servo tests, Doctor warnings, explained commands,
+service logs, active
 network, IP addresses, Wi-Fi scan, and hotspot controls. Every network change
-stops the motors. **Code** contains editing help and guarded manual drive.
+stops the motors. **Code** contains the two VS Code workflows, guarded manual
+drive, and the time-limited terminal.
 
 ## 7. Wi-Fi and automatic standalone hotspot
 

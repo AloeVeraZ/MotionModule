@@ -103,6 +103,15 @@ During installation, every bundled example is copied once into
 systemd. `motionmodule project PROJECT_NAME` switches that symlink and restarts
 the service. Runtime upgrades never overwrite those persistent project folders.
 
+For local VS Code development, `tools/push_robot.py` creates a filtered archive
+and transfers it through the user's existing SSH account. The Pi accepts
+archives only from `~/MotionModule/.uploads`, rejects traversal paths, links,
+special files, excessive sizes, and invalid Python syntax, then atomically
+replaces the named project. An existing copy is moved to
+`~/MotionModule/backups` first. The active symlink is switched and the narrowly
+authorized MotionModule service restart makes the uploaded copy live; the
+upload path never grants general root command execution.
+
 The hotspot profile has autoconnect disabled. A manual hotspot therefore stays
 active for the current boot, while a reboot always gives saved client Wi-Fi the
 first 30-second opportunity. Network changes are queued after an HTTP response

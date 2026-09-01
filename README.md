@@ -102,31 +102,49 @@ doctor check after wiring and before applying motor power.
 
 ## Connect, edit, and run
 
-The recommended workflow is VS Code Remote‑SSH over the Pi's saved Wi-Fi or
-Ethernet connection:
+VS Code is the supported editor. Choose either of these two VS Code workflows
+for a robot project:
+
+1. **Edit on the Pi with Remote - SSH.** Connect over the Pi's saved Wi-Fi or
+   Ethernet connection:
 
 ```bash
 ssh YOUR_PI_USER@motionmodule.local
 ```
 
-In VS Code, install **Remote - SSH**, connect to the same address, and open
-`~/MotionModule`. Saving changes edits the code directly on the Pi. Apply them
-with:
+   In VS Code, install **Remote - SSH**, connect to that address, and open
+   `~/MotionModule/robots/PROJECT_NAME`. Saving changes edits the Pi copy.
+   Apply them from the VS Code terminal with:
 
 ```bash
 motionmodule restart
 motionmodule logs
 ```
 
+2. **Edit locally, then push.** Open this repository in VS Code, make a local
+   folder containing `robot.py` (for example, copy `examples/Mecanum` to
+   `robots/MyRobot`), and run **Terminal → Run Task → MotionModule: Push robot
+   project**. The equivalent command is:
+
+```bash
+python tools/push_robot.py robots/MyRobot --host YOUR_PI_USER@motionmodule.local
+```
+
+The push checks every Python file, uploads over SSH, backs up an existing copy
+under `~/MotionModule/backups`, activates the uploaded project, and restarts the
+service. Local edits never run hardware by themselves; the uploaded copy starts
+only after a successful push.
+
 Open `http://motionmodule.local` or type the Pi's IP address directly into a
 browser. Nginx accepts normal HTTP on port 80 and forwards it to the versioned
 MotionModule dashboard. Overview shows live motor, servo, controller, and
 network state. Debug combines the complete 40-pin diagram, four-driver/servo
-wiring, guarded bench tests, Doctor warnings, service logs, and Wi-Fi setup.
+wiring, guarded bench tests, Doctor warnings, explained management commands,
+service logs, and Wi-Fi setup.
 Its servo test selects PCA9685 channels 0–15 and includes goBILDA 300°,
 5-turn/1800°, continuous-rotation, and generic positional profiles, plus a
-dedicated zero/neutral command. Code contains the editing workflow and guarded
-manual drive controls, followed by a time-limited Bash terminal at the bottom.
+dedicated zero/neutral command. Code contains only the two VS Code setup paths,
+guarded manual drive controls, and a time-limited Bash terminal at the bottom.
 
 At every boot the Pi first uses the Wi-Fi configured in Raspberry Pi Imager (or
 the most recently saved network). If no client Wi-Fi connects within 30 seconds,

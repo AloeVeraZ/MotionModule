@@ -76,6 +76,16 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('rm -f -- "$TERMINAL_ACCESS_FILE"', manager)
         self.assertIn('minutes" -le 120', manager)
 
+    def test_local_push_is_validated_activated_and_restarted(self):
+        manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
+        self.assertIn('deploy)', manager)
+        self.assertIn('-m motion_module.deploy', manager)
+        self.assertIn('"$upload_root"/*.tar.gz', manager)
+        self.assertIn('mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"', manager)
+        self.assertIn("systemctl is-active --quiet motionmodule.service", manager)
+        self.assertIn("The uploaded code is now running", manager)
+        self.assertIn("restart motionmodule.service", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()

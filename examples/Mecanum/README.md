@@ -34,6 +34,11 @@ After editing either file, run `motionmodule restart`. Older student folders
 that contain the original Flask server remain compatible: MotionModule loads
 their drive class and ignores the old page server.
 
+When editing a copy on a development computer in VS Code, push and activate it
+with `python tools/push_robot.py LOCAL_FOLDER --host USER@motionmodule.local`
+from the repository root. The VS Code task named **MotionModule: Push robot
+project** runs the same command interactively.
+
 To use a servo from your own code:
 
 ```python

@@ -152,6 +152,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Four dual H-bridge drivers", debug)
         self.assertIn(b"MotionModule Doctor", debug)
         self.assertIn(b"Connect to Wi", debug)
+        self.assertIn(b"Useful commands", debug)
+        self.assertIn(b"Stops outputs, reloads the active robot project", debug)
         self.assertNotIn(b'data-page="drive"', debug)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
@@ -159,7 +161,12 @@ class DashboardTests(unittest.TestCase):
         code = self.client.get("/code").data
         self.assertIn(b"Manual test control", code)
         self.assertIn(b'id="driveEnable"', code)
-        self.assertIn(b"robots/Mecanum/robot.py", code)
+        self.assertIn(b"robots/Mecanum", code)
+        self.assertIn(b"Code with VS Code", code)
+        self.assertIn(b"Edit directly on the robot", code)
+        self.assertIn(b"Edit locally, then push", code)
+        self.assertIn(b"MotionModule: Push robot project", code)
+        self.assertIn(b"tools/push_robot.py", code)
         self.assertIn(b"Time-limited robot shell", code)
         self.assertIn(b'id="terminalCommand"', code)
         self.assertGreater(code.index(b"Time-limited robot shell"), code.index(b"Manual test control"))
@@ -195,7 +202,7 @@ class DashboardTests(unittest.TestCase):
         by_motor = {item["motor"]: item for item in data["motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))
         self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (1, "A"))
-        self.assertEqual(data["header"][39]["role"], "Driver 1 A IN2 · Motor 3")
+        self.assertEqual(data["header"][39]["role"], "Driver 1A IN2")
 
     def test_dashboard_reports_custom_active_project(self):
         app = create_app(
@@ -205,8 +212,9 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(client.get("/api/status").get_json()["system"]["active_project"], "WalkingRobot")
         code_page = client.get("/code").data
         self.assertIn(b"ACTIVE \xc2\xb7 WalkingRobot", code_page)
-        self.assertIn(b"class RobotDrive", code_page)
-        self.assertNotIn(b"from mecanum import MecanumDrive", code_page)
+        self.assertIn(b"robots/WalkingRobot", code_page)
+        self.assertIn(b"VS Code local workspace", code_page)
+        self.assertNotIn(b"class RobotDrive", code_page)
 
     def test_custom_project_requires_the_documented_drive_factory(self):
         with tempfile.TemporaryDirectory() as directory:

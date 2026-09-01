@@ -105,10 +105,10 @@ def header_rows(config) -> list[dict]:
         roles[physical] = (role, "ground")
     for row in motor_rows(config):
         roles[row["in1_physical"]] = (
-            f"Driver {row['driver']} {row['output']} IN1 · Motor {row['motor']}", "motor"
+            f"Driver {row['driver']}{row['output']} IN1", "motor"
         )
         roles[row["in2_physical"]] = (
-            f"Driver {row['driver']} {row['output']} IN2 · Motor {row['motor']}", "motor"
+            f"Driver {row['driver']}{row['output']} IN2", "motor"
         )
 
     rows = []

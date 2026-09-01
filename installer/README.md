@@ -38,6 +38,14 @@ Version 0.4 also moves projects created by the earlier direct-folder layout
 into `robots/`. After installation, use `motionmodule project list` and
 `motionmodule project PROJECT_NAME` to inspect or switch them.
 
+Local VS Code projects can be sent with `tools/push_robot.py`. The upload lands
+under `~/MotionModule/.uploads`; `motionmodule deploy` validates paths, file
+types, size, required `robot.py`, and Python syntax before replacing anything.
+The previous project is retained under `~/MotionModule/backups`, the uploaded
+project is activated, and the service restarts. The sudoers entry permits only
+that MotionModule service restart in addition to the existing constrained
+network helper; it does not grant a general root shell.
+
 It also installs the root-owned constrained network helper and
 `motionmodule-network.service`. The helper records the active Imager-created
 Wi-Fi during installation. At boot, the service allows saved client Wi-Fi 30

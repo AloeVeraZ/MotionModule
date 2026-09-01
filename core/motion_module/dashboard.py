@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import math
 import os
 import secrets
@@ -173,6 +174,7 @@ def system_snapshot() -> dict:
         disk_status = {"total": 0, "free": 0, "used_percent": None}
     return {
         "hostname": socket.gethostname(),
+        "username": getpass.getuser(),
         "version": __version__,
         "uptime_seconds": uptime,
         "load_1m": load,

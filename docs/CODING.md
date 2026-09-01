@@ -1,5 +1,33 @@
 # Coding robots on MotionModule
 
+## Use VS Code
+
+VS Code is the single supported editor, with two ways to reach the robot:
+
+- **Remote - SSH:** connect to `YOUR_PI_USER@motionmodule.local`, open
+  `~/MotionModule/robots/PROJECT_NAME`, edit the Pi copy, and run
+  `motionmodule restart` in the VS Code terminal.
+- **Local then push:** open the MotionModule repository locally in VS Code,
+  create a project folder containing `robot.py`, and push it over SSH. Local
+  files do not execute on the robot until the push finishes successfully.
+
+For the local workflow, copy `examples/Mecanum` to a folder such as
+`robots/MyRobot`, edit it, then choose **Terminal → Run Task → MotionModule:
+Push robot project**. VS Code asks for the folder and SSH target. The direct
+terminal equivalent is:
+
+```bash
+python tools/push_robot.py robots/MyRobot --host YOUR_PI_USER@motionmodule.local
+```
+
+The helper requires Python plus the standard `ssh` and `scp` commands on the
+development computer. It archives the selected folder without Git metadata,
+virtual environments, build output, or caches. The Pi rejects unsafe archive
+paths and links, checks `robot.py` and every other Python file for syntax,
+backs up an existing project to `~/MotionModule/backups`, installs the new
+copy, makes it active, and restarts the service. A failed validation leaves the
+currently installed project unchanged.
+
 The system dashboard loads exactly one active robot project's drive hook:
 
 ```text

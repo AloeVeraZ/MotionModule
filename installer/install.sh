@@ -237,6 +237,13 @@ motionmodule project list
 Hardware configuration lives at \`$CONFIG_FILE\` and is intentionally outside
 the versioned runtime. Run \`motionmodule pinout\` and \`motionmodule doctor\`
 before the first powered test.
+
+You can also edit a project locally in VS Code and push it from a MotionModule
+repository clone. The upload is validated, backed up, activated, and restarted:
+
+\`\`\`bash
+python tools/push_robot.py robots/MyRobot --host $USER@${TARGET_HOSTNAME:-$(hostname)}.local
+\`\`\`
 EOF
 fi
 
@@ -247,7 +254,9 @@ sudo install -m 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionm
 sudo install -m 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
 
 sudoers_temp="$(mktemp)"
+systemctl_path="$(command -v systemctl)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-network *\n' "$USER" > "$sudoers_temp"
+printf '%s ALL=(root) NOPASSWD: %s restart motionmodule.service\n' "$USER" "$systemctl_path" >> "$sudoers_temp"
 sudo visudo -cf "$sudoers_temp" >/dev/null
 sudo install -m 0440 "$sudoers_temp" /etc/sudoers.d/motionmodule-network
 rm -f "$sudoers_temp"
