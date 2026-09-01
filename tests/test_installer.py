@@ -42,6 +42,11 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("sudo nginx -t", self.script)
         self.assertIn("http://%s.local (or type the Pi IP directly)", self.script)
 
+    def test_first_install_assigns_hostname_through_constrained_helper(self):
+        self.assertIn('TARGET_HOSTNAME="motionmodule"', self.script)
+        self.assertIn("motionmodule-network hostname", self.script)
+        self.assertNotIn('sudo hostnamectl set-hostname "$TARGET_HOSTNAME"', self.script)
+
     def test_root_bootstrap_enters_the_root_system_installer(self):
         bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
         self.assertIn('${BASH_SOURCE[0]:-}', bootstrap)

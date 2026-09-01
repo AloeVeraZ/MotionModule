@@ -31,6 +31,7 @@ except ImportError:  # pragma: no cover - lets validation tests import this Linu
 
 CONFIG_PATH = Path(os.environ.get("MOTIONMODULE_NETWORK_CONFIG", "/etc/motionmodule/network.json"))
 LOCK_PATH = Path(os.environ.get("MOTIONMODULE_NETWORK_LOCK", "/run/motionmodule-network.lock"))
+HOSTS_PATH = Path(os.environ.get("MOTIONMODULE_HOSTS_PATH", "/etc/hosts"))
 HOTSPOT_PROFILE = "MotionModule-Hotspot"
 DEFAULT_CONFIG = {
     "schema_version": 1,
@@ -99,6 +100,21 @@ def _validate_domain(value: object) -> str:
     if not re.fullmatch(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,62}", domain):
         raise NetworkError("Authentication server domain must be a full DNS name")
     return domain
+
+
+def _validate_hostname(value: object) -> str:
+    """Return a safe single-label hostname suitable for Linux and mDNS."""
+
+    hostname = _clean_text(value, "Hostname", maximum=69).casefold()
+    if hostname.endswith(".local"):
+        hostname = hostname[:-6]
+    if hostname == "localhost" or not re.fullmatch(
+        r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", hostname
+    ):
+        raise NetworkError(
+            "Hostname must contain 1-63 letters, numbers, or hyphens; it cannot start or end with a hyphen"
+        )
+    return hostname
 
 
 class NetworkManager:
@@ -241,6 +257,10 @@ class NetworkManager:
                     addresses.append({"interface": name, "address": address})
         return addresses
 
+    def service_active(self, unit: str) -> bool:
+        result = self.run(["systemctl", "is-active", unit], timeout=5, check=False)
+        return result.returncode == 0 and result.stdout.strip() == "active"
+
     def status(self) -> dict:
         config = load_config()
         hostname = socket.gethostname()
@@ -278,6 +298,10 @@ class NetworkManager:
         return {
             "wifi": wifi,
             "addresses": self.addresses(),
+            "services": {
+                "ssh": self.service_active("ssh.service"),
+                "mdns": self.service_active("avahi-daemon.service"),
+            },
             "hostname": hostname,
             "local_url": f"http://{hostname}.local",
             "hotspot_url": "http://10.42.0.1",
@@ -301,6 +325,58 @@ class NetworkManager:
             config["last_error"] = f"Initial Wi-Fi capture: {error}"
         save_config(config)
         return self.status()
+
+    def change_hostname(self, payload: dict) -> dict:
+        """Change the Pi hostname without accepting arbitrary commands or paths."""
+
+        _require_root()
+        hostname = _validate_hostname(payload.get("hostname"))
+        old_hostname = socket.gethostname()
+        self.run(["hostnamectl", "set-hostname", hostname])
+        try:
+            self._update_hosts(hostname)
+        except OSError as error:
+            # Avoid leaving hostnamectl and /etc/hosts disagreeing if the
+            # filesystem unexpectedly rejects the atomic hosts update.
+            self.run(["hostnamectl", "set-hostname", old_hostname], check=False)
+            raise NetworkError(f"Could not update {HOSTS_PATH}: {error}") from error
+        self.run(["systemctl", "try-restart", "avahi-daemon.service"], check=False)
+        config = load_config()
+        config["last_message"] = (
+            f"Hostname changed to {hostname}. Use {hostname}.local for the dashboard and SSH."
+        )
+        config["last_error"] = ""
+        save_config(config)
+        result = self.status()
+        # Test runners and some containers do not update socket.gethostname()
+        # immediately even though hostnamectl succeeded.
+        result["hostname"] = hostname
+        result["local_url"] = f"http://{hostname}.local"
+        return result
+
+    @staticmethod
+    def _update_hosts(hostname: str) -> None:
+        try:
+            lines = HOSTS_PATH.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            lines = []
+        replacement = f"127.0.1.1\t{hostname}"
+        replaced = False
+        updated: list[str] = []
+        for line in lines:
+            fields = line.split()
+            if not replaced and fields and fields[0] == "127.0.1.1":
+                updated.append(replacement)
+                replaced = True
+            else:
+                updated.append(line)
+        if not replaced:
+            updated.append(replacement)
+        HOSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary = HOSTS_PATH.with_name(f"{HOSTS_PATH.name}.tmp.{os.getpid()}")
+        temporary.write_text("\n".join(updated) + "\n", encoding="utf-8")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, HOSTS_PATH)
 
     def _profile_name(self, ssid: str) -> str:
         digest = hashlib.sha256(ssid.encode("utf-8")).hexdigest()[:10]
@@ -589,6 +665,7 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("hotspot")
     subparsers.add_parser("connect")
     subparsers.add_parser("preferred")
+    subparsers.add_parser("hostname")
     watch_parser = subparsers.add_parser("watch")
     watch_parser.add_argument("--timeout", type=int, default=30)
     args = parser.parse_args(argv)
@@ -606,6 +683,8 @@ def main(argv: list[str] | None = None) -> int:
             result = manager.connect(read_payload())
         elif args.command == "preferred":
             result = manager.activate_preferred()
+        elif args.command == "hostname":
+            result = manager.change_hostname(read_payload())
         else:
             if not 5 <= args.timeout <= 300:
                 raise NetworkError("Failover timeout must be 5-300 seconds")

@@ -339,10 +339,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable motionmodule-network.service motionmodule.service
 
 if [ -n "$TARGET_HOSTNAME" ]; then
-    if ! printf '%s' "$TARGET_HOSTNAME" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$'; then
+    if ! printf '%s' "$TARGET_HOSTNAME" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'; then
         fail "Invalid hostname: $TARGET_HOSTNAME"
     fi
-    sudo hostnamectl set-hostname "$TARGET_HOSTNAME"
+    TARGET_HOSTNAME="$(printf '%s' "$TARGET_HOSTNAME" | tr '[:upper:]' '[:lower:]')"
+    printf '{"hostname":"%s"}\n' "$TARGET_HOSTNAME" | \
+        sudo /usr/local/sbin/motionmodule-network hostname >/dev/null
 fi
 
 say "Activating the new release without deleting older versions..."

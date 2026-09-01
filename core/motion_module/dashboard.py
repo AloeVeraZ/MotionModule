@@ -6,6 +6,7 @@ import argparse
 import getpass
 import math
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -519,6 +520,7 @@ def create_app(
     def network_status():
         try:
             response = network.status()
+            response["username"] = getpass.getuser()
             with network_lock:
                 response["busy"] = network_state["busy"]
                 response["job_error"] = network_state["last_error"]
@@ -612,6 +614,33 @@ def create_app(
         if not queue_network_switch(network.activate_preferred, {}):
             return network_error(MotionModuleError("Another network change is already running"), 409)
         return jsonify({"ok": True, "switching": True, "message": "Reconnecting to the saved preferred Wi-Fi. Rejoin it on this device and open the displayed address."}), 202
+
+    @app.post("/api/network/hostname")
+    def network_hostname():
+        if not authorized():
+            return network_error(MotionModuleError("Invalid settings-session token"), 403)
+        body = request.get_json(silent=True) or {}
+        hostname = str(body.get("hostname", "")).strip().casefold()
+        if hostname.endswith(".local"):
+            hostname = hostname[:-6]
+        if hostname == "localhost" or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", hostname
+        ):
+            return network_error(MotionModuleError(
+                "Use 1-63 letters, numbers, or hyphens; do not include the username, @, spaces, or .local"
+            ), 400)
+        body = {"hostname": hostname}
+        if not queue_network_switch(network.change_hostname, body):
+            return network_error(MotionModuleError("Another network change is already running"), 409)
+        username = getpass.getuser()
+        return jsonify({
+            "ok": True,
+            "switching": True,
+            "message": (
+                f"Changing the hostname to {hostname}. Reconnect with "
+                f"ssh {username}@{hostname}.local; use the displayed IP if .local does not work."
+            ),
+        }), 202
 
     return app
 

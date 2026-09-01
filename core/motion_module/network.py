@@ -52,3 +52,6 @@ class NetworkClient:
 
     def activate_preferred(self) -> dict:
         return self._call("preferred", timeout=55)
+
+    def change_hostname(self, payload: dict) -> dict:
+        return self._call("hostname", payload, timeout=20)

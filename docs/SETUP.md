@@ -147,10 +147,29 @@ Use VS Code for robot code. There are two supported connection modes.
 
 ### Option A: edit directly on the Pi
 
-Install the Microsoft Remote - SSH extension in VS Code. Connect to
-`YOUR_USER@motionmodule-01.local`, then open
-`~/MotionModule/robots/Mecanum`. Saving edits the robot's copy directly. Restart
-and watch logs from the VS Code terminal:
+Open the dashboard's **Code** page first. It displays the exact commands for
+this Pi, including an IP fallback. Remember:
+
+- **username** is the account created in Raspberry Pi Imager;
+- **hostname** is the robot name shown in **Debug → Robot identity**;
+- the SSH destination combines them as `username@hostname.local`.
+
+Then follow these beginner steps:
+
+1. Open Extensions in VS Code, search for **Remote - SSH** by Microsoft, and
+   press **Install**.
+2. Press `Ctrl+Shift+P`, choose **Remote-SSH: Add New SSH Host…**, and paste
+   `ssh YOUR_USER@motionmodule.local` (or the exact command shown by the robot).
+3. Choose the first SSH configuration file VS Code offers.
+4. Press `Ctrl+Shift+P` again, choose **Remote-SSH: Connect to Host…**, and
+   select the robot you just added.
+5. Choose **Linux** if asked, accept the fingerprint, and type the Raspberry Pi
+   Imager password. Password characters are intentionally not displayed.
+6. Wait for the bottom-left corner to say `SSH: motionmodule`, choose **File →
+   Open Folder…**, and open `/home/YOUR_USER/MotionModule/robots/Mecanum`.
+
+Saving now edits the robot's copy directly. Restart and watch logs from the VS
+Code terminal:
 
 ```bash
 motionmodule restart
@@ -258,12 +277,18 @@ connected while the Wi-Fi adapter serves the hotspot.
 
 ### Finding the address after changing Wi-Fi
 
-The Debug page shows every current IPv4 address and the stable mDNS name
-`http://HOSTNAME.local`. When the Pi switches away from its hotspot, the
+The Debug page shows the Pi username, hostname, complete SSH target, every
+current IPv4 address, and the mDNS name `http://HOSTNAME.local`. **Robot
+identity** can rename the Pi without SSH; enter only the base name (for example
+`motionmodule-07`), not the username, `@`, or `.local`. The change survives a
+reboot and becomes the new browser and VS Code name.
+
+When the Pi switches away from its hotspot, the
 old browser loses contact before it can learn the new DHCP address; that is a
 normal one-radio handoff. Join the destination Wi-Fi on the laptop and open the
 `.local` name. If `.local` is unavailable on that laptop/network, find the Pi in
-the router's client list or SSH in and run `hostname -I`.
+the Debug page or router's client list and use `ssh YOUR_USER@IP_ADDRESS`. If
+already connected through SSH, `hostname -I` prints the same current addresses.
 
 ## Troubleshooting
 

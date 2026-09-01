@@ -52,6 +52,7 @@ class FakeModule:
 class FakeNetwork:
     def __init__(self):
         self.hotspot_payload = None
+        self.hostname_payload = None
         self.called = threading.Event()
 
     def status(self):
@@ -59,6 +60,7 @@ class FakeNetwork:
             "ok": True,
             "wifi": {"mode": "client", "ssid": "Workshop"},
             "addresses": [{"interface": "wlan0", "address": "192.0.2.10"}],
+            "services": {"ssh": True, "mdns": True},
             "hostname": "motionmodule",
             "local_url": "http://motionmodule.local",
             "hotspot_url": "http://10.42.0.1",
@@ -76,6 +78,10 @@ class FakeNetwork:
         self.called.set()
 
     def activate_preferred(self):
+        self.called.set()
+
+    def change_hostname(self, payload):
+        self.hostname_payload = payload
         self.called.set()
 
 
@@ -167,6 +173,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Edit locally, then push", code)
         self.assertIn(b"MotionModule: Push robot project", code)
         self.assertIn(b"tools/push_robot.py", code)
+        self.assertIn(b"Remote-SSH: Add New SSH Host", code)
+        self.assertIn(b'id="sshCommand"', code)
+        self.assertIn(b'id="sshIpCommand"', code)
+        self.assertIn(b"Pi password from Raspberry Pi Imager", code)
         self.assertIn(b"Time-limited robot shell", code)
         self.assertIn(b'id="terminalCommand"', code)
         self.assertGreater(code.index(b"Time-limited robot shell"), code.index(b"Manual test control"))
@@ -175,6 +185,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="servoChannel"', debug)
         self.assertIn(b'id="servoProfile"', debug)
         self.assertIn(b"Zero servo", debug)
+        self.assertIn(b'id="hostnameForm"', debug)
+        self.assertIn(b"Username and hostname are different", debug)
 
     def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
         for path, active in (("/drive", b'data-page="code"'), ("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
@@ -404,6 +416,26 @@ class DashboardTests(unittest.TestCase):
             self.assertTrue(self.network.called.wait(1))
         self.assertTrue(self.module.stopped)
         self.assertEqual(self.network.hotspot_payload, {"ssid": "Robot"})
+
+    def test_hostname_api_normalizes_local_suffix_and_stops_outputs(self):
+        self.module.outputs[1] = 0.4
+        with patch("motion_module.dashboard.time.sleep", return_value=None):
+            accepted = self.client.post(
+                "/api/network/hostname", headers=self.headers,
+                json={"hostname": "Robot-07.local"},
+            )
+            self.assertEqual(accepted.status_code, 202)
+            self.assertTrue(self.network.called.wait(1))
+        self.assertTrue(self.module.stopped)
+        self.assertEqual(self.network.hostname_payload, {"hostname": "robot-07"})
+
+    def test_hostname_api_rejects_username_and_spaces(self):
+        for hostname in ("angelo@robot", "robot name", "-robot"):
+            with self.subTest(hostname=hostname):
+                response = self.client.post(
+                    "/api/network/hostname", headers=self.headers, json={"hostname": hostname}
+                )
+                self.assertEqual(response.status_code, 400)
 
 
 if __name__ == "__main__":

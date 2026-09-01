@@ -57,8 +57,11 @@ SSH, and run:
 curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | bash
 ```
 
-Do not put `sudo` before the command. For multiple robots, assign each one a
-unique hostname:
+Do not put `sudo` before the command. A first install automatically names the
+Pi `motionmodule`, so its dashboard is normally `http://motionmodule.local`.
+The **Debug → Robot identity** panel shows the hostname, Pi username, exact SSH
+target, and current IP addresses. It can also change the hostname later. For
+multiple robots, assign each one a unique hostname during installation:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
@@ -252,19 +255,35 @@ VS Code is the supported editor. Choose one workflow per project.
 
 ### Edit directly on the Pi
 
-Install Microsoft's **Remote - SSH** extension in VS Code. Connect to:
+The dashboard's **Code** page fills these instructions with this Pi's real
+username, hostname, and IP. The username is the account created in Raspberry
+Pi Imager; it is not the hostname.
 
-```text
-YOUR_PI_USER@motionmodule.local
+1. In VS Code, open Extensions, install Microsoft's **Remote - SSH** extension,
+   then press `Ctrl+Shift+P`.
+2. Choose **Remote-SSH: Add New SSH Host…** and paste the full command:
+
+```bash
+ssh YOUR_PI_USER@motionmodule.local
 ```
 
-Open `~/MotionModule/robots/PROJECT_NAME`, edit the project, and use the VS Code
-terminal to reload and inspect it:
+3. Choose the first SSH configuration file offered. Press `Ctrl+Shift+P` again,
+   choose **Remote-SSH: Connect to Host…**, and select the robot.
+4. Choose **Linux** if asked, accept the first-connection fingerprint, and
+   enter the Pi password created in Raspberry Pi Imager.
+5. When VS Code's bottom-left corner says `SSH: motionmodule`, choose **File →
+   Open Folder…** and open `/home/YOUR_PI_USER/MotionModule/robots/PROJECT_NAME`.
+6. Edit the project, then use the VS Code terminal to reload and inspect it:
 
 ```bash
 motionmodule restart
 motionmodule logs
 ```
+
+If `motionmodule.local` does not work, the network is probably blocking mDNS
+name discovery. Open **Debug**, copy the Pi's current IP, and add the same host
+using `ssh YOUR_PI_USER@IP_ADDRESS`. The username and password stay the same.
+Do not use `YOUR_PI_USER.local`; the part before `.local` is always the hostname.
 
 ### Edit locally, then push
 
@@ -382,9 +401,12 @@ Dashboard: http://10.42.0.1
 ```
 
 Debug can scan nearby networks, save personal or PEAP credentials, display the
-Pi's current addresses, reconnect preferred Wi-Fi, or start the hotspot for the
-current boot. Every network switch stops motor output first. A reboot always
-tries saved Wi-Fi before falling back again.
+Pi username, hostname, exact SSH target and current addresses, rename the Pi,
+reconnect preferred Wi-Fi, or start the hotspot for the current boot. A valid
+new hostname contains only letters, numbers, and hyphens; the change survives
+reboot and becomes the new `HOSTNAME.local` address. Every network/identity
+change stops motor output first. A reboot always tries saved Wi-Fi before
+falling back again.
 
 ## Projects, updates, and rollback
 
