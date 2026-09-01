@@ -19,8 +19,8 @@ SPEC.loader.exec_module(network_helper)
 class NetworkHelperTests(unittest.TestCase):
     def test_terse_parser_preserves_escaped_colons_and_backslashes(self):
         self.assertEqual(
-            network_helper._split_terse(r"*:City\:Tech\\Lab:82:WPA2 PSK"),
-            ["*", "City:Tech\\Lab", "82", "WPA2 PSK"],
+            network_helper._split_terse(r"*:Robotics\:Lab\\Main:82:WPA2 PSK"),
+            ["*", "Robotics:Lab\\Main", "82", "WPA2 PSK"],
         )
 
     def test_security_classification(self):

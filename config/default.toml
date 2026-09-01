@@ -7,9 +7,9 @@ deadtime_ms = 15
 watchdog_ms = 500
 
 # Drivers 1 and 2 preserve the tested physical-pin 30-40 wiring. The first
-# four channels are inverted so positive wheel speed matches the City Tech
-# chassis' installed motor polarity. Change an individual `inverted` value if
-# that wheel is physically reversed; do not change the mecanum math.
+# four channels are inverted to match the initially tested reference harness.
+# Change an individual `inverted` value when that physical output runs opposite
+# its robot project's intended positive direction.
 
 [motors.1]
 name = "driver2_a"

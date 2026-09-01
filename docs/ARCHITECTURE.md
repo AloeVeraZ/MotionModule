@@ -53,10 +53,8 @@ compatible across that boundary.
 
 ## Connectivity choice
 
-Systemcore's strongest usability idea is that deployment works over USB,
-Ethernet, or Wi‑Fi with a stable network identity. For an ordinary Raspberry Pi,
-Ethernet/Wi‑Fi SSH provides that same editing surface without a custom desktop
-toolchain:
+MotionModule uses standard Ethernet/Wi-Fi SSH and a stable network identity so
+students can deploy without a custom desktop toolchain:
 
 - VS Code Remote‑SSH edits and runs code directly on the Pi;
 - mDNS supplies a friendly `motionmodule.local` address;

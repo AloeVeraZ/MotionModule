@@ -138,11 +138,11 @@ rear_right  = forward + strafe - rotate
 ```
 
 A pure rotation therefore drives both left wheels together and both right
-wheels in the opposite direction. The earlier City Tech version mixed the
-front wheels against the rear wheels and tried to account for installed motor
-orientation inside the math; that can produce diagonal/translation behavior
-instead of a center turn. The default config now marks the installed first four
-motors as inverted, so the mixer remains conventional and testable.
+wheels in the opposite direction. Mixing the front wheels against the rear
+wheels, or compensating for installed motor orientation inside the kinematics,
+can produce diagonal/translation behavior instead of a center turn. Keep the
+mixer conventional and put physical output polarity in each motor's
+`inverted` configuration value.
 
 If a wheel is wrong, calibrate its `inverted` setting. If the robot turns the
 opposite named direction but otherwise rotates correctly, swap the Q/E mapping
