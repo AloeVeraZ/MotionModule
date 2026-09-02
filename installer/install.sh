@@ -150,7 +150,10 @@ printf '%s\n' "$VERSION_REF" > "$release_dir/INSTALL_REF"
 python3 -m venv --system-site-packages "$release_dir/.venv"
 "$release_dir/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
 "$release_dir/.venv/bin/python" -m pip install --no-build-isolation -e "$release_dir"
-"$release_dir/.venv/bin/python" -m unittest discover -s "$release_dir/tests" -v
+(
+    cd "$release_dir"
+    ./.venv/bin/python -m unittest discover -s tests -v
+)
 touch "$release_dir/.complete"
 
 say "Creating the persistent student workspace and robot projects..."

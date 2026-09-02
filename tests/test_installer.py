@@ -18,6 +18,10 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn(reboot, self.script)
         self.assertLess(self.script.index(doctor), self.script.index(reboot))
 
+    def test_release_tests_run_from_release_root(self):
+        self.assertIn('cd "$release_dir"', self.script)
+        self.assertIn('./.venv/bin/python -m unittest discover -s tests -v', self.script)
+
     def test_pinout_link_is_the_final_printed_message(self):
         message = (
             "Check GitHub for the proper pinout before wiring the robot: "

@@ -1,12 +1,14 @@
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from motion_module.errors import MotionModuleError
-from motion_module.terminal import TerminalManager
+from motion_module.terminal import TerminalManager, TerminalSession
 
 
 class TerminalManagerTests(unittest.TestCase):
@@ -39,6 +41,16 @@ class TerminalManagerTests(unittest.TestCase):
             self.assertFalse(wrong_boot.status()["enabled"])
             self.write_access(access, expires_offset=-1)
             self.assertFalse(manager.status()["enabled"])
+
+    def test_pty_master_descriptor_is_closed_exactly_once(self):
+        session = TerminalSession.__new__(TerminalSession)
+        session._lock = threading.RLock()
+        session._master_fd = 123
+        with patch("motion_module.terminal.os.close") as close:
+            session._close_master()
+            session._close_master()
+        close.assert_called_once_with(123)
+        self.assertIsNone(session._master_fd)
 
     @unittest.skipUnless(os.name == "posix" and Path("/bin/bash").is_file(), "Linux Bash required")
     def test_real_pty_shell_streams_output_and_checks_session_token(self):

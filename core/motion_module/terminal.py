@@ -75,7 +75,10 @@ class TerminalSession:
             raise
         else:
             os.close(slave_fd)
-        threading.Thread(target=self._reader, name="motionmodule-terminal-output", daemon=True).start()
+        self._reader_thread = threading.Thread(
+            target=self._reader, name="motionmodule-terminal-output", daemon=True
+        )
+        self._reader_thread.start()
         threading.Thread(target=self._reaper, name="motionmodule-terminal-timeout", daemon=True).start()
 
     @property
@@ -90,10 +93,26 @@ class TerminalSession:
                 self._buffer = self._buffer[removed:]
                 self._base_cursor += removed
 
+    def _close_master(self) -> None:
+        """Close the PTY exactly once, even when stop and reader race."""
+
+        with self._lock:
+            master_fd = self._master_fd
+            self._master_fd = None
+        if master_fd is not None:
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
+
     def _reader(self) -> None:
         try:
             while True:
-                data = os.read(self._master_fd, 4096)
+                with self._lock:
+                    master_fd = self._master_fd
+                if master_fd is None:
+                    break
+                data = os.read(master_fd, 4096)
                 if not data:
                     break
                 self._append(data.decode("utf-8", errors="replace"))
@@ -102,10 +121,7 @@ class TerminalSession:
         finally:
             if not self._stopping:
                 self._append("\n[MotionModule terminal closed]\n")
-            try:
-                os.close(self._master_fd)
-            except OSError:
-                pass
+            self._close_master()
 
     def _reaper(self) -> None:
         while self.active:
@@ -133,7 +149,11 @@ class TerminalSession:
         if "\x00" in value:
             raise MotionModuleError("Terminal input cannot contain a null byte")
         try:
-            os.write(self._master_fd, encoded)
+            with self._lock:
+                master_fd = self._master_fd
+            if master_fd is None:
+                raise OSError("PTY is closed")
+            os.write(master_fd, encoded)
         except (BrokenPipeError, OSError) as error:
             raise MotionModuleError("The terminal process stopped") from error
         self.touch()
@@ -178,10 +198,17 @@ class TerminalSession:
                 os.killpg(self.process.pid, signal.SIGKILL)
             except (AttributeError, OSError):
                 self.process.kill()
-        try:
-            os.close(self._master_fd)
-        except OSError:
-            pass
+            try:
+                self.process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+        # The child closing its slave PTY wakes the reader. Let that thread own
+        # normal descriptor cleanup so it cannot double-close a descriptor the
+        # OS has already reused for an unrelated file.
+        self._reader_thread.join(timeout=1)
+        if self._reader_thread.is_alive():
+            self._close_master()
+            self._reader_thread.join(timeout=1)
 
 
 class TerminalManager:
