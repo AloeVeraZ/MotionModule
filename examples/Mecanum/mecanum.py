@@ -2,7 +2,7 @@
 
 Positive forward moves toward the front of the robot, positive strafe moves
 right, and positive rotate turns counter-clockwise. Motor electrical polarity
-belongs in config.toml, not in this mixer.
+belongs in this project's hardware.py, not in this mixer.
 """
 
 from __future__ import annotations
@@ -56,4 +56,3 @@ class MecanumDrive:
 
     def stop(self) -> None:
         self.module.set_motors({channel: 0 for channel in self.channels.values()})
-

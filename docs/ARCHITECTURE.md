@@ -3,119 +3,101 @@
 ## Control path
 
 ```text
-browser ---> nginx :80 ---> versioned dashboard :8080
-                              |              |
-                              |              +--> time-limited PTY Bash (Pi user)
-active robot/robot.py ------- drive hook
-        |
-        v
-motion_module.MotionModule
-   |                     |
-   v                     v
-lgpio 1 kHz PWM          I2C bus 1
-16 direction legs        PCA9685 0x40, 0x41, ...
-   |                     |
-4 dual H-bridges         16 servos per board
-   |
-8 brushed motors
+browser → nginx :80 → versioned dashboard :8080
+                           │
+                           ├── browser project deployment
+active robot folder ───────┤
+                           ├── GPIO PWM → four dual H-bridges → eight motors
+                           ├── I2C → PCA9685 board(s) → servos
+                           ├── sysfs → read-only USB inventory
+                           └── time-limited PTY Bash terminal
 ```
 
-All motor writes go through one lock. A logical sign reversal stops every motor,
-waits 15 ms, and applies the new directions together. A separate watchdog thread
-stops all output after 500 ms without a control heartbeat. GPIO starts low and
-is forced low again during normal shutdown and handled Python exceptions. A
-physical main cutoff remains required because software cannot guarantee safety
-through OS lockups, regulator faults, broken wiring, or failed power electronics.
+All motor writes share a lock. A logical sign reversal coasts all motors for
+the configured deadtime, and a watchdog stops all output after the configured
+period without a control heartbeat. GPIO starts low and is forced low on normal
+shutdown and handled Python exceptions. Software safety does not replace a
+fused power system and physical cutoff.
 
-## Files that updates can and cannot change
+## Runtime and project separation
 
 ```text
 ~/.local/share/motionmodule/
-├── current -> releases/main-...        # service follows this link
-├── previous -> releases/v0.1.0-...
-└── releases/                            # immutable installed copies
+├── current -> releases/main-...
+├── previous -> releases/v0.8.1-...
+└── releases/
 
-~/MotionModule/active -> robots/Mecanum/ # selected robot project
-~/MotionModule/robots/Mecanum/           # persistent student-owned code
-~/MotionModule/robots/Swerve/            # another possible robot project
-~/.config/motionmodule/config.toml      # persistent hardware calibration
-~/.config/motionmodule/terminal-access.json # temporary mode-0600 shell grant
+~/MotionModule/
+├── active -> robots/Mecanum/
+├── robots/
+│   ├── Mecanum/
+│   │   ├── robot.py
+│   │   ├── hardware.py
+│   │   └── mecanum.py
+│   └── AnotherRobot/
+└── backups/
+
+~/.config/motionmodule/config.toml       # older-project fallback
+~/.config/motionmodule/terminal-access.json
 ```
 
-Installing a new Git tag/ref builds and tests a new release before switching
-`current`. It does not pull in the background and does not overwrite student
-code/config. `motionmodule rollback` swaps `current` and `previous` and restarts
-the service. Rollback changes the backend runtime, not student files; students
-should also use Git in `~/MotionModule` when they need revisions of robot code.
-The stable service launcher detects releases from before Dashboard 0.2.0 and
-runs their original project-hosted server, so Nginx and explicit rollback stay
-compatible across that boundary.
+Installing a tag, branch, or commit builds and tests a new release before the
+`current` link changes. It does not overwrite robot projects. Rollback switches
+the runtime links, not the student folders.
 
-## Connectivity choice
+The service follows `~/MotionModule/active/robot.py`. For a current project,
+its data-only `hardware.py` is the source of GPIO and servo configuration. An
+older installed project without that file continues to use the persistent TOML
+fallback.
 
-MotionModule uses standard Ethernet/Wi-Fi SSH and a stable network identity so
-students can deploy without a custom desktop toolchain:
+## Browser deployment boundary
 
-- VS Code Remote‑SSH edits and runs code directly on the Pi;
-- mDNS supplies a friendly `motionmodule.local` address;
-- Ethernet is available for reliable bench work;
-- a root-owned NetworkManager helper exposes only fixed scan/connect/hotspot
-  actions to the browser service;
-- `motionmodule-network.service` waits 30 seconds for client Wi-Fi, then creates
-  a direct robot hotspot when no LAN exists;
-- the robot browser UI uses the same address and requires no app installation.
+The Code page sends a browser-selected directory as multipart files to the
+local dashboard. The backend:
+
+1. requires the unguessable per-page dashboard token;
+2. accepts a single safe root folder and Python/text documentation only;
+3. enforces count, individual-file, and total-size limits;
+4. rejects path traversal, links, binary data, caches, and build output;
+5. compiles every `.py`, verifies `create_drive(module)`, and parses
+   `hardware.py` with `ast.literal_eval` without importing it;
+6. stops outputs before writing project state;
+7. moves an existing target to `backups`, atomically installs the staged
+   folder, and atomically updates `active`; and
+8. exits so systemd restarts the dashboard on the new project.
+
+The service uses `Restart=always`, so a deliberate clean exit after deployment
+returns through the same launcher. Nginx stays the stable port-80 front door.
+
+## Connectivity
 
 ```text
 boot
-  |
-  v
-saved Raspberry Pi Imager / preferred Wi-Fi ---- connected ----> .local + DHCP IP
-  |
-  | no connection for 30 seconds
-  v
-MotionModule hotspot ----> http://10.42.0.1
+  │
+  ├── saved Wi-Fi connects within 30 seconds → hostname.local + DHCP IP
+  │
+  └── no saved connection → MotionModule hotspot → http://10.42.0.1
 ```
 
-Nginx is the stable front door on port 80, so a beginner can enter the bare Pi
-IP or `.local` name. The dashboard application listens on port 8080 behind that
-proxy and owns the live APIs. It is packaged with each versioned release; the
-student drive hook is loaded from the persistent project.
+Ethernet also reaches the same dashboard. A root-owned NetworkManager helper
+exposes only fixed status, scan, connect, preferred-network, hotspot, and
+hostname operations to the unprivileged service. A manual hotspot is for the
+current boot; the next boot tries saved client Wi-Fi again.
 
-The terminal API requires both the per-page dashboard token and a second random
-access code created over SSH. Its access record is time-limited and bound to the
-current Linux boot ID. The backend owns one PTY session at a time, caps retained
-output and input size, closes idle sessions, and runs Bash with exactly the
-service user's permissions. Disabling or rotating the grant invalidates the
-active terminal on its next poll. The browser never persists the terminal token
-or access code.
+## Hardware discovery limits
 
-## Source and robot-project boundaries
+PCA9685 boards acknowledge on I2C. USB devices expose descriptors in Linux
+sysfs, so the dashboard can list identity, topology, driver binding, device
+node, and permission status without probing or writing to the device.
 
-The Git repository exposes all system components at its root.
-`core/motion_module/` owns hardware access, safety, the dashboard, and network
-APIs. `examples/` contains copyable robot styles; `examples/Mecanum` is the
-included example and is not part of the core package.
+The reference GPIO H-bridges and PWM servo signal have no return channel.
+MotionModule can validate their configured pins and safely pulse an output, but
+it cannot electronically prove a driver, motor, or servo is attached.
 
-During installation, every bundled example is copied once into
-`~/MotionModule/robots/`. The `active` symlink selects the folder loaded by
-systemd. `motionmodule project PROJECT_NAME` switches that symlink and restarts
-the service. Runtime upgrades never overwrite those persistent project folders.
+## Web terminal
 
-For local VS Code development, `tools/push_robot.py` creates a filtered archive
-and transfers it through the user's existing SSH account. The Pi accepts
-archives only from `~/MotionModule/.uploads`, rejects traversal paths, links,
-special files, excessive sizes, and invalid Python syntax, then atomically
-replaces the named project. An existing copy is moved to
-`~/MotionModule/backups` first. The active symlink is switched and the narrowly
-authorized MotionModule service restart makes the uploaded copy live; the
-upload path never grants general root command execution.
-
-The hotspot profile has autoconnect disabled. A manual hotspot therefore stays
-active for the current boot, while a reboot always gives saved client Wi-Fi the
-first 30-second opportunity. Network changes are queued after an HTTP response
-and stop all motor output before the adapter changes roles.
-
-Bluetooth serial and automatic USB gadget mode were intentionally left out.
-They add platform-specific pairing/drivers and provide a worse beginner coding
-experience than SSH. USB Ethernet gadget support can be added later for a
-specific Pi model without changing the Python hardware API.
+The terminal API requires the per-page dashboard token and a second temporary
+access code created by `motionmodule terminal enable`. The code is stored with
+mode 0600, expires, and is tied to the current Linux boot ID. The backend owns
+one unprivileged PTY at a time, caps retained output and input, and closes idle
+sessions.

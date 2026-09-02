@@ -45,6 +45,9 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("proxy_pass http://127.0.0.1:8080", self.script)
         self.assertIn("sudo nginx -t", self.script)
         self.assertIn("http://%s.local (or type the Pi IP directly)", self.script)
+        self.assertIn("client_max_body_size 12m", self.script)
+        self.assertIn("Environment=MOTIONMODULE_ACTIVE_PROJECT=$PROJECT_DIR/active", self.script)
+        self.assertIn("Restart=always", self.script)
 
     def test_first_install_assigns_hostname_through_constrained_helper(self):
         self.assertIn('TARGET_HOSTNAME="motionmodule"', self.script)
@@ -70,6 +73,7 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('motionmodule project [list|PROJECT_NAME]', manager)
         self.assertIn('for robot_file in "$ROBOT_DIR"/*/robot.py', manager)
         self.assertIn('mv -Tf "$PROJECT_DIR/active.new.$$" "$PROJECT_DIR/active"', manager)
+        self.assertIn('examples/$ROBOT_PROJECT/hardware.py', self.script)
 
     def test_launcher_recognizes_new_core_layout_and_older_releases(self):
         launcher = (INSTALLER.parent / "dashboard_launcher").read_text(encoding="utf-8")
@@ -94,6 +98,12 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("systemctl is-active --quiet motionmodule.service", manager)
         self.assertIn("The uploaded code is now running", manager)
         self.assertIn("restart motionmodule.service", self.script)
+
+    def test_installed_readme_teaches_browser_folder_deployment(self):
+        self.assertIn("Open the dashboard Code page", self.script)
+        self.assertIn("hardware.py", self.script)
+        self.assertIn("directly through the robot website", self.script)
+        self.assertNotIn("VS Code", self.script)
 
 
 if __name__ == "__main__":

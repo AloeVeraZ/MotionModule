@@ -1,156 +1,176 @@
-<div align="center">
-
 # MotionModule
 
-### A Raspberry Pi motion controller for eight brushed motors and PCA9685 servos
+MotionModule is a Raspberry Pi robot controller for eight brushed motors and
+PCA9685 servo boards. It is an independent, FTC-style system inspired by the
+idea of combining a Control Hub and Expansion Hub, but it does not use or
+depend on that hardware or software.
 
-Python robot projects · hardware diagnostics · wireless editing · explicit rollback
-
-</div>
-
-MotionModule is an independent, FTC-style robot control project inspired by the
-way a REV Control Hub and Expansion Hub combine robot I/O in one system. It is
-not affiliated with, built from, or dependent on that control system;
-it uses a Raspberry Pi, ordinary H-bridge boards, PCA9685 servo controllers,
-and its own Python software.
-
-Four dual H-bridge boards provide eight brushed-motor outputs. One or more I2C
-PCA9685 boards provide 16 servo channels each. Robot behavior lives in separate
-project folders, so the same MotionModule installation can run a Mecanum,
-tank-drive, walking, or other robot without making the core runtime specific to
-one machine.
+The reusable runtime owns GPIO, I2C, safety, networking, diagnostics, and the
+browser dashboard. Each robot is one separate Python folder containing its own
+behavior and hardware map, so the same installation can run a Mecanum, tank,
+walking, or other robot.
 
 > [!CAUTION]
 > MotionModule is developmental lab hardware, not an approved competition
-> control system. Raise all wheels, fuse every power branch, and keep a physical
-> motor-power cutoff within reach during commissioning.
+> controller. Fuse every power branch, keep a physical motor-power cutoff in
+> reach, and raise the wheels for initial tests.
 
 ## Hardware
 
-Start with the root-level **[bill of materials](BOM.md)**. The reference build
-uses:
+See the root-level **[bill of materials](BOM.md)** for the reference parts:
 
-- [GODIYMODULES 3–18 V, 10 A dual H-bridge motor driver](https://www.amazon.com/dp/B0FKH352D2), four boards for eight motor outputs.
-- [AITRIP PCA9685 16-channel I2C servo controller](https://www.amazon.com/dp/B07WS5XY63), address `0x40` by default.
-- A Raspberry Pi 5 with a 40-pin header and current Raspberry Pi OS.
-- Separate, fused motor and servo power rails sized for the real motors' stall
-  current and the servos' combined load.
-- A 10 kΩ pull-down from every H-bridge input to signal ground, so the drivers
-  remain disabled while the Pi boots or is shut down.
-
-MotionModule sends 1 kHz PWM to the motor-driver inputs and inserts a coast
-interval before reversing direction. The PCA9685 generates servo PWM without
-using one Raspberry Pi pin per servo. Additional PCA9685 boards can be added at
-unique I2C addresses.
+- four dual H-bridge boards for eight brushed-motor outputs;
+- one or more PCA9685 I2C boards, with 16 servo channels per board;
+- Raspberry Pi 5 with a 40-pin header;
+- separate, fused motor and servo power supplies; and
+- a 10 kΩ pull-down from every H-bridge input to signal ground.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
-wiring. Motor battery positive and servo V+ must never connect to a Raspberry
+wiring. Never connect motor battery positive or the PCA9685 servo V+ rail to a
 Pi header power pin.
 
-## Install on the Raspberry Pi
+## Install on a Raspberry Pi
 
-Flash Raspberry Pi OS, create a normal sudo-capable user, enable SSH, and enter
-the initial Wi-Fi information in Raspberry Pi Imager. Boot the Pi, connect over
-SSH, and run:
+In Raspberry Pi Imager, install current Raspberry Pi OS, create a normal
+sudo-capable user, enable SSH for initial administration, and enter the Wi-Fi
+the robot should prefer. Boot the Pi, connect once, and run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | bash
 ```
 
-Do not put `sudo` before the command. A first install automatically names the
-Pi `motionmodule`, so its dashboard is normally `http://motionmodule.local`.
-The **Debug → Robot identity** panel shows the hostname, Pi username, exact SSH
-target, and current IP addresses. It can also change the hostname later. For
-multiple robots, assign each one a unique hostname during installation:
+Do not put `sudo` before that command. The installer:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
-  bash -s -- --hostname motionmodule-01
-```
+1. installs all OS and Python dependencies;
+2. creates a versioned runtime and persistent robot workspace;
+3. configures the dashboard, GPIO/I2C access, mDNS, and Wi-Fi fallback;
+4. runs the non-moving MotionModule Doctor automatically;
+5. prints the GitHub pinout as its final message; and
+6. reboots the Pi.
 
-The installer creates:
+The first install uses hostname `motionmodule`. Give multiple robots unique
+names with `--hostname motionmodule-01`. Updates are always explicit; no
+automatic updater is installed.
 
-| Item | Location |
-| --- | --- |
-| Robot projects | `~/MotionModule/robots/PROJECT_NAME` |
-| Active project | `~/MotionModule/active` symlink |
-| Project backups | `~/MotionModule/backups` |
-| Persistent hardware config | `~/.config/motionmodule/config.toml` |
-| Versioned runtimes | `~/.local/share/motionmodule/releases` |
-| Robot service | `motionmodule.service` |
-| Wi-Fi failover service | `motionmodule-network.service` |
-| Saved network settings | `/etc/motionmodule/network.json` |
+## Connect to the robot UI
 
-Installation never enables automatic updates and never overwrites an existing
-robot project or hardware configuration. It runs the non-moving Doctor check,
-prints the pinout link, and reboots automatically.
-
-## Open the robot dashboard
-
-From a computer on the same network, open:
+Put the computer on the same Wi-Fi as the Pi and open this in Chrome or Edge:
 
 ```text
 http://motionmodule.local
 ```
 
-The Pi's IP address also works directly. The dashboard contains:
-
-- **Overview:** live controller, motor-output, servo-board, temperature,
-  uptime, health, and network status.
-- **Debug:** generic Driver 1A–Driver 4B wiring, the complete Pi header,
-  guarded motor and servo tests, Doctor, logs, useful commands, Wi-Fi, and
-  hotspot controls.
-- **Code:** the VS Code setup, guarded keyboard drive, and the time-limited web
-  terminal.
-
-## How robot code works
-
-MotionModule runs exactly one active robot project. On service startup it
-imports:
+The Pi's numeric IP also works. If no saved Wi-Fi connects within 30 seconds,
+the robot creates its fallback hotspot:
 
 ```text
-~/MotionModule/active/robot.py
+Network:  MotionModule
+Password: motionrobot
+Website:  http://10.42.0.1
 ```
 
-That file must define `create_drive(module)`. MotionModule calls it once and
-expects a drive object with these two methods:
+The same Driver Station and deployment flow works through normal Wi-Fi,
+Ethernet, or the robot hotspot. Debug shows the current hostname and every IP,
+can scan and join another network, can start the hotspot for the current boot,
+and can rename the robot. A reboot always tries saved Wi-Fi first.
 
-```python
-drive(forward, strafe, rotate, speed) -> dict
-stop() -> None
-```
+## Dashboard
 
-The browser's W/A/S/D and Q/E controls repeatedly call `drive(...)`. Releasing
-a key sends a new zeroed drive command; Space, STOP, or leaving the page sends a
-stop request. If the browser disappears before that request arrives, the 500 ms
-watchdog shuts down stale motor output. Saving a file does not reload it;
-`motionmodule restart` or a successful local push starts the new code.
+- **Overview** shows live motor output, servo commands and I2C responses,
+  watchdog state, temperature, memory, disk, uptime, and network status.
+- **Debug** combines the full generic GPIO pinout, driver and servo wiring,
+  USB-device inventory, guarded hardware tests, Doctor, logs, useful commands,
+  Wi-Fi, hostname, and hotspot controls.
+- **Code** is the browser Driver Station. It deploys one local Python robot
+  folder, shows communications/code/network/output state, provides guarded
+  keyboard drive, and includes the time-limited web terminal.
 
-Do not start a permanent loop or move hardware at the top level of `robot.py`.
-Top-level code runs while the service imports the file and can prevent the
-dashboard from starting.
+## Deploy robot code from the browser
 
-### Robot project structure
+No editor plugin or remote coding connection is required. Code the project in
+any local editor, then:
 
-A project can be one file or several normal Python modules:
+1. Open **Code** in the robot dashboard.
+2. Press **Choose one robot project folder**.
+3. Select the whole folder containing `robot.py` and `hardware.py`.
+4. Review the files, accept the stop/restart confirmation, and press
+   **Deploy and run**.
+5. Wait for the dashboard to reconnect after the service restarts.
+
+The Pi accepts Python and project documentation only, checks every Python file,
+parses `hardware.py` without executing it, validates the pins and safety limits,
+stops all outputs, backs up an older project with the same name, atomically
+installs the new folder, makes it active, and restarts MotionModule. A validation
+error leaves the working project in place.
+
+Press **Download Mecanum sample** on that page for a complete starting folder.
+Unzip it, rename the folder, edit it locally, and deploy the renamed folder.
+
+## Robot project format
+
+Every project is self-contained:
 
 ```text
 MyRobot/
-├── robot.py          # Required entry point
-├── drivetrain.py     # Drive math and channel mapping
-├── mechanisms.py     # Arm, intake, claw, or other helpers
-└── README.md         # Notes for this specific robot
+├── robot.py          # required browser-control entry point
+├── hardware.py       # required pins and electrical settings
+├── drivetrain.py     # optional Python modules
+├── mechanisms.py
+└── README.md         # optional project notes
 ```
 
-Imports are relative to the project folder, so `robot.py` can use
-`from drivetrain import TankDrive`. The installed `examples/Mecanum` project is
-a working multi-file example.
+### `hardware.py`
 
-### Example: write a tank drive
+`hardware.py` contains exactly one literal `HARDWARE` dictionary. It cannot
+contain imports, function calls, calculations, or executable setup code. This
+lets MotionModule validate an uploaded pinout without running student code.
 
-This complete `robot.py` maps the left side to motor channels 1–2 and the right
-side to channels 3–4. Robot-specific names belong here, while Debug continues
-to show only the generic driver outputs.
+```python
+HARDWARE = {
+    "module": {
+        "pwm_hz": 1000,
+        "deadtime_ms": 15,
+        "watchdog_ms": 500,
+    },
+    "motors": {
+        1: {
+            "name": "left_drive",
+            "forward_gpio": 12,
+            "reverse_gpio": 6,
+            "inverted": True,
+        },
+        2: {
+            "name": "right_drive",
+            "forward_gpio": 19,
+            "reverse_gpio": 16,
+            "inverted": False,
+        },
+    },
+    "servos": {
+        "enabled": True,
+        "i2c_bus": 1,
+        "frequency_hz": 50,
+        "addresses": [0x40],
+        "minimum_pulse_us": 500,
+        "maximum_pulse_us": 2500,
+    },
+}
+```
+
+Use BCM GPIO numbers in this file. Debug converts them to physical header pins.
+The included Mecanum sample contains the complete eight-motor reference map.
+Older installed projects without `hardware.py` continue to use the persistent
+`~/.config/motionmodule/config.toml` fallback, but every new browser deployment
+must include `hardware.py`.
+
+### `robot.py`
+
+`robot.py` must define `create_drive(module)`. Return an object with
+`drive(forward, strafe, rotate, speed)` and `stop()` methods. Do not move
+hardware or start a permanent loop at import time, because the dashboard loads
+this file during startup.
+
+This is a complete two-sided drive example:
 
 ```python
 def clamp(value):
@@ -182,48 +202,34 @@ def create_drive(module):
     return TankDrive(module)
 ```
 
-The four input values supplied by the dashboard are:
+The Driver Station supplies values from `-1.0` to `1.0` for `forward`,
+`strafe`, and `rotate`; `speed` is its `0.0` to `1.0` limit. The returned
+dictionary must contain JSON-compatible data.
 
-| Argument | Range | Meaning |
-| --- | ---: | --- |
-| `forward` | `-1.0` to `1.0` | Backward to forward |
-| `strafe` | `-1.0` to `1.0` | Left to right; a tank drive may ignore it |
-| `rotate` | `-1.0` to `1.0` | Turn in either direction |
-| `speed` | `0.0` to `1.0` | Dashboard maximum-speed setting |
+### Motors
 
-The returned dictionary must contain JSON-compatible values because it becomes
-part of the dashboard API response.
-
-### Control motors
-
-Motor channels are numbered 1–8. A single output can be controlled with a
-handle:
+Motor channels are 1–8. Use a single channel for a mechanism:
 
 ```python
 intake = module.motor(5)
-intake.set(0.30)   # +1.0 full forward; -1.0 full reverse
+intake.set(0.30)
 intake.stop()
 ```
 
-For a drivetrain, update all related channels together:
+Update a drivetrain together:
 
 ```python
 module.set_motors({1: 0.4, 2: 0.4, 3: 0.4, 4: 0.4})
 ```
 
-`set_motors()` clamps values to `-1.0` through `1.0`, applies configured motor
-inversion, inserts shared reversal deadtime, and refreshes the watchdog. Keep
-refreshing nonzero output faster than the configured 500 ms timeout. Use
-`module.stop_all()` when the whole robot must stop.
+Values are clamped to `-1.0` through `1.0`. MotionModule applies the project
+inversion map, inserts coast time before a direction reversal, and refreshes
+the watchdog. Keep nonzero commands arriving faster than the configured
+watchdog timeout and call `module.stop_all()` for a whole-robot stop.
 
-The channel-to-driver/pin mapping comes from
-`~/.config/motionmodule/config.toml` and is shown on the Debug page. Decide what
-those channels mean—left wheel, arm motor, intake, or something else—inside the
-robot project.
+### Servos
 
-### Control servos
-
-PCA9685 boards count from `0`; every board has channels `0`–`15`:
+PCA9685 boards count from 0, and each has channels 0–15:
 
 ```python
 claw = module.servo(channel=0, board=0)
@@ -232,245 +238,133 @@ claw.set_angle(110)
 claw.release()
 ```
 
-`set_angle()` is the generic 0–180° API. For a calibrated positional or
-continuous-rotation servo, send a verified pulse inside the configured safety
-range:
+For a calibrated positional or continuous-rotation servo, use a verified pulse
+inside the configured range:
 
 ```python
-claw.set_pulse_us(1500)  # commonly midpoint or neutral; verify the servo first
+claw.set_pulse_us(1500)
 ```
 
-`release()` disables PWM for that channel; it does not move the mechanism to a
-safe pose first. Command the safe pose, wait for the motion to finish, and only
-then release it if the mechanism should stop holding torque.
+The Debug servo tool includes generic 180°/360° position profiles and goBILDA
+position, five-turn, and continuous-rotation profiles. `release()` disables
+the PWM signal; it does not first move a mechanism to a safe pose.
 
-A helper method does not automatically create a dashboard button. Something in
-the project's control logic must call it. Keep mechanism mappings and behavior
-inside the robot project rather than adding robot-specific assumptions to the
-MotionModule core.
+## What MotionModule can detect
 
-## Code with VS Code
-
-VS Code is the supported editor. Choose one workflow per project.
-
-### Edit directly on the Pi
-
-The dashboard's **Code** page fills these instructions with this Pi's real
-username, hostname, and IP. The username is the account created in Raspberry
-Pi Imager; it is not the hostname.
-
-1. In VS Code, open Extensions, install Microsoft's **Remote - SSH** extension,
-   then press `Ctrl+Shift+P`.
-2. Choose **Remote-SSH: Add New SSH Host…** and paste the full command:
-
-```bash
-ssh YOUR_PI_USER@motionmodule.local
-```
-
-3. Choose the first SSH configuration file offered. Press `Ctrl+Shift+P` again,
-   choose **Remote-SSH: Connect to Host…**, and select the robot.
-4. Choose **Linux** if asked, accept the first-connection fingerprint, and
-   enter the Pi password created in Raspberry Pi Imager.
-5. When VS Code's bottom-left corner says `SSH: motionmodule`, choose **File →
-   Open Folder…** and open `/home/YOUR_PI_USER/MotionModule/robots/PROJECT_NAME`.
-6. Edit the project, then use the VS Code terminal to reload and inspect it:
-
-```bash
-motionmodule restart
-motionmodule logs
-```
-
-If `motionmodule.local` does not work, the network is probably blocking mDNS
-name discovery. Open **Debug**, copy the Pi's current IP, and add the same host
-using `ssh YOUR_PI_USER@IP_ADDRESS`. The username and password stay the same.
-Do not use `YOUR_PI_USER.local`; the part before `.local` is always the hostname.
-
-### Edit locally, then push
-
-Open a local clone of this repository in VS Code. Copy `examples/Mecanum` to a
-new folder such as `robots/MyRobot`, then edit it locally. Local code cannot
-move robot hardware.
-
-Choose **Terminal → Run Task → MotionModule: Push robot project**, or run:
-
-```bash
-python tools/push_robot.py robots/MyRobot --host YOUR_PI_USER@motionmodule.local
-```
-
-The push filters development caches, uploads through SSH, rejects unsafe
-archives and Python syntax errors, backs up an existing Pi project, activates
-the new copy, restarts MotionModule, and verifies that the service stays
-running. Only the successfully installed copy runs on the robot.
+- A PCA9685 can acknowledge its I2C address, so Debug reports detected or no
+  response for each configured board.
+- USB devices identify themselves. Debug lists their product, vendor/product
+  ID, Pi port, Linux driver, device file, and whether the service user has
+  access. This is live inventory, not firmware management.
+- The reference H-bridge inputs and ordinary servos have no return data. The Pi
+  cannot prove that a board, motor, or servo is plugged into those output-only
+  wires. Debug labels those outputs as configured but unverified; use the
+  guarded low-power bench tests with the robot raised.
 
 ## How the system works together
 
 ```text
-Browser on the robot network
-        │ HTTP
-        ▼
-Nginx on port 80
-        │ local proxy
-        ▼
-MotionModule dashboard service
-        ├── loads ~/MotionModule/active/robot.py
-        ├── calls the project's drive(...) and stop()
-        ├── exposes guarded test and status APIs
-        └── owns the hardware controller
-                    ├── GPIO PWM → four H-bridges → eight motor outputs
-                    └── I2C → PCA9685 board(s) → servo channels
+Chrome / Edge on robot network
+          │ HTTP
+          ▼
+       Nginx :80
+          │ local proxy
+          ▼
+MotionModule dashboard + active Python project
+          ├── GPIO PWM → four H-bridges → eight motor outputs
+          ├── I2C → PCA9685 board(s) → servo channels
+          ├── sysfs → read-only USB inventory
+          └── watchdog → stops stale motor commands
 ```
 
-The system service starts the selected project at boot and restarts it after a
-project switch or code deployment. The hardware controller applies inversion,
-reversal deadtime, pulse limits, watchdog shutdown, and final cleanup. The
-persistent TOML file describes hardware; the selected project describes robot
-behavior. Updating the versioned runtime does not overwrite either one.
+The service loads `~/MotionModule/active/robot.py`. `active` points to one
+folder under `~/MotionModule/robots`; browser uploads preserve previous copies
+under `~/MotionModule/backups`. Runtime releases live separately, so installing
+or rolling back MotionModule does not overwrite robot projects.
 
-The separate network service asks NetworkManager to use saved Wi-Fi first. If
-no saved network connects within 30 seconds, it starts the protected robot
-hotspot. Nginx remains the stable browser entry point regardless of which
-runtime version is active.
+The network service tries saved Wi-Fi for 30 seconds and creates the fallback
+hotspot only when none connects. Nginx provides the same port-80 page in either
+mode.
 
-## Debugging and the web terminal
+## Debugging and terminal
 
-Use this order when something does not work:
+Use this order:
 
-1. Open **Debug** and read the hardware warnings, generic driver wiring, servo
-   detection, current network addresses, and service log.
-2. Run `motionmodule doctor`. It checks software, GPIO configuration, services,
-   and I2C without intentionally moving a motor or servo.
-3. Run `motionmodule pinout` and compare every physical wire before applying
-   motor or servo power.
-4. Raise the robot and use the guarded Motor Bench Test at low power. The
-   H-bridge boards do not report whether a motor is physically connected, so a
-   controlled pulse is the real connection/direction test.
-5. Use the Servo Pulse Test to select the exact board, channel, and servo
-   behavior. PCA9685 boards acknowledge over I2C, so the dashboard can report a
-   missing board before movement.
-6. Run `motionmodule logs` after a code change. Import errors, exceptions, and
-   service startup failures appear there.
+1. Open **Debug** and inspect warnings, the generic pinout, USB/I2C devices,
+   network addresses, and service log.
+2. Run `motionmodule doctor`; it does not intentionally move hardware.
+3. Run `motionmodule pinout` and compare every wire before applying power.
+4. Raise the robot and use the guarded Motor Bench Test at low power.
+5. Select the correct board, channel, and behavior in Servo Pulse Test.
+6. Check `motionmodule logs` after a failed project start.
 
-The web terminal is at the bottom of **Code**. It is a real Bash shell running
-as the normal Pi user, but it is deliberately locked by default. Enable a
-temporary grant over SSH:
+The web terminal at the bottom of Code is a real, unprivileged Bash shell. For
+security it needs a short-lived code created during an admin SSH session:
 
 ```bash
-motionmodule terminal enable       # 15 minutes
-motionmodule terminal enable 30    # custom duration, 1–120 minutes
-motionmodule terminal status
-```
-
-Enter the printed access code in the page. The grant expires, is bound to the
-current boot, and an idle shell closes after five minutes. Disable it early
-with:
-
-```bash
+motionmodule terminal enable       # valid for 15 minutes
+motionmodule terminal enable 30    # choose 1–120 minutes
 motionmodule terminal disable
 ```
 
-Useful terminal commands include:
+Enter the printed code in the webpage. The grant expires automatically, is
+invalid after reboot, and an idle shell closes after five minutes. The robot UI
+uses HTTP, so never put reusable passwords or tokens in this terminal and never
+expose it to the public internet.
+
+Useful commands are also explained inside Debug:
 
 | Command | Purpose |
 | --- | --- |
-| `motionmodule status` | Show the system service state |
-| `motionmodule doctor` | Run non-moving system and hardware checks |
+| `motionmodule status` | Show the service state |
+| `motionmodule doctor` | Run non-moving checks |
 | `motionmodule pinout` | Print the physical wiring map |
 | `motionmodule restart` | Stop outputs and reload the active project |
-| `motionmodule logs` | Follow live service output and Python errors |
-| `motionmodule project list` | List robot folders; `*` marks the active one |
-| `motionmodule project NAME` | Select another project and restart |
+| `motionmodule logs` | Follow Python and service output |
+| `motionmodule project list` | List installed robot folders |
+| `motionmodule project NAME` | Select another installed folder |
 | `motionmodule versions` | List installed runtime versions |
 | `motionmodule rollback` | Activate the previous runtime |
-| `motionmodule hotspot status` | Show standalone-network state |
 
-The dashboard uses ordinary HTTP on the robot network. Do not enter reusable
-passwords, access tokens, or other secrets in the web terminal, and never
-expose the dashboard directly to the public internet. Use normal SSH for
-privileged administration.
+## Updates and development
 
-## Wi-Fi and standalone mode
-
-At boot, the Pi tries the Wi-Fi saved by Raspberry Pi Imager or the most
-recently selected network. If none connects within 30 seconds, MotionModule
-creates this fallback network:
-
-```text
-SSID: MotionModule
-Initial password: motionrobot
-Dashboard: http://10.42.0.1
-```
-
-Debug can scan nearby networks, save personal or PEAP credentials, display the
-Pi username, hostname, exact SSH target and current addresses, rename the Pi,
-reconnect preferred Wi-Fi, or start the hotspot for the current boot. A valid
-new hostname contains only letters, numbers, and hyphens; the change survives
-reboot and becomes the new `HOSTNAME.local` address. Every network/identity
-change stops motor output first. A reboot always tries saved Wi-Fi before
-falling back again.
-
-## Projects, updates, and rollback
-
-Every direct folder under `~/MotionModule/robots` that contains `robot.py` is a
-robot project. List or activate them without reinstalling:
+Runtime changes are explicit:
 
 ```bash
-motionmodule project list
-motionmodule project Swerve
-```
-
-Runtime updates are always explicit:
-
-```bash
-motionmodule versions
 motionmodule install main
+motionmodule versions
 motionmodule rollback
 ```
 
-Updates replace the dashboard and core runtime together while preserving robot
-projects and hardware configuration. Local pushes back up the previous copy of
-the named robot project under `~/MotionModule/backups`.
-
-For detailed references, see:
-
-- **[Setup and commissioning](docs/SETUP.md)**
-- **[Coding guide](docs/CODING.md)**
-- **[Pinout](docs/PINOUT.md)**
-- **[Architecture](docs/ARCHITECTURE.md)**
-- **[Bill of materials](BOM.md)**
-
-## Development without robot hardware
-
-The core tests and simulated dashboard run on a normal development computer:
+To test the repository without robot hardware:
 
 ```bash
 python -m venv .venv
 python -m pip install -e .
 python -m unittest discover -s tests -v
-python -m motion_module pinout
 python -m motion_module doctor
 ```
 
-Set `MOTIONMODULE_MOCK=1` on a Pi to run without claiming GPIO or I2C hardware.
+Set `MOTIONMODULE_MOCK=1` on a Pi to avoid claiming GPIO and I2C hardware.
+Detailed references are in [Setup](docs/SETUP.md), [Coding](docs/CODING.md),
+[Pinout](docs/PINOUT.md), and [Architecture](docs/ARCHITECTURE.md).
 
 ## Repository layout
 
 ```text
-MotionModule repository/
-├── core/motion_module/        # Motor, servo, safety, deploy, and web runtime
-├── installer/                 # Pi setup, services, Wi-Fi, versions, rollback
-├── config/default.toml        # Eight-output and PCA9685 hardware defaults
-├── docs/                      # Pinout, setup, coding, and architecture
-├── examples/                  # Copyable robot projects; not core system code
-│   └── Mecanum/
-├── tools/push_robot.py        # Local VS Code-to-robot deployment helper
-├── tests/                     # Hardware-independent validation
-├── .vscode/tasks.json         # Interactive local push task
-├── BOM.md                     # Reference hardware list
-├── install.sh                 # One-line and local installation entry point
+MotionModule/
+├── core/motion_module/    # controller, safety, dashboard, deploy, USB, network
+├── installer/             # Pi install, services, Wi-Fi, versions, rollback
+├── config/default.toml    # compatibility/default hardware configuration
+├── docs/                  # setup, coding, pinout, and architecture
+├── examples/
+│   └── Mecanum/           # complete downloadable Python robot folder
+│       ├── robot.py
+│       ├── hardware.py
+│       └── mecanum.py
+├── tests/                 # hardware-independent automated tests
+├── BOM.md
+├── install.sh
 ├── requirements.txt
 └── pyproject.toml
 ```
-
-The repository root contains the complete reusable MotionModule system.
-`core/motion_module` is hardware and service infrastructure, while `examples`
-and user-created robot folders contain robot-specific behavior.

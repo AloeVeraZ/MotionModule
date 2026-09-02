@@ -44,7 +44,9 @@ case "$command" in
         sudo systemctl "$command" motionmodule.service
         ;;
     doctor|pinout|test-motor|test-servo)
-        exec "$(runtime_python)" -m motion_module "$command" "$@"
+        MOTIONMODULE_CONFIG="$CONFIG_DIR/config.toml" \
+        MOTIONMODULE_ACTIVE_PROJECT="$PROJECT_DIR/active" \
+            exec "$(runtime_python)" -m motion_module "$command" "$@"
         ;;
     versions)
         current="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
@@ -201,11 +203,6 @@ PY
                 ;;
         esac
         ;;
-    edit)
-        printf 'Connect VS Code Remote - SSH to: %s@%s.local\n' "$USER" "$(hostname)"
-        printf 'Then open: %s/MotionModule\n' "$HOME"
-        printf 'Edit robot project: %s/%s\n' "$ROBOT_DIR" "$(basename "$(readlink -f "$PROJECT_DIR/active")")"
-        ;;
     help|-h|--help)
         cat <<'EOF'
 MotionModule commands:
@@ -223,7 +220,6 @@ MotionModule commands:
                                   off reconnects the saved preferred Wi-Fi
   terminal enable [MINUTES] | terminal disable | terminal status
                                   time-limited access to the Code-page Bash terminal
-  edit
 EOF
         ;;
     *)

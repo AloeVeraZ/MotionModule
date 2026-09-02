@@ -1,13 +1,16 @@
-# Mecanum example
+# Mecanum robot sample
 
-This is a copyable student robot example. The versioned MotionModule runtime
-hosts the browser dashboard, while `robot.py` supplies its drive hook and
-`mecanum.py` contains the wheel math. Future installs update the dashboard
-without overwriting this folder.
+This folder is a complete browser-deployable Python robot project:
 
-`Mecanum` is not required by the core. On the Pi, add `Swerve`, `WalkingRobot`,
-or another folder under `~/MotionModule/robots` with its own `robot.py`, then run
-`motionmodule project PROJECT_NAME` on the Pi to activate it.
+- `hardware.py` owns the eight motor GPIOs, inversion, PWM/deadtime/watchdog,
+  and PCA9685 setup;
+- `robot.py` exposes the required `create_drive(module)` entry point; and
+- `mecanum.py` contains the wheel mixing and channel mapping.
+
+Download it from the Driver Station, unzip it, rename the folder, edit it in
+any local editor, then choose that whole folder in **Code → Deploy robot
+folder**. MotionModule validates it, backs up a same-named project, activates
+it, and restarts.
 
 The first four motor channels are:
 
@@ -18,39 +21,25 @@ The first four motor channels are:
 | Front right | 3 |
 | Rear right | 4 |
 
-The mixer uses the standard left-versus-right rotation pattern. If a physical
-wheel runs backward, edit only that motor's `inverted` setting in
-`~/.config/motionmodule/config.toml`, then run `motionmodule restart`. Do not
-change the rotation signs to compensate for one reversed motor.
+If one wheel runs backward, change only that channel's `inverted` value in
+`hardware.py`. Do not change the rotation formula to compensate for one
+reversed motor.
 
-Open `http://motionmodule.local` (or the Pi's IP address) after installation.
-Use W/S to move, A/D to strafe, Q/E to rotate, and Space to stop. The dashboard
-refreshes the 500 ms hardware watchdog every 80 ms while keyboard driving is
-explicitly enabled. The Debug page shows every Pi IP and provides wiring,
-Doctor, Wi-Fi, and hotspot controls. Starting a network change stops all motors
-first.
+After deployment, use W/S to move, A/D to strafe, Q/E to rotate, and Space to
+stop. Enable browser drive deliberately and start with the speed limit low.
+The dashboard refreshes the 500 ms hardware watchdog while controls are active.
 
-After editing either file, run `motionmodule restart`. Older student folders
-that contain the original Flask server remain compatible: MotionModule loads
-their drive class and ignores the old page server.
-
-When editing a copy on a development computer in VS Code, push and activate it
-with `python tools/push_robot.py LOCAL_FOLDER --host USER@motionmodule.local`
-from the repository root. The VS Code task named **MotionModule: Push robot
-project** runs the same command interactively.
-
-To use a servo from your own code:
-
-```python
-arm = module.servo(channel=0, board=0)
-arm.set_angle(90)
-arm.release()
-```
-
-To use an extra motor:
+Extra devices can use the remaining channels:
 
 ```python
 intake = module.motor(5)
 intake.set(0.35)
 intake.stop()
+
+arm = module.servo(channel=0, board=0)
+arm.set_angle(90)
+arm.release()
 ```
+
+Use Debug's generic Driver 1A–4B pinout and raised-wheel bench tests before
+testing this robot-specific wheel assignment.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import io
 import math
 import os
 import re
@@ -14,19 +15,26 @@ import socket
 import subprocess
 import threading
 import time
+import zipfile
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.serving import make_server
 
 from . import __version__
 from .controller import MotionModule
+from .deploy import (
+    MAX_BROWSER_FILE_BYTES,
+    activate_project,
+    deploy_project_files,
+)
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
 from .network import NetworkClient
 from .pinout import header_rows, motor_rows
 from .runner import load_project
 from .terminal import TerminalManager
+from .usb import usb_devices
 
 
 DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
@@ -216,8 +224,11 @@ def create_app(
     network_client=None,
     project_name: str = "No project",
     terminal_manager=None,
+    workspace_directory: str | os.PathLike[str] | None = None,
+    restart_callback=None,
 ) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
+    app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
     active_drive = drive or IdleDrive(module)
     network = network_client or NetworkClient()
     terminal = terminal_manager or TerminalManager()
@@ -229,6 +240,8 @@ def create_app(
     servo_commands: dict[tuple[int, int], dict] = {}
     terminal_attempts: dict[str, list[float]] = {}
     network_state = {"busy": False, "last_error": ""}
+    deployment_lock = threading.Lock()
+    workspace = Path(workspace_directory).resolve() if workspace_directory else None
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
     last_sequence = -1
@@ -298,6 +311,103 @@ def create_app(
     @app.get("/api/diagnostics")
     def diagnostics():
         return jsonify({"ok": True, "checks": dashboard_checks(module)})
+
+    @app.get("/api/usb")
+    def usb_inventory():
+        return jsonify({"ok": True, **usb_devices()})
+
+    @app.get("/api/projects/status")
+    def project_status():
+        if workspace is None:
+            return jsonify({
+                "ok": True,
+                "available": False,
+                "active": project_name,
+                "projects": [project_name] if project_name != "No project" else [],
+            })
+        robots = workspace / "robots"
+        projects = sorted(
+            path.name for path in robots.iterdir()
+            if path.is_dir() and (path / "robot.py").is_file()
+        ) if robots.is_dir() else []
+        try:
+            active = (workspace / "active").resolve(strict=True).name
+        except OSError:
+            active = project_name
+        return jsonify({"ok": True, "available": True, "active": active, "projects": projects})
+
+    @app.get("/api/projects/sample")
+    def project_sample():
+        sample = Path(__file__).resolve().parents[2] / "examples" / "Mecanum"
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as output:
+            for source in sorted(sample.rglob("*")):
+                if source.is_file() and source.suffix.casefold() in {".py", ".md", ".txt"}:
+                    output.write(source, (Path("Mecanum") / source.relative_to(sample)).as_posix())
+        archive.seek(0)
+        return send_file(
+            archive,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="MotionModule-Mecanum-Sample.zip",
+        )
+
+    @app.post("/api/projects/deploy")
+    def project_deploy():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        if workspace is None or restart_callback is None:
+            return jsonify({"ok": False, "error": "Browser deployment is available on the installed Pi runtime"}), 503
+        if not deployment_lock.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "Another robot folder is already being deployed"}), 409
+        try:
+            uploads = request.files.getlist("files")
+            paths = request.form.getlist("paths")
+            if paths and len(paths) != len(uploads):
+                return jsonify({"ok": False, "error": "The uploaded folder file list is incomplete"}), 400
+            entries: list[tuple[str, bytes]] = []
+            for index, upload in enumerate(uploads):
+                content = upload.stream.read(MAX_BROWSER_FILE_BYTES + 1)
+                if len(content) > MAX_BROWSER_FILE_BYTES:
+                    return jsonify({"ok": False, "error": f"{upload.filename} is larger than 2 MiB"}), 413
+                entries.append((paths[index] if paths else upload.filename or "", content))
+            active_drive.stop()
+            module.stop_all()
+            result = deploy_project_files(
+                entries,
+                workspace / "robots",
+                workspace / "backups",
+                request.form.get("project_name", "").strip() or None,
+            )
+            activate_project(result["target"], workspace / "active")
+        except MotionModuleError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        except OSError as error:
+            return jsonify({"ok": False, "error": f"Could not activate the robot folder: {error}"}), 500
+        finally:
+            deployment_lock.release()
+
+        def restart_after_response():
+            time.sleep(0.8)
+            restart_callback()
+
+        threading.Thread(
+            target=restart_after_response,
+            name="motionmodule-browser-deploy-restart",
+            daemon=True,
+        ).start()
+        return jsonify({
+            "ok": True,
+            "restarting": True,
+            "project": result["name"],
+            "files": result["files"],
+            "backup_created": bool(result["backup"]),
+            "message": f"{result['name']} passed validation. MotionModule is restarting with that folder.",
+        }), 202
+
+    @app.errorhandler(413)
+    def upload_too_large(_error):
+        return jsonify({"ok": False, "error": "Robot folder upload is larger than 8 MiB"}), 413
 
     @app.get("/api/logs")
     def logs():
@@ -627,18 +737,17 @@ def create_app(
             r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", hostname
         ):
             return network_error(MotionModuleError(
-                "Use 1-63 letters, numbers, or hyphens; do not include the username, @, spaces, or .local"
+                "Use 1-63 letters, numbers, or hyphens; do not include @, spaces, or .local"
             ), 400)
         body = {"hostname": hostname}
         if not queue_network_switch(network.change_hostname, body):
             return network_error(MotionModuleError("Another network change is already running"), 409)
-        username = getpass.getuser()
         return jsonify({
             "ok": True,
             "switching": True,
             "message": (
-                f"Changing the hostname to {hostname}. Reconnect with "
-                f"ssh {username}@{hostname}.local; use the displayed IP if .local does not work."
+                f"Changing the hostname to {hostname}. Reopen "
+                f"http://{hostname}.local; use the displayed IP if .local does not work."
             ),
         }), 202
 
@@ -647,7 +756,14 @@ def create_app(
 
 def serve(module, stop_event: threading.Event, project_path: Path | None = None) -> None:
     project_name = project_path.parent.name if project_path else "No project"
-    app = create_app(module, load_drive(module, project_path), project_name=project_name)
+    workspace = project_path.parent.parent.parent if project_path else None
+    app = create_app(
+        module,
+        load_drive(module, project_path),
+        project_name=project_name,
+        workspace_directory=workspace,
+        restart_callback=stop_event.set,
+    )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.
     server = make_server("127.0.0.1", 8080, app, threaded=True)

@@ -64,6 +64,7 @@ if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
     fail "Invalid robot project name: $ROBOT_PROJECT"
 fi
 [ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
+[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/hardware.py" ] || fail "Robot example $ROBOT_PROJECT is missing hardware.py."
 command -v sudo >/dev/null || fail "sudo is required for Raspberry Pi setup."
 
 INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
@@ -237,16 +238,13 @@ motionmodule logs
 motionmodule project list
 \`\`\`
 
-Hardware configuration lives at \`$CONFIG_FILE\` and is intentionally outside
-the versioned runtime. Run \`motionmodule pinout\` and \`motionmodule doctor\`
-before the first powered test.
+New robot folders keep their pins and electrical setup in \`hardware.py\` next
+to \`robot.py\`. Open the dashboard Code page, download the sample, edit that
+folder on any computer, then choose the folder under Driver Station. The robot
+validates, backs up, activates, and runs it directly through the robot website.
 
-You can also edit a project locally in VS Code and push it from a MotionModule
-repository clone. The upload is validated, backed up, activated, and restarted:
-
-\`\`\`bash
-python tools/push_robot.py robots/MyRobot --host $USER@${TARGET_HOSTNAME:-$(hostname)}.local
-\`\`\`
+Older projects without \`hardware.py\` continue to use \`$CONFIG_FILE\`.
+Run \`motionmodule pinout\` and \`motionmodule doctor\` before powered testing.
 EOF
 fi
 
@@ -293,7 +291,7 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name _;
-    client_max_body_size 2m;
+    client_max_body_size 12m;
 
     location / {
         proxy_pass http://127.0.0.1:8080;
@@ -327,8 +325,9 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR/active
 Environment=PYTHONUNBUFFERED=1
 Environment=MOTIONMODULE_CONFIG=$CONFIG_FILE
+Environment=MOTIONMODULE_ACTIVE_PROJECT=$PROJECT_DIR/active
 ExecStart=/usr/local/sbin/motionmodule-dashboard "$CURRENT_LINK" "$PROJECT_DIR/active/robot.py"
-Restart=on-failure
+Restart=always
 RestartSec=2
 KillSignal=SIGINT
 TimeoutStopSec=5
@@ -385,7 +384,7 @@ printf 'Active release: %s\n' "$release_id"
 printf 'Active robot:   %s/%s\n' "$ROBOT_DIR" "$ACTIVE_PROJECT"
 printf 'Configuration:  %s\n' "$CONFIG_FILE"
 printf 'Robot dashboard: http://%s.local (or type the Pi IP directly)\n' "${TARGET_HOSTNAME:-$(hostname)}"
-printf 'SSH / VS Code:  ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
+printf 'Admin SSH:       ssh %s@%s.local\n' "$USER" "${TARGET_HOSTNAME:-$(hostname)}"
 printf 'Wi-Fi fallback: MotionModule hotspot after 30 seconds offline\n'
 if [ "$REBOOT_SYSTEM" = true ]; then
     say "Rebooting automatically in 3 seconds so GPIO/I2C group membership and boot settings take effect."

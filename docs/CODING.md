@@ -1,164 +1,151 @@
-# Coding robots on MotionModule
+# Coding a MotionModule robot
 
-## Use VS Code
+Robot code is a normal local Python folder. You may use any text editor; the
+only deployment tool is the robot's browser Driver Station.
 
-VS Code is the single supported editor, with two ways to reach the robot:
+## Start from the sample
 
-- **Remote - SSH:** connect to `YOUR_PI_USER@motionmodule.local`, open
-  `~/MotionModule/robots/PROJECT_NAME`, edit the Pi copy, and run
-  `motionmodule restart` in the VS Code terminal.
-- **Local then push:** open the MotionModule repository locally in VS Code,
-  create a project folder containing `robot.py`, and push it over SSH. Local
-  files do not execute on the robot until the push finishes successfully.
+1. Open `http://motionmodule.local/code` or the robot's IP in Chrome or Edge.
+2. Press **Download Mecanum sample**.
+3. Unzip it and rename the `Mecanum` folder for the new robot.
+4. Edit that folder locally.
+5. Return to Code, choose the whole folder, confirm, and press **Deploy and
+   run**.
 
-For the local workflow, copy `examples/Mecanum` to a folder such as
-`robots/MyRobot`, edit it, then choose **Terminal → Run Task → MotionModule:
-Push robot project**. VS Code asks for the folder and SSH target. The direct
-terminal equivalent is:
+The same upload works on the saved Wi-Fi, Ethernet, and the direct MotionModule
+hotspot. The local folder cannot move hardware. Only the validated copy sent to
+the Pi runs.
 
-```bash
-python tools/push_robot.py robots/MyRobot --host YOUR_PI_USER@motionmodule.local
-```
-
-The helper requires Python plus the standard `ssh` and `scp` commands on the
-development computer. It archives the selected folder without Git metadata,
-virtual environments, build output, or caches. The Pi rejects unsafe archive
-paths and links, checks `robot.py` and every other Python file for syntax,
-backs up an existing project to `~/MotionModule/backups`, installs the new
-copy, makes it active, and restarts the service. A failed validation leaves the
-currently installed project unchanged.
-
-The system dashboard loads exactly one active robot project's drive hook:
+## Required files
 
 ```text
-~/MotionModule/active/robot.py
+MyRobot/
+├── robot.py       # creates the browser drive controller
+├── hardware.py    # pins, inversion, PWM, watchdog, servo boards
+└── helpers.py     # any other Python files you want
 ```
 
-The starter file defines:
+`hardware.py` must contain a single literal dictionary assignment:
 
 ```python
-from mecanum import MecanumDrive
+HARDWARE = {
+    "module": {"pwm_hz": 1000, "deadtime_ms": 15, "watchdog_ms": 500},
+    "motors": {
+        1: {
+            "name": "front_left",
+            "forward_gpio": 12,
+            "reverse_gpio": 6,
+            "inverted": True,
+        },
+    },
+    "servos": {
+        "enabled": True,
+        "i2c_bus": 1,
+        "frequency_hz": 50,
+        "addresses": [0x40],
+        "minimum_pulse_us": 500,
+        "maximum_pulse_us": 2500,
+    },
+}
+```
+
+It may have a docstring, but no imports, calls, calculations, or other
+statements. Every browser-deployed project must include this file. Debug reads
+the active project's configuration to draw the generic wiring map.
+
+`robot.py` defines the dashboard hook:
+
+```python
+from my_drive import MyDrive
+
 
 def create_drive(module):
-    return MecanumDrive(module)
+    return MyDrive(module)
 ```
 
-The returned object implements `drive(forward, strafe, rotate, speed)` and
-`stop()`. `module` is the hardware controller. MotionModule owns the web server,
-network setup, and cleanup, so runtime updates do not overwrite the student
-folder. Existing projects with the original `MecanumDrive` class remain
-compatible even when they do not yet define `create_drive`.
-
-## Robot project folders
-
-`Mecanum` is one example, not a required drivetrain. Create a project folder
-under `~/MotionModule/robots` and give it a `robot.py`:
-
-```text
-~/MotionModule/
-├── active -> robots/Mecanum/
-└── robots/
-    ├── Mecanum/robot.py
-    ├── Swerve/robot.py
-    └── WalkingRobot/robot.py
-```
-
-The drive object returned by `create_drive(module)` can implement Mecanum,
-swerve, tank, walking, or another mechanism. It only needs `drive(...)` and
-`stop()` methods compatible with the dashboard controls. List and switch
-projects with:
-
-```bash
-motionmodule project list
-motionmodule project Swerve
-```
-
-The switch restarts the service. Hardware configuration remains shared at
-`~/.config/motionmodule/config.toml`; project code remains independent.
-
-## Motors
-
-Channels are 1 through 8:
+The returned object implements:
 
 ```python
-intake = module.motor(5)
-intake.set(0.30)   # -1.0 to +1.0
-intake.stop()
+drive(forward, strafe, rotate, speed) -> dict
+stop() -> None
 ```
 
-For coordinated motion, update channels together. This gives every reversing
-channel one shared coast/deadtime interval:
+Avoid permanent loops and hardware movement at module scope. MotionModule must
+be able to import the project before it can serve the dashboard.
+
+## Motor API
 
 ```python
-module.set_motors({1: 0.4, 2: 0.4, 3: 0.4, 4: 0.4})
+motor = module.motor(5)
+motor.set(0.25)   # -1.0 to +1.0
+motor.stop()
+
+module.set_motors({1: 0.4, 2: 0.4, 3: -0.4, 4: -0.4})
+module.stop_all()
 ```
 
-Any nonzero motor output arms the watchdog. Refresh with another motor command
-or `module.feed_watchdog()` within 500 ms. A stale controller stops all motors.
+The controller clamps power, applies the `inverted` value from `hardware.py`,
+inserts a coast interval before reversing, and stops stale output at the
+watchdog deadline. A control routine must resend nonzero values faster than
+that deadline.
 
-## Servos
-
-PCA9685 boards count from zero. Each board has channels 0 through 15:
+## Servo API
 
 ```python
-claw = module.servo(channel=0, board=0)
-claw.set_angle(30)
-claw.set_angle(110)
-claw.release()
+arm = module.servo(channel=0, board=0)
+arm.set_angle(90)
+arm.set_pulse_us(1500)
+arm.release()
 ```
 
-`set_angle()` is the generic 0–180° API. For a calibrated servo profile, the
-dashboard maps its logical position or continuous-rotation speed to a pulse and
-the low-level project API can send that pulse directly:
+Each configured PCA9685 has channels 0–15. Verify the exact servo's voltage,
+pulse range, mode, and mechanical clearance before commanding it. Use Debug's
+guarded Servo Pulse Test for first movement.
+
+## Add mechanisms and sensors
+
+Put robot-specific code in additional `.py` files inside the same folder:
 
 ```python
-claw.set_pulse_us(1500)  # midpoint / neutral for the configured servo
+# mechanisms.py
+class Intake:
+    def __init__(self, module, channel=5):
+        self.motor = module.motor(channel)
+
+    def run(self, power=0.35):
+        self.motor.set(power)
+
+    def stop(self):
+        self.motor.stop()
 ```
 
-Direct pulses are restricted to the configured `minimum_pulse_us` and
-`maximum_pulse_us` safety envelope. The commissioning dashboard includes
-goBILDA 300°, goBILDA 5-turn/1800°, goBILDA continuous, generic 180°, and
-generic 360° profiles. A PCA9685 board has channels 0–15; channel 16 does not
-exist.
+Then import it with `from mechanisms import Intake`. USB or serial libraries
+needed by a project must already be installed in the MotionModule runtime;
+Debug's USB list only discovers attached devices and does not install drivers.
 
-`release()` turns that PWM output fully off; it does not physically move the
-servo to a safe pose first. Code the safe pose for the actual mechanism, wait
-for motion, then release if the mechanism should not hold torque.
+## What deployment validates
 
-## Mecanum math and the turning fix
+Before changing the active project, the Pi checks:
 
-The example treats physical/electrical motor direction and chassis kinematics as
-separate layers. The standard normalized wheel equations are:
+- one folder with a safe 1–64 character project name;
+- `robot.py` and `hardware.py` at the top level;
+- only `.py`, `.md`, and `.txt` files, up to 250 files and 8 MiB total;
+- valid syntax in every Python file;
+- a synchronous top-level `create_drive(module)` function;
+- literal-only hardware data, valid GPIOs, unique motor pins, allowed I2C
+  addresses, pulse limits, and watchdog limits.
 
-```text
-front_left  = forward + strafe + rotate
-rear_left   = forward - strafe + rotate
-front_right = forward - strafe - rotate
-rear_right  = forward + strafe - rotate
-```
+It then stops outputs, backs up an existing same-named folder, replaces it,
+switches `~/MotionModule/active`, and restarts. If the new project later fails
+while importing a dependency, open Debug's service log and correct the local
+folder before deploying again.
 
-A pure rotation therefore drives both left wheels together and both right
-wheels in the opposite direction. Mixing the front wheels against the rear
-wheels, or compensating for installed motor orientation inside the kinematics,
-can produce diagonal/translation behavior instead of a center turn. Keep the
-mixer conventional and put physical output polarity in each motor's
-`inverted` configuration value.
+## Manual testing
 
-If a wheel is wrong, calibrate its `inverted` setting. If the robot turns the
-opposite named direction but otherwise rotates correctly, swap the Q/E mapping
-or invert the `rotate` command once at the control boundary.
+The Code page's W/A/S/D/Q/E controls call your `drive()` method. Keyboard drive
+works only while its deliberate-enable box is selected. Releasing keys, Space,
+STOP, leaving the page, or losing communications produces a stop; the hardware
+watchdog is the final backstop.
 
-## Running without hardware
-
-On any development computer:
-
-```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# Linux/macOS: source .venv/bin/activate
-python -m pip install -e .
-python -m unittest discover -s tests -v
-```
-
-Non-Pi computers automatically simulate GPIO and PCA9685 state. On a Pi, set
-`MOTIONMODULE_MOCK=1` before a manual run to avoid touching hardware.
+Keep a physical power cutoff in reach. First verify every raw output using
+Debug with the chassis raised, then test the project's drive mapping slowly.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import tomllib
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.
 RESERVED_ID_GPIOS = {0, 1}
 I2C_GPIOS = {2, 3}
 VALID_BCM_GPIOS = set(range(28))
+PROJECT_CONFIG_NAME = "hardware.py"
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,12 @@ class ModuleConfig:
 def _as_int(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigurationError(f"{label} must be an integer")
+    return value
+
+
+def _as_bool(value: object, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigurationError(f"{label} must be true or false")
     return value
 
 
@@ -101,17 +109,9 @@ def _validate(config: ModuleConfig) -> ModuleConfig:
     return config
 
 
-def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
-    """Load TOML config, using MOTIONMODULE_CONFIG or the repository default."""
-
-    selected = Path(path or os.environ.get("MOTIONMODULE_CONFIG", DEFAULT_CONFIG_PATH)).expanduser()
-    try:
-        data = tomllib.loads(selected.read_text(encoding="utf-8"))
-    except FileNotFoundError as error:
-        raise ConfigurationError(f"Configuration file not found: {selected}") from error
-    except tomllib.TOMLDecodeError as error:
-        raise ConfigurationError(f"Invalid TOML in {selected}: {error}") from error
-
+def _config_from_mapping(data: object, source: Path) -> ModuleConfig:
+    if not isinstance(data, dict):
+        raise ConfigurationError(f"Hardware configuration in {source} must be a dictionary")
     try:
         module_data = data["module"]
         motor_data = data["motors"]
@@ -122,7 +122,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
                 name=str(values.get("name", f"motor_{channel}")),
                 forward_gpio=_as_int(values["forward_gpio"], f"motors.{channel}.forward_gpio"),
                 reverse_gpio=_as_int(values["reverse_gpio"], f"motors.{channel}.reverse_gpio"),
-                inverted=bool(values.get("inverted", False)),
+                inverted=_as_bool(values.get("inverted", False), f"motors.{channel}.inverted"),
             )
             for channel, values in sorted(motor_data.items(), key=lambda item: int(item[0]))
         )
@@ -133,7 +133,7 @@ def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
             watchdog_ms=_as_int(module_data["watchdog_ms"], "module.watchdog_ms"),
             motors=motors,
             servos=ServoConfig(
-                enabled=bool(servo_data.get("enabled", True)),
+                enabled=_as_bool(servo_data.get("enabled", True), "servos.enabled"),
                 i2c_bus=_as_int(servo_data["i2c_bus"], "servos.i2c_bus"),
                 frequency_hz=_as_int(servo_data["frequency_hz"], "servos.frequency_hz"),
                 addresses=addresses,
@@ -145,6 +145,68 @@ def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
                 ),
             ),
         )
-    except (KeyError, TypeError, ValueError) as error:
-        raise ConfigurationError(f"Missing or invalid configuration value in {selected}: {error}") from error
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise ConfigurationError(f"Missing or invalid configuration value in {source}: {error}") from error
     return _validate(config)
+
+
+def load_project_config(project: str | os.PathLike[str]) -> ModuleConfig:
+    """Load a project's data-only ``hardware.py`` without executing student code."""
+
+    selected = Path(project).expanduser() / PROJECT_CONFIG_NAME
+    try:
+        source = selected.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(selected))
+    except FileNotFoundError as error:
+        raise ConfigurationError(f"Project hardware file not found: {selected}") from error
+    except (OSError, SyntaxError, UnicodeError) as error:
+        raise ConfigurationError(f"Invalid Python in {selected}: {error}") from error
+
+    hardware_node: ast.AST | None = None
+    for node in tree.body:
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(
+            node.value.value, str
+        ):
+            continue
+        valid_assignment = (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "HARDWARE"
+        ) or (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "HARDWARE"
+        )
+        if valid_assignment:
+            if hardware_node is not None:
+                raise ConfigurationError(f"{selected} must assign HARDWARE exactly once")
+            hardware_node = node.value
+            continue
+        raise ConfigurationError(
+            f"{selected} may contain only a docstring and one literal HARDWARE assignment"
+        )
+    if hardware_node is None:
+        raise ConfigurationError(f"{selected} must define HARDWARE = {{...}}")
+    try:
+        data = ast.literal_eval(hardware_node)
+    except (ValueError, TypeError, SyntaxError) as error:
+        raise ConfigurationError(f"HARDWARE in {selected} must contain literal data only") from error
+    return _config_from_mapping(data, selected)
+
+
+def load_config(path: str | os.PathLike[str] | None = None) -> ModuleConfig:
+    """Load project hardware when active, otherwise use the persistent TOML config."""
+
+    if path is None:
+        project = os.environ.get("MOTIONMODULE_ACTIVE_PROJECT", "")
+        if project and (Path(project).expanduser() / PROJECT_CONFIG_NAME).is_file():
+            return load_project_config(project)
+    selected = Path(path or os.environ.get("MOTIONMODULE_CONFIG", DEFAULT_CONFIG_PATH)).expanduser()
+    try:
+        data = tomllib.loads(selected.read_text(encoding="utf-8"))
+    except FileNotFoundError as error:
+        raise ConfigurationError(f"Configuration file not found: {selected}") from error
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigurationError(f"Invalid TOML in {selected}: {error}") from error
+    return _config_from_mapping(data, selected)

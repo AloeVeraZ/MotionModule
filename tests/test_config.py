@@ -1,7 +1,11 @@
+import os
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from motion_module.config import DEFAULT_CONFIG_PATH, load_config
+from motion_module.config import DEFAULT_CONFIG_PATH, load_config, load_project_config
+from motion_module.errors import ConfigurationError
 from motion_module.pinout import header_rows, motor_rows
 
 
@@ -61,6 +65,23 @@ class DefaultConfigTests(unittest.TestCase):
                 8: "driver4_b",
             },
         )
+
+    def test_project_hardware_is_loaded_from_literal_python_data(self):
+        project = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        config = load_project_config(project)
+        self.assertEqual(len(config.motors), 8)
+        self.assertEqual(config.motors[0].forward_gpio, 12)
+        with patch.dict(os.environ, {"MOTIONMODULE_ACTIVE_PROJECT": str(project)}):
+            self.assertEqual(load_config(), config)
+
+    def test_project_hardware_never_executes_student_code(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "hardware.py").write_text(
+                "import os\nHARDWARE = {}\nos.system('never')\n", encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ConfigurationError, "only a docstring"):
+                load_project_config(project)
 
 
 if __name__ == "__main__":

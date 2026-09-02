@@ -1,7 +1,9 @@
+import io
 import threading
 import tempfile
 import unittest
 import sys
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -167,16 +169,12 @@ class DashboardTests(unittest.TestCase):
         code = self.client.get("/code").data
         self.assertIn(b"Manual test control", code)
         self.assertIn(b'id="driveEnable"', code)
-        self.assertIn(b"robots/Mecanum", code)
-        self.assertIn(b"Code with VS Code", code)
-        self.assertIn(b"Edit directly on the robot", code)
-        self.assertIn(b"Edit locally, then push", code)
-        self.assertIn(b"MotionModule: Push robot project", code)
-        self.assertIn(b"tools/push_robot.py", code)
-        self.assertIn(b"Remote-SSH: Add New SSH Host", code)
-        self.assertIn(b'id="sshCommand"', code)
-        self.assertIn(b'id="sshIpCommand"', code)
-        self.assertIn(b"Pi password from Raspberry Pi Imager", code)
+        self.assertIn(b"Driver Station", code)
+        self.assertIn(b'id="projectFolder"', code)
+        self.assertIn(b"Download Mecanum sample", code)
+        self.assertIn(b"hardware.py", code)
+        self.assertNotIn(b"Remote-SSH", code)
+        self.assertNotIn(b"tools/push_robot.py", code)
         self.assertIn(b"Time-limited robot shell", code)
         self.assertIn(b'id="terminalCommand"', code)
         self.assertGreater(code.index(b"Time-limited robot shell"), code.index(b"Manual test control"))
@@ -186,7 +184,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="servoProfile"', debug)
         self.assertIn(b"Zero servo", debug)
         self.assertIn(b'id="hostnameForm"', debug)
-        self.assertIn(b"Username and hostname are different", debug)
+        self.assertIn(b"Connected USB devices", debug)
+        self.assertIn(b'id="usbDevices"', debug)
+        self.assertIn(b"hostname is this robot", debug)
 
     def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
         for path, active in (("/drive", b'data-page="code"'), ("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
@@ -224,9 +224,69 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(client.get("/api/status").get_json()["system"]["active_project"], "WalkingRobot")
         code_page = client.get("/code").data
         self.assertIn(b"ACTIVE \xc2\xb7 WalkingRobot", code_page)
-        self.assertIn(b"robots/WalkingRobot", code_page)
-        self.assertIn(b"VS Code local workspace", code_page)
+        self.assertIn(b"Driver Station", code_page)
         self.assertNotIn(b"class RobotDrive", code_page)
+
+    def test_sample_project_download_contains_complete_python_folder(self):
+        response = self.client.get("/api/projects/sample")
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(io.BytesIO(response.data)) as archive:
+            names = set(archive.namelist())
+        self.assertIn("Mecanum/robot.py", names)
+        self.assertIn("Mecanum/hardware.py", names)
+        self.assertIn("Mecanum/mecanum.py", names)
+
+    def test_browser_folder_deploy_requires_token_and_restarts(self):
+        hardware = b'''HARDWARE = {"module": {"pwm_hz": 1000, "deadtime_ms": 2, "watchdog_ms": 500}, "motors": {1: {"forward_gpio": 4, "reverse_gpio": 17, "inverted": False}}, "servos": {"enabled": True, "i2c_bus": 1, "frequency_hz": 50, "addresses": [0x40], "minimum_pulse_us": 500, "maximum_pulse_us": 2500}}\n'''
+        with tempfile.TemporaryDirectory() as directory:
+            restarted = threading.Event()
+            app = create_app(
+                self.module,
+                MecanumDrive(self.module),
+                self.network,
+                project_name="Mecanum",
+                terminal_manager=self.terminal,
+                workspace_directory=directory,
+                restart_callback=restarted.set,
+            )
+            client = app.test_client()
+            payload = {
+                "project_name": "TestBot",
+                "paths": ["TestBot/robot.py", "TestBot/hardware.py"],
+                "files": [
+                    (io.BytesIO(b"def create_drive(module):\n    return module\n"), "TestBot/robot.py"),
+                    (io.BytesIO(hardware), "TestBot/hardware.py"),
+                ],
+            }
+            denied = client.post("/api/projects/deploy", data=payload)
+            self.assertEqual(denied.status_code, 403)
+            payload["files"] = [
+                (io.BytesIO(b"def create_drive(module):\n    return module\n"), "TestBot/robot.py"),
+                (io.BytesIO(hardware), "TestBot/hardware.py"),
+            ]
+            with patch("motion_module.dashboard.activate_project") as activate, patch(
+                "motion_module.dashboard.time.sleep", return_value=None
+            ):
+                accepted = client.post(
+                    "/api/projects/deploy",
+                    headers={"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]},
+                    data=payload,
+                )
+                self.assertEqual(accepted.status_code, 202)
+                self.assertTrue(restarted.wait(1))
+            self.assertTrue(self.module.stopped)
+            self.assertTrue((Path(directory) / "robots" / "TestBot" / "hardware.py").is_file())
+            activate.assert_called_once()
+
+    def test_usb_api_exposes_read_only_inventory(self):
+        with patch("motion_module.dashboard.usb_devices", return_value={
+            "available": True,
+            "devices": [{"vendor_id": "1234", "product_id": "abcd"}],
+            "error": "",
+        }):
+            data = self.client.get("/api/usb").get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["devices"][0]["vendor_id"], "1234")
 
     def test_custom_project_requires_the_documented_drive_factory(self):
         with tempfile.TemporaryDirectory() as directory:

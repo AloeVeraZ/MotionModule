@@ -1,310 +1,140 @@
-# Raspberry Pi installation and commissioning
+# Raspberry Pi setup and commissioning
 
-## 1. Prepare Raspberry Pi OS
+## 1. Image the Pi
 
-Use Raspberry Pi Imager to install a current Raspberry Pi OS release on a
-Raspberry Pi 5, the current tested hardware target. The
-64-bit Lite image is sufficient; Desktop also works. In Imager customization:
+Use current Raspberry Pi OS in Raspberry Pi Imager. In its customization page:
 
-- create a normal username and strong password;
-- enable SSH;
-- configure a 2.4/5 GHz Wi-Fi network or plan to use Ethernet;
-- give every classroom Pi a unique hostname if possible;
-- set the correct locale and timezone.
+- create a normal username and a strong password;
+- enter the Wi-Fi the robot should normally use;
+- set the correct Wi-Fi country; and
+- enable SSH for installation and future administration.
 
-Before motor power is ever attached, add the input pull-downs described in
-[PINOUT.md](PINOUT.md). Software cannot control a GPIO during the Pi's early
-boot or while it has no power.
-
-Ethernet is the most dependable first-install connection. Normal Wi-Fi is the
-most convenient everyday editing connection. Bluetooth is not used because it
-does not provide a consistent SSH/deployment path, and USB gadget networking is
-not the default because support and cabling differ across Pi models.
+The Wi-Fi saved here is the first preferred network. MotionModule can add or
+replace preferred networks later from Debug.
 
 ## 2. Install MotionModule
 
-SSH into the Pi, then run the installer as that normal user:
+Boot the Pi and connect to it once. Then run as the normal user, without putting
+`sudo` before the command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | bash
+```
+
+For multiple robots, give each a distinct hostname:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
   bash -s -- --hostname motionmodule-01
 ```
 
-The script requests sudo only for APT, GPIO/I2C groups, SSH/mDNS, hostname, and
-the systemd service. It performs these operations in order:
+The installer creates versioned software, the persistent robot workspace,
+system services, Nginx, I2C/GPIO access, mDNS, and Wi-Fi failover. It runs
+MotionModule Doctor automatically, prints the pinout link last, and reboots.
 
-1. installs `lgpio`, I2C, Python, NetworkManager, Nginx, SSH, and mDNS packages;
-2. enables I2C and adds the installing user to the `gpio`/`i2c` groups;
-3. copies the requested code into a new timestamped release directory;
-4. creates an isolated Python environment and runs the complete unit test suite;
-5. copies each repository example into `~/MotionModule/robots` only when that project does not already exist;
-6. points `~/MotionModule/active` at the selected project and creates the persistent config;
-7. switches the `current` symlink only after validation succeeds;
-8. records the active Raspberry Pi Imager Wi-Fi as the preferred network;
-9. enables the dashboard/runtime, port-80 proxy, and 30-second Wi-Fi failover service;
-10. runs the non-moving `motionmodule doctor` check and prints its results;
-11. links to the GitHub pinout as its final message, then reboots automatically.
+## 3. Open the dashboard
 
-The SSH connection closes when the automatic reboot begins. Wait for the Pi to
-come back online before reconnecting. For a provisioning workflow that still
-has additional work to do, skip only the reboot with:
+After reboot, put the laptop on the same Wi-Fi and open:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh | \
-  bash -s -- --no-reboot
+```text
+http://motionmodule.local
 ```
 
-## 3. Non-moving checks
+Use the Pi IP if `.local` discovery is blocked. If no saved Wi-Fi connects
+within 30 seconds, join `MotionModule` with initial password `motionrobot` and
+open `http://10.42.0.1`.
 
-The installer already ran `doctor` before reboot. After wiring against
-[PINOUT.md](PINOUT.md), reconnect and run the checks again before applying motor
-power:
+Debug shows all current IP addresses and lets you rename the hostname, scan and
+join Wi-Fi, or start the robot hotspot for this boot. After a network switch,
+join the same destination network on the laptop and reopen the hostname. The
+next reboot always tries saved client Wi-Fi first.
+
+## 4. Wire and inspect hardware
+
+Read [PINOUT.md](PINOUT.md) and [the bill of materials](../BOM.md) before
+applying motor or servo power.
+
+- Motor battery positive goes only to the fused motor rail and H-bridges.
+- PCA9685 VCC is Pi-side logic power; servo V+ comes from a separate fused
+  5–6 V supply.
+- Connect all signal grounds.
+- Add 10 kΩ pull-downs to H-bridge inputs.
+- Keep a physical motor-power cutoff reachable.
+
+Open Debug. Its header and H-bridge labels are generic Driver 1A through 4B,
+independent of the selected robot style. PCA9685 boards are checked through
+I2C. USB devices appear with their IDs, Pi ports, drivers, and access state.
+Basic H-bridge and servo outputs cannot identify attached hardware.
+
+With all wheels raised, use the guarded Motor Bench Test at low power. Test
+servos one channel at a time after selecting the correct voltage and behavior.
+
+## 5. Create and deploy robot code
+
+Open **Code → Driver Station** and download the Mecanum sample. Unzip it and
+rename the folder for the robot. Every browser-deployed folder contains:
+
+```text
+MyRobot/
+├── robot.py
+├── hardware.py
+└── any_other_python_files.py
+```
+
+Edit the local folder in any editor. `hardware.py` owns this robot's pins,
+inversion, PWM, watchdog, and servo board list. `robot.py` defines
+`create_drive(module)`. See [CODING.md](CODING.md) for the APIs and examples.
+
+Return to Code, choose the whole folder, review its files, accept the output
+stop/restart confirmation, and press **Deploy and run**. The Pi validates it,
+backs up an older same-named folder, makes the new copy active, restarts, and
+automatically reconnects the page. A failed check does not replace the working
+project.
+
+## 6. Test the active project
+
+Start with the speed limit low and the robot raised. Enable keyboard drive
+deliberately:
+
+- W/S: forward/backward
+- A/D: strafe
+- Q/E: rotate
+- Space: stop
+
+Releasing a key, disabling drive, leaving the page, or losing communication
+sends or causes a stop. The 500 ms default hardware watchdog protects against a
+lost browser command, but it does not replace the physical cutoff.
+
+## 7. Use Doctor, logs, and terminal
+
+Useful commands are explained inside Debug:
 
 ```bash
-motionmodule status
 motionmodule doctor
 motionmodule pinout
-```
-
-`doctor` can confirm the config, GPIO access, SPI conflicts, service, and every
-configured PCA9685 I2C address. The H-bridge boards have no return data line, so
-their presence cannot be detected without moving a motor or adding current/
-encoder feedback hardware.
-
-If the PCA9685 is absent—as expected during early development—`doctor` reports a
-warning and motor service remains usable. Install the board later and rerun the
-same check.
-
-## 4. Raised-wheel motor commissioning
-
-Read [PINOUT.md](PINOUT.md), raise the chassis, and keep the cutoff nearby.
-Normal robot code must be stopped so two processes cannot claim GPIO:
-
-```bash
-motionmodule stop
-motionmodule test-motor 1
-motionmodule test-motor 2
-```
-
-The diagnostic requires typing `RAISED`, limits power to 25% and duration to two
-seconds, and stops through a `finally`/context cleanup path. Test all eight
-channels. Missing motor/driver wiring produces no software discovery error; the
-physical channel simply will not move.
-
-For a wheel that runs opposite its semantic direction, edit only its
-`inverted = true/false` value:
-
-```bash
-nano ~/.config/motionmodule/config.toml
-motionmodule start
-```
-
-## 5. Servo commissioning
-
-Set the external servo regulator with a multimeter before attaching a servo.
-Start with mechanical linkage disconnected and a centered generic command:
-
-```bash
-motionmodule stop
-motionmodule test-servo 0 --board 0 --angle 90
-```
-
-If the board is not found, run `i2cdetect -y 1`. The default board should appear
-at `40`. Check SDA/SCL orientation, 3.3 V logic VCC, common ground, and address
-pads. A servo may still fail to move with a detected board if its separate V+
-rail is absent.
-
-The dashboard **Debug → Servo pulse test** provides board selection and all 16
-PCA9685 outputs, numbered `0` through `15`. Choose the servo behavior before
-sending a pulse:
-
-| Dashboard profile | Command range | PWM range |
-| --- | ---: | ---: |
-| goBILDA 25-2 positional | 0–300° | 500–2500 µs |
-| goBILDA 25-2 5-turn positional | 0–1800° | 500–2500 µs |
-| goBILDA 25-2 continuous | −100% to +100%; 0% stops | 900–2100 µs |
-| Generic positional | 0–180° or 0–360° | Configured servo pulse range |
-
-The profiles follow goBILDA's published specifications for the
-[300° Dual Mode Servo](https://www.gobilda.com/2000-series-dual-mode-servo-25-2-torque/)
-and [5-Turn Dual Mode Servo](https://www.gobilda.com/2000-series-5-turn-dual-mode-servo-25-2-torque/).
-Continuous behavior works only after the servo itself has been changed into
-continuous mode with the supported programmer. The **Zero servo** button sends
-0° for a positional profile or the neutral 0% command for continuous mode. For
-a positional servo, 0° can be a mechanical endpoint—disconnect the linkage and
-confirm the full travel path first. Every dashboard command automatically
-releases the PCA9685 output after 1.5 seconds.
-
-The profile changes only PWM behavior; it does not set supply voltage or
-reprogram the servo. Both linked goBILDA models specify 4.8–7.4 V, so set and
-verify the separate regulated V+ rail for the actual servo before connecting
-it. Do not choose the generic 360° positional profile for a continuous-rotation
-servo—continuous PWM represents direction and speed, not an absolute angle.
-
-## 6. Student editing
-
-Use VS Code for robot code. There are two supported connection modes.
-
-### Option A: edit directly on the Pi
-
-Open the dashboard's **Code** page first. It displays the exact commands for
-this Pi, including an IP fallback. Remember:
-
-- **username** is the account created in Raspberry Pi Imager;
-- **hostname** is the robot name shown in **Debug → Robot identity**;
-- the SSH destination combines them as `username@hostname.local`.
-
-Then follow these beginner steps:
-
-1. Open Extensions in VS Code, search for **Remote - SSH** by Microsoft, and
-   press **Install**.
-2. Press `Ctrl+Shift+P`, choose **Remote-SSH: Add New SSH Host…**, and paste
-   `ssh YOUR_USER@motionmodule.local` (or the exact command shown by the robot).
-3. Choose the first SSH configuration file VS Code offers.
-4. Press `Ctrl+Shift+P` again, choose **Remote-SSH: Connect to Host…**, and
-   select the robot you just added.
-5. Choose **Linux** if asked, accept the fingerprint, and type the Raspberry Pi
-   Imager password. Password characters are intentionally not displayed.
-6. Wait for the bottom-left corner to say `SSH: motionmodule`, choose **File →
-   Open Folder…**, and open `/home/YOUR_USER/MotionModule/robots/Mecanum`.
-
-Saving now edits the robot's copy directly. Restart and watch logs from the VS
-Code terminal:
-
-```bash
-motionmodule restart
+motionmodule status
 motionmodule logs
-```
-
-### Option B: edit locally and push
-
-Open a local clone of this repository in VS Code. Copy `examples/Mecanum` into
-a new local folder such as `robots/MyRobot`; every project must contain
-`robot.py`. Edit locally without touching the robot, then choose **Terminal →
-Run Task → MotionModule: Push robot project**. Enter the project folder and a
-target such as `YOUR_USER@motionmodule-01.local`.
-
-The same operation can be run directly from the VS Code terminal:
-
-```bash
-python tools/push_robot.py robots/MyRobot --host YOUR_USER@motionmodule-01.local
-```
-
-The push uses SSH, validates all Python syntax, saves the previous Pi copy in
-`~/MotionModule/backups`, activates `MyRobot`, and restarts MotionModule. Only
-the successfully pushed copy runs on the robot. Install the operating system's
-OpenSSH client if the `ssh` or `scp` command is missing.
-
-### Browser terminal
-
-At the bottom of the dashboard Code page is a PTY-backed Bash terminal. It runs
-as the normal Pi user in the active robot project, so it can run scripts and
-normal shell commands but cannot silently bypass Linux permissions.
-
-It is deliberately locked until enabled from SSH:
-
-```bash
-motionmodule terminal enable       # 15 minutes
-motionmodule terminal enable 30    # choose 1–120 minutes
-motionmodule terminal status
-motionmodule terminal disable
-```
-
-Enter the printed access code in the Code page. The file containing that code
-is readable only by the Pi user, expires at the selected time, and includes the
-Linux boot ID so it cannot be reused after reboot. An active shell closes when
-the page is left, when access is disabled or expires, or after five minutes
-without browser activity. `Interrupt · Ctrl-C` stops a running command.
-
-The robot dashboard is HTTP, not end-to-end HTTPS. Use this terminal only on a
-trusted/private robot network, never expose port 80 to the public internet, and
-do not enter reusable passwords, access tokens, or other secrets. Use SSH for
-`sudo` and other privileged administration. Running `motionmodule restart`
-inside the page intentionally disconnects the terminal while the service
-restarts.
-
-To add another robot, create `~/MotionModule/robots/Swerve/robot.py` (or another
-project-named folder), then select it:
-
-```bash
+motionmodule restart
 motionmodule project list
-motionmodule project Swerve
 ```
 
-The dashboard's Code page shows the active project. Reinstalling or updating
-the runtime does not overwrite any existing robot project folder.
-
-The complete dashboard is `http://motionmodule-01.local`; the Pi's current IP
-address also works directly without adding a port. A network
-disconnect stops motor output after 500 ms even if the browser stop request
-never reaches the Pi. Open **Debug** for the pin diagram, live PCA9685
-detection, guarded motor/servo tests, Doctor warnings, explained commands,
-service logs, active
-network, IP addresses, Wi-Fi scan, and hotspot controls. Every network change
-stops the motors. **Code** contains the two VS Code workflows, guarded manual
-drive, and the time-limited terminal.
-
-## 7. Wi-Fi and automatic standalone hotspot
-
-On every boot, NetworkManager first tries the Wi-Fi profiles already saved on
-the Pi. The installer records whichever client Wi-Fi is active—normally the one
-entered in Raspberry Pi Imager—as MotionModule's preferred profile. If the Pi
-does not have a working client connection within 30 seconds, it creates:
-
-- SSID: `MotionModule`
-- password: `motionrobot` on a fresh install
-- robot address: `http://10.42.0.1`
-
-Change the hotspot name/password from the browser Settings screen before using
-it in a shared classroom. Settings can also scan and join open, WPA personal,
-or PEAP/MSCHAPv2 enterprise networks. Enterprise setup requires the username,
-password, and authentication server's full DNS domain so the Pi can validate
-the server certificate. Use `nmtui` through SSH for other school configurations.
-
-Press **Switch to robot hotspot** to leave the current LAN and start the access
-point immediately. That manual choice applies to the current boot only. At the
-next boot, the Pi again tries preferred Wi-Fi for 30 seconds first. The matching
-terminal commands remain available:
+The web terminal is an unprivileged real Bash shell and is locked by default.
+Create a temporary access code during an admin SSH session:
 
 ```bash
-motionmodule hotspot on MotionModule-01 choose-a-password
-motionmodule hotspot off
-motionmodule hotspot status
+motionmodule terminal enable
 ```
 
-`hotspot off` reconnects the saved preferred profile. Ethernet can remain
-connected while the Wi-Fi adapter serves the hotspot.
-
-### Finding the address after changing Wi-Fi
-
-The Debug page shows the Pi username, hostname, complete SSH target, every
-current IPv4 address, and the mDNS name `http://HOSTNAME.local`. **Robot
-identity** can rename the Pi without SSH; enter only the base name (for example
-`motionmodule-07`), not the username, `@`, or `.local`. The change survives a
-reboot and becomes the new browser and VS Code name.
-
-When the Pi switches away from its hotspot, the
-old browser loses contact before it can learn the new DHCP address; that is a
-normal one-radio handoff. Join the destination Wi-Fi on the laptop and open the
-`.local` name. If `.local` is unavailable on that laptop/network, find the Pi in
-the Debug page or router's client list and use `ssh YOUR_USER@IP_ADDRESS`. If
-already connected through SSH, `hostname -I` prints the same current addresses.
+Enter that code at the bottom of Code. It expires after 15 minutes by default,
+is invalid after reboot, and its shell closes after five idle minutes. Revoke it
+with `motionmodule terminal disable`. Do not enter reusable secrets because the
+local robot dashboard uses HTTP.
 
 ## Troubleshooting
 
-### Service repeatedly restarts
+### The Pi is online but the website does not open
 
-```bash
-motionmodule status
-sudo journalctl -u motionmodule.service -n 100 --no-pager
-```
-
-A syntax error in student `robot.py`, a GPIO already claimed by another process,
-or active SPI on expansion pins are common causes.
-
-### The Pi is online but the dashboard does not open
-
-Use `http://` rather than `https://`, then check both services:
+Use `http://`, not `https://`, and try the numeric IP. On the Pi:
 
 ```bash
 sudo systemctl status nginx motionmodule.service --no-pager
@@ -312,27 +142,35 @@ curl http://127.0.0.1:8080/healthz
 sudo nginx -t
 ```
 
-Port 8080 is the private dashboard process; Nginx exposes it as normal port 80.
+### A deployment is rejected
 
-### `.local` address does not resolve
+The selected folder must contain top-level `robot.py` and `hardware.py` and may
+contain only `.py`, `.md`, and `.txt` files. Read the exact Driver Station
+message. Syntax and hardware-map failures are rejected before replacement.
 
-Use the IP shown by `hostname -I`, your router, or `10.42.0.1` in hotspot mode.
-Confirm `systemctl status avahi-daemon` on the Pi.
+### The service repeatedly restarts after a deployment
+
+The static checks cannot prove that every imported third-party package exists
+or that import-time student code succeeds. Open Debug's service log or run:
+
+```bash
+sudo journalctl -u motionmodule.service -n 100 --no-pager
+```
+
+Correct the local folder and deploy it again. Previous copies are retained in
+`~/MotionModule/backups`.
 
 ### The hotspot never appears
 
-Wait at least 30 seconds after boot, then check Ethernet and the saved Wi-Fi—any
-working client connection intentionally prevents fallback. Inspect the monitor
-with `sudo systemctl status motionmodule-network.service` and
-`sudo journalctl -u motionmodule-network.service -n 100 --no-pager`.
+Wait at least 30 seconds. Any working saved Wi-Fi intentionally prevents the
+fallback. Inspect `motionmodule-network.service` if necessary.
 
-### Permission denied for GPIO/I2C
+### GPIO or I2C says permission denied
 
-Reboot after installation. Confirm `groups` includes `gpio` and `i2c`, and that
-`/dev/gpiochip0` and `/dev/i2c-1` exist.
+Reboot after installation. Confirm the user belongs to `gpio` and `i2c` and
+that `/dev/gpiochip0` and `/dev/i2c-1` exist.
 
-### The robot moves briefly and stops
+### A motor moves briefly and stops
 
-The 500 ms watchdog is working. Long-running code must refresh motor commands or
-call `module.feed_watchdog()` faster than the configured timeout. Do not disable
-the watchdog to hide a blocked control loop.
+The watchdog is working. Robot logic that maintains nonzero output must refresh
+commands faster than the configured timeout.

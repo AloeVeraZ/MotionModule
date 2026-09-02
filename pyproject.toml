@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "motionmodule"
-version = "0.8.1"
+version = "0.9.0"
 description = "Raspberry Pi control runtime for eight brushed motors and PCA9685 servos"
 readme = "README.md"
 requires-python = ">=3.11"

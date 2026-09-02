@@ -53,7 +53,7 @@ def dashboard_checks(module) -> list[dict]:
         }
     )
     if not module.config.servos.enabled:
-        checks.append({"id": "servos", "level": "info", "title": "Servo boards", "detail": "Servo support is disabled in config.toml."})
+        checks.append({"id": "servos", "level": "info", "title": "Servo boards", "detail": "Servo support is disabled in the active hardware configuration."})
     else:
         for board in snapshot.get("servo_boards", []):
             checks.append(
