@@ -16,16 +16,22 @@ The same upload works on the saved Wi-Fi, Ethernet, and the direct MotionModule
 hotspot. The local folder cannot move hardware. Only the validated copy sent to
 the Pi runs.
 
-## Required files
+## What goes in the folder
 
 ```text
 MyRobot/
-├── robot.py       # creates the browser drive controller
-├── hardware.py    # pins, inversion, PWM, watchdog, servo boards
-└── helpers.py     # any other Python files you want
+├── robot.py       # required: creates the browser drive controller
+├── hardware.py    # optional: your own names, pins, inversion, servo boards
+└── helpers.py     # optional: any other Python files you want
 ```
 
-`hardware.py` must contain a single literal dictionary assignment:
+Only `robot.py` is required. A folder without `hardware.py` runs on the
+installed hardware map, whose names (`motor_1`…`motor_8`, `servo_1`…`servo_16`)
+are listed in **Debug → Wiring**.
+
+Add `hardware.py` when this robot needs its own names or wiring. Download the
+current one from Debug or Code, rename the outputs you use, and keep it next to
+`robot.py`. It must contain a single literal dictionary assignment:
 
 ```python
 HARDWARE = {
@@ -49,9 +55,10 @@ HARDWARE = {
 }
 ```
 
-It may have a docstring, but no imports, calls, calculations, or other
-statements. Every browser-deployed project must include this file. Debug reads
-the active project's configuration to draw the generic wiring map.
+It may have a docstring and comments, but no imports, calls, calculations, or
+other statements, so MotionModule can check the pins without running the file.
+Debug reads whichever configuration is active to draw the wiring map and to
+list the names available to your code.
 
 `robot.py` defines the dashboard hook:
 
@@ -75,14 +82,19 @@ be able to import the project before it can serve the dashboard.
 
 ## Motor API
 
+Address a motor by its name, or by its channel number from 1 to 8:
+
 ```python
-motor = module.motor(5)
-motor.set(0.25)   # -1.0 to +1.0
+motor = module.motor("motor_5")   # module.motor(5) also works
+motor.set(0.25)                   # -1.0 to +1.0
 motor.stop()
 
-module.set_motors({1: 0.4, 2: 0.4, 3: -0.4, 4: -0.4})
+module.set_motors({"motor_1": 0.4, "motor_2": 0.4, "motor_3": -0.4, "motor_4": -0.4})
 module.stop_all()
 ```
+
+`motor.name` and `motor.channel` tell you which output a handle refers to,
+which is useful when printing debug output.
 
 The controller clamps power, applies the `inverted` value from `hardware.py`,
 inserts a coast interval before reversing, and stops stale output at the
@@ -92,7 +104,7 @@ that deadline.
 ## Servo API
 
 ```python
-arm = module.servo(channel=0, board=0)
+arm = module.servo("servo_1")     # module.servo(channel=0, board=0) also works
 arm.set_angle(90)
 arm.set_pulse_us(1500)
 arm.release()
@@ -109,8 +121,8 @@ Put robot-specific code in additional `.py` files inside the same folder:
 ```python
 # mechanisms.py
 class Intake:
-    def __init__(self, module, channel=5):
-        self.motor = module.motor(channel)
+    def __init__(self, module, name="motor_5"):
+        self.motor = module.motor(name)
 
     def run(self, power=0.35):
         self.motor.set(power)
@@ -128,12 +140,13 @@ Debug's USB list only discovers attached devices and does not install drivers.
 Before changing the active project, the Pi checks:
 
 - one folder with a safe 1–64 character project name;
-- `robot.py` and `hardware.py` at the top level;
+- `robot.py` at the top level;
 - only `.py`, `.md`, and `.txt` files, up to 250 files and 8 MiB total;
 - valid syntax in every Python file;
 - a synchronous top-level `create_drive(module)` function;
-- literal-only hardware data, valid GPIOs, unique motor pins, allowed I2C
-  addresses, pulse limits, and watchdog limits.
+- and, when the folder includes `hardware.py`, literal-only data with valid
+  GPIOs, unique motor pins, unique names, allowed I2C addresses, pulse limits,
+  and watchdog limits.
 
 It then stops outputs, backs up an existing same-named folder, replaces it,
 switches `~/MotionModule/active`, and restarts. If the new project later fails

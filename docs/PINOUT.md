@@ -3,6 +3,24 @@
 Software uses **BCM GPIO numbers**. Connector diagrams use **physical header
 numbers**. Every table below shows both; never assume they are interchangeable.
 Use this wiring guide together with the root-level [bill of materials](../BOM.md).
+Both are built into **Debug → Wiring** and **Debug → Parts** in the robot
+dashboard, so the guide works on the robot hotspot without internet access.
+The dashboard uses the active configuration's names and pins; the tables here
+describe the reference harness.
+
+## Read the connector before connecting a wire
+
+The Pi has **40 physical header pins**, with two numbering systems:
+
+- **Physical pin** is the numbered position on the connector, from 1 to 40.
+- **GPIO / BCM** is the signal number used in `hardware.py`. For example,
+  GPIO12 is **physical pin 32**, not physical pin 12.
+
+In Debug, select a header pin to see its destination and purpose. A motor
+signal label means a wire to an H-bridge input, not a connection directly to
+the motor. The motor's two heavy wires go to that driver's output pair.
+Confirm pin 1 using the Pi/header markings; a diagram can be rotated relative
+to the board on your bench.
 
 ## Four dual H-bridge boards
 
@@ -57,7 +75,10 @@ during boot until these pull-downs and the stopped-output behavior are verified.
 
 ## PCA9685 servo controller
 
-The servo board is a separate I2C device and shares no motor GPIO.
+The servo board is a separate I2C device and shares no motor GPIO. Its 16
+servo outputs live **on the PCA9685 board**, not on 16 Pi pins. Only four
+Pi connections are needed: SDA, SCL, 3.3 V logic power and logic ground.
+Two additional supply connections deliver the servo power.
 
 | PCA9685 connection | Raspberry Pi / supply connection |
 | --- | --- |
@@ -68,6 +89,51 @@ The servo board is a separate I2C device and shares no motor GPIO.
 | V+ screw terminal | separate regulated servo supply positive |
 | V+ screw terminal GND | servo supply negative and common logic ground |
 
+### The 16 servo output headers
+
+Each numbered output has **three contacts**. Follow the board's printed
+signal/V+/GND labels and the servo's connector specification, rather than
+assuming wire colors or board orientation:
+
+| Contact on each output | Connect to | What it does |
+| --- | --- | --- |
+| Signal / PWM | That servo's signal wire | Carries the command for this one channel |
+| V+ | That servo's power wire | Shared regulated servo supply, not Pi logic power |
+| GND | That servo's ground wire | Returns power to the servo supply |
+
+The first board has these default code names. Channel numbers start at **0**,
+while the friendly names start at **1**; rename them in `hardware.py` to match
+your mechanisms. A configured name does not prove a servo is plugged in.
+
+| Board output | Default code name | Board output | Default code name |
+| ---: | --- | ---: | --- |
+| 0 | `servo_1` | 8 | `servo_9` |
+| 1 | `servo_2` | 9 | `servo_10` |
+| 2 | `servo_3` | 10 | `servo_11` |
+| 3 | `servo_4` | 11 | `servo_12` |
+| 4 | `servo_5` | 12 | `servo_13` |
+| 5 | `servo_6` | 13 | `servo_14` |
+| 6 | `servo_7` | 14 | `servo_15` |
+| 7 | `servo_8` | 15 | `servo_16` |
+
+### Other connectors and pads
+
+- **OE (output enable):** low enables the PWM outputs, high disables them.
+  MotionModule assigns no Pi GPIO to OE and does not control it. Verify that
+  the fitted board's enable circuit holds it low; do not leave OE floating.
+  Disabling PWM does not disconnect the servo power rail.
+- **A0–A5:** solder address pads, not servo outputs. They choose which I2C
+  address this board responds to.
+- **Repeated side headers:** repeated SDA/SCL/VCC/GND labels are the same
+  electrical connections for chaining another controller. They do not each
+  need a separate Pi pin. V+ remains the separate servo power rail.
+
+The [PCA9685 datasheet](https://www.nxp.com/docs/en/data-sheet/PCA9685.pdf)
+documents OE and address inputs. The
+[PCA9685 connector reference](https://learn.adafruit.com/16-channel-pwm-servo-driver/pinouts)
+explains the common breakout layout; match labels on the selected AITRIP board
+before wiring, since board orientation and fitted components can differ.
+
 > [!WARNING]
 > `VCC` powers PCA9685 logic. `V+` powers the servos. Do not bridge them and do
 > not power a bank of servos from a Raspberry Pi 5 V header pin.
@@ -76,15 +142,41 @@ The first board has every address pad open and uses `0x40`. To add another
 board, solder A0 on the second board for `0x41`, chain SDA/SCL/VCC/GND, provide
 appropriately sized servo power, and edit:
 
-```toml
-[servos]
-addresses = [0x40, 0x41]
+```python
+# In HARDWARE["servos"] in hardware.py:
+"addresses": [0x40, 0x41],
 ```
 
 Code then uses `module.servo(channel=0, board=1)` for the second board. Never
 put two boards with the same address on one bus. The hardware can address many
 boards, but wire length, bus capacitance, connector current, and power
 distribution become the practical limits well before the advertised maximum.
+
+If `servos.channels` contains an explicit list of named outputs, also add names
+with `"board": 1` and channels 0–15 for the second board. If you omit that
+optional dictionary, MotionModule automatically names every output on every
+configured board. Debug always shows all 16 physical headers per board, even
+when only some have explicit names.
+
+## Reserved and unused Pi header pins
+
+"Reserved" means kept for a specific electrical interface. It does not mean
+that a sensor is connected or supported; no sensors are implemented yet.
+
+| Physical pin(s) | Reference purpose | What to do |
+| --- | --- | --- |
+| 1, 3, 5, 6 | PCA9685 logic: VCC, SDA, SCL, GND | Connect the four logic wires above; GPIO2/3 stay reserved for I2C even if servo support is disabled |
+| 8 / GPIO14, 10 / GPIO15 | UART transmit and receive | Leave disconnected in the default harness; serial access may use them |
+| 27 / GPIO0, 28 / GPIO1 | HAT ID EEPROM data and clock | Leave disconnected; MotionModule rejects motor use of these pins |
+| 2, 4 | Pi 5 V power | Not used by the reference harness; never connect the motor battery or servo V+ here |
+| 17 | Spare Pi 3.3 V logic power | Unused; not a motor or servo supply |
+| 9, 14, 30 | Spare Pi ground | Available for low-current signal references |
+| 7, 11, 12, 13, 15, 19 | Unassigned GPIO4/17/18/27/22/10 | No configured device or sensor; alternate interfaces may use these pins |
+
+If you customize motor pins, Debug shows the **active assignment** in place of
+the reference label. For example, using a UART GPIO for a motor requires
+disabling its serial-console/UART use first. Do not treat an unused label as a
+guarantee that another Pi service is not using that pin.
 
 ## Power boundaries
 

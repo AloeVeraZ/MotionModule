@@ -101,16 +101,23 @@ class DeployTests(unittest.TestCase):
             self.assertTrue(Path(result["backup"]).is_dir())
             self.assertIn("create_drive", (target / "robot.py").read_text())
 
-    def test_browser_folder_requires_hardware_and_data_only_config(self):
+    def test_browser_folder_without_hardware_uses_the_shipped_pin_map(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with self.assertRaisesRegex(MotionModuleError, "hardware.py"):
-                deploy_project_files(
-                    [("BadBot/robot.py", b"def create_drive(module):\n    return module\n")],
-                    root / "robots",
-                    root / "backups",
-                )
-            with self.assertRaisesRegex(MotionModuleError, "literal"):
+            result = deploy_project_files(
+                [("JustCode/robot.py", b"def create_drive(module):\n    return module\n")],
+                root / "robots",
+                root / "backups",
+            )
+            self.assertEqual(result["files"], 1)
+            target = root / "robots" / "JustCode"
+            self.assertTrue((target / "robot.py").is_file())
+            self.assertFalse((target / "hardware.py").exists())
+
+    def test_browser_folder_rejects_a_hardware_file_that_is_not_data_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(MotionModuleError, "plain value"):
                 deploy_project_files(
                     [
                         ("BadBot/robot.py", b"def create_drive(module):\n    return module\n"),
@@ -119,6 +126,30 @@ class DeployTests(unittest.TestCase):
                     root / "robots",
                     root / "backups",
                 )
+
+    def test_archive_checks_hardware_before_replacing_an_existing_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "robots" / "MyRobot"
+            target.mkdir(parents=True)
+            (target / "robot.py").write_text("WORKS = True\n", encoding="utf-8")
+            archive = root / "broken.tar.gz"
+            write_archive(archive, {
+                "robot.py": "def create_drive(module):\n    return module\n",
+                "hardware.py": VALID_HARDWARE.replace('"reverse_gpio": 17', '"reverse_gpio": 4'),
+            })
+            with self.assertRaisesRegex(MotionModuleError, "same GPIO"):
+                deploy_archive(archive, root / "robots", root / "backups", "MyRobot")
+            self.assertIn("WORKS = True", (target / "robot.py").read_text())
+
+    def test_browser_python_files_saved_with_windows_utf8_bom_are_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = deploy_project_files([
+                ("MyRobot/robot.py", "def create_drive(module):\n    return module\n".encode("utf-8-sig")),
+                ("MyRobot/hardware.py", VALID_HARDWARE.encode("utf-8-sig")),
+            ], root / "robots", root / "backups")
+            self.assertEqual(result["files"], 2)
 
     def test_browser_folder_rejects_non_source_files(self):
         with tempfile.TemporaryDirectory() as directory:

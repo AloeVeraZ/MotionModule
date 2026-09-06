@@ -1,6 +1,6 @@
-"""Public student-facing MotionModule API."""
+"""Public MotionModule API used by robot projects."""
 
-from .config import ModuleConfig, load_config
+from .config import ModuleConfig, ServoSlot, default_config, load_config, load_hardware_file
 from .controller import MotionModule
 from .errors import ConfigurationError, HardwareUnavailable, MotionModuleError
 
@@ -10,7 +10,10 @@ __all__ = [
     "ModuleConfig",
     "MotionModule",
     "MotionModuleError",
+    "ServoSlot",
+    "default_config",
     "load_config",
+    "load_hardware_file",
 ]
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"

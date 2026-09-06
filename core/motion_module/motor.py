@@ -53,11 +53,15 @@ class HBridgeMotor:
 
 
 class Motor:
-    """Student-facing handle that routes changes through the shared safety controller."""
+    """One named motor output; every change goes through the safety controller."""
 
-    def __init__(self, controller, channel: int) -> None:
+    def __init__(self, controller, channel: int, name: str = "") -> None:
         self._controller = controller
         self.channel = channel
+        self.name = name or f"motor_{channel}"
+
+    def __repr__(self) -> str:
+        return f"<Motor {self.name} (channel {self.channel})>"
 
     @property
     def value(self) -> float:

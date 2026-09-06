@@ -59,7 +59,7 @@ trap 'fail "Installation stopped on line $LINENO. Read the error above and rerun
 [ -n "$SOURCE_DIR" ] || fail "The installer source directory was not provided. Run the repository install.sh."
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 [ -f "$SOURCE_DIR/pyproject.toml" ] || fail "pyproject.toml is missing from $SOURCE_DIR"
-[ -f "$SOURCE_DIR/config/default.toml" ] || fail "The default hardware configuration is missing."
+[ -f "$SOURCE_DIR/core/motion_module/hardware.py" ] || fail "The default hardware definition file is missing."
 if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
     fail "Invalid robot project name: $ROBOT_PROJECT"
 fi
@@ -74,7 +74,8 @@ PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
 ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
-CONFIG_FILE="$CONFIG_DIR/config.toml"
+CONFIG_FILE="$CONFIG_DIR/hardware.py"
+LEGACY_CONFIG_FILE="$CONFIG_DIR/config.toml"
 
 if [ "$TARGET_HOSTNAME" = "__default__" ]; then
     if [ -L "$CURRENT_LINK" ]; then
@@ -219,10 +220,24 @@ case "$active_target" in
     *) fail "The active robot project points outside $ROBOT_DIR" ;;
 esac
 ACTIVE_PROJECT="$(basename "$active_target")"
-if [ ! -f "$CONFIG_FILE" ]; then
-    install -m 0644 "$release_dir/config/default.toml" "$CONFIG_FILE"
+# hardware.py is the one editable pin-definition file. Preserve older custom
+# pin maps when upgrading, and keep config.toml for older release rollbacks.
+if [ -f "$CONFIG_FILE" ]; then
+    say "Keeping the existing hardware definitions at $CONFIG_FILE."
+elif [ -f "$LEGACY_CONFIG_FILE" ]; then
+    "$release_dir/.venv/bin/python" - "$LEGACY_CONFIG_FILE" "$CONFIG_FILE" <<'PY'
+import sys
+from pathlib import Path
+from motion_module.config import hardware_source, load_config
+
+config = load_config(sys.argv[1])
+with Path(sys.argv[2]).open("x", encoding="utf-8") as output:
+    output.write(hardware_source(config))
+PY
+    say "Converted the existing pin map to $CONFIG_FILE; kept $LEGACY_CONFIG_FILE for rollback."
 else
-    say "Keeping the existing hardware configuration at $CONFIG_FILE."
+    install -m 0644 "$release_dir/core/motion_module/hardware.py" "$CONFIG_FILE"
+    say "Installed the default pin and name definitions at $CONFIG_FILE."
 fi
 
 if [ ! -f "$PROJECT_DIR/README.md" ] || grep -q '^# MotionModule student workspace$' "$PROJECT_DIR/README.md"; then
@@ -238,12 +253,15 @@ motionmodule logs
 motionmodule project list
 \`\`\`
 
-New robot folders keep their pins and electrical setup in \`hardware.py\` next
-to \`robot.py\`. Open the dashboard Code page, download the sample, edit that
-folder on any computer, then choose the folder under Driver Station. The robot
-validates, backs up, activates, and runs it directly through the robot website.
+A robot folder needs only \`robot.py\`. Open the dashboard Code page, download
+the sample, edit that folder on any computer, then choose the folder under
+Driver Station. The robot validates, backs up, and activates it, then runs it
+directly through the robot website.
 
-Older projects without \`hardware.py\` continue to use \`$CONFIG_FILE\`.
+Motors and servos are addressed by name: \`module.motor("motor_1")\`. Those
+names live in \`$CONFIG_FILE\`. To rename them for one robot, copy that file
+into the robot folder as \`hardware.py\` and edit it there.
+
 Run \`motionmodule pinout\` and \`motionmodule doctor\` before powered testing.
 EOF
 fi

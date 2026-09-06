@@ -7,6 +7,7 @@ import threading
 import time
 
 from .config import ModuleConfig, load_config
+from .errors import ConfigurationError, MotionModuleError
 from .gpio import MockGPIO, create_gpio_backend
 from .motor import HBridgeMotor, Motor
 from .servo import MockServoController, PCA9685Controller, Servo
@@ -15,8 +16,13 @@ from .servo import MockServoController, PCA9685Controller, Servo
 class MotionModule:
     """Main API passed into robot projects.
 
-    Motor channels are numbered 1-8. PCA9685 servo boards are numbered from 0,
-    and each board provides channels 0-15.
+    Outputs are addressed by the names in ``hardware.py``::
+
+        module.motor("front_left").set(0.5)
+        module.servo("claw").set_angle(90)
+
+    The underlying numbers still work: motor channels are 1-8, PCA9685 boards
+    are numbered from 0, and each board provides channels 0-15.
     """
 
     def __init__(self, config: ModuleConfig | None = None, gpio=None, servo_controller=None) -> None:
@@ -44,27 +50,46 @@ class MotionModule:
         )
         self._watchdog_thread.start()
 
-    def motor(self, channel: int) -> Motor:
-        if channel not in self._motors:
-            raise ValueError(f"Motor channel {channel} is not configured")
-        return Motor(self, channel)
+    def motor(self, channel: int | str) -> Motor:
+        """Return one motor by its hardware.py name or by channel number."""
 
-    def servo(self, channel: int, board: int = 0) -> Servo:
+        number = self._resolve_motor(channel)
+        return Motor(self, number, self.config.motor(number).name)
+
+    def servo(self, channel: int | str, board: int = 0) -> Servo:
+        """Return one servo by its hardware.py name or by board and channel."""
+
         if not self.config.servos.enabled:
-            raise ValueError("Servo support is disabled in the configuration")
-        if not 0 <= board < len(self.config.servos.addresses):
-            raise ValueError(f"Servo board {board} is not configured")
-        if not 0 <= channel <= 15:
+            raise ValueError("Servo support is disabled in hardware.py")
+        try:
+            slot = self.config.servo_slot(channel, board)
+        except ConfigurationError as error:
+            raise ValueError(str(error)) from error
+        if not 0 <= slot.board < len(self.config.servos.addresses):
+            raise ValueError(f"Servo board {slot.board} is not configured")
+        if not 0 <= slot.channel <= 15:
             raise ValueError("Servo channel must be from 0 through 15")
-        return Servo(self._servos, board, channel)
+        return Servo(self._servos, slot.board, slot.channel, slot.name)
 
-    def set_motors(self, outputs: dict[int, float]) -> None:
+    def _resolve_motor(self, reference: int | str) -> int:
+        try:
+            number = self.config.motor_channel(reference)
+        except ConfigurationError as error:
+            raise ValueError(str(error)) from error
+        if number not in self._motors:
+            raise ValueError(f"Motor channel {number} is not configured")
+        return number
+
+    def set_motors(self, outputs: dict[int | str, float]) -> None:
+        """Set several motors at once, by name or by channel number."""
+
         if not outputs:
             return
         clean: dict[int, float] = {}
-        for channel, value in outputs.items():
-            if channel not in self._motors:
-                raise ValueError(f"Motor channel {channel} is not configured")
+        for reference, value in outputs.items():
+            channel = self._resolve_motor(reference)
+            if channel in clean:
+                raise ValueError(f"Motor channel {channel} was specified more than once; use its name or number once")
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError("Motor values must be numbers")
             value = float(value)
@@ -90,9 +115,31 @@ class MotionModule:
             self._last_feed = time.monotonic()
 
     def stop_all(self) -> None:
+        """Coast every motor immediately. Servos keep holding until released."""
+
         with self._lock:
+            if self._closed:
+                return
             self._apply_all_zero()
             self._watchdog_armed = False
+
+    def release_all_servos(self) -> None:
+        """Stop driving every servo output.
+
+        A released servo stops holding its position, so a loaded mechanism can
+        fall. ``stop_all`` deliberately does not do this; the dashboard STOP
+        button does, so that what the page shows matches what the wires carry.
+        """
+
+        with self._lock:
+            if self._closed:
+                return
+            held = {*self._servos.angles, *getattr(self._servos, "pulses", {})}
+            for board, channel in sorted(held):
+                try:
+                    self._servos.release(board, channel)
+                except (MotionModuleError, ValueError, OSError):
+                    continue
 
     def _apply_all_zero(self) -> None:
         for channel, motor in self._motors.items():
@@ -114,6 +161,13 @@ class MotionModule:
             return {
                 "hardware": bool(getattr(self.gpio, "is_hardware", False)),
                 "motors": dict(self.motor_values),
+                "motor_names": {
+                    str(item.channel): item.name for item in self.config.motors
+                },
+                "servo_names": {
+                    f"{slot.board}:{slot.channel}": slot.name
+                    for slot in self.config.servos.channels
+                },
                 "watchdog_ms": self.config.watchdog_ms,
                 "watchdog_armed": self._watchdog_armed,
                 "watchdog_tripped": self._watchdog_tripped,

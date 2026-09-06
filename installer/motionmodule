@@ -44,7 +44,7 @@ case "$command" in
         sudo systemctl "$command" motionmodule.service
         ;;
     doctor|pinout|test-motor|test-servo)
-        MOTIONMODULE_CONFIG="$CONFIG_DIR/config.toml" \
+        MOTIONMODULE_CONFIG_DIR="$CONFIG_DIR" \
         MOTIONMODULE_ACTIVE_PROJECT="$PROJECT_DIR/active" \
             exec "$(runtime_python)" -m motion_module "$command" "$@"
         ;;

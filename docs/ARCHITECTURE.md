@@ -32,12 +32,12 @@ fused power system and physical cutoff.
 ├── robots/
 │   ├── Mecanum/
 │   │   ├── robot.py
-│   │   ├── hardware.py
-│   │   └── mecanum.py
+│   │   └── hardware.py
 │   └── AnotherRobot/
 └── backups/
 
-~/.config/motionmodule/config.toml       # older-project fallback
+~/.config/motionmodule/hardware.py       # installed pin and name definitions
+~/.config/motionmodule/config.toml       # pre-hardware.py installs only
 ~/.config/motionmodule/terminal-access.json
 ```
 
@@ -45,10 +45,11 @@ Installing a tag, branch, or commit builds and tests a new release before the
 `current` link changes. It does not overwrite robot projects. Rollback switches
 the runtime links, not the student folders.
 
-The service follows `~/MotionModule/active/robot.py`. For a current project,
-its data-only `hardware.py` is the source of GPIO and servo configuration. An
-older installed project without that file continues to use the persistent TOML
-fallback.
+The service follows `~/MotionModule/active/robot.py`. GPIO and servo
+configuration is resolved in one order: the active project's data-only
+`hardware.py`, then the installed `~/.config/motionmodule/hardware.py`, then the
+copy shipped inside the runtime. Installs predating that file keep their TOML
+configuration, which is still read for compatibility.
 
 ## Browser deployment boundary
 
@@ -59,8 +60,8 @@ local dashboard. The backend:
 2. accepts a single safe root folder and Python/text documentation only;
 3. enforces count, individual-file, and total-size limits;
 4. rejects path traversal, links, binary data, caches, and build output;
-5. compiles every `.py`, verifies `create_drive(module)`, and parses
-   `hardware.py` with `ast.literal_eval` without importing it;
+5. compiles every `.py`, verifies `create_drive(module)`, and, when the folder
+   ships one, parses `hardware.py` with `ast.literal_eval` without importing it;
 6. stops outputs before writing project state;
 7. moves an existing target to `backups`, atomically installs the staged
    folder, and atomically updates `active`; and

@@ -188,10 +188,16 @@ class MockServoController:
 
 
 class Servo:
-    def __init__(self, controller, board: int, channel: int) -> None:
+    """One named PCA9685 output."""
+
+    def __init__(self, controller, board: int, channel: int, name: str = "") -> None:
         self._controller = controller
         self.board = board
         self.channel = channel
+        self.name = name or f"servo_{board * 16 + channel + 1}"
+
+    def __repr__(self) -> str:
+        return f"<Servo {self.name} (board {self.board}, channel {self.channel})>"
 
     @property
     def angle(self) -> float | None:

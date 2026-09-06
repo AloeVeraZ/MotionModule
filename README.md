@@ -7,7 +7,7 @@ depend on that hardware or software.
 
 The reusable runtime owns GPIO, I2C, safety, networking, diagnostics, and the
 browser dashboard. Each robot is one separate Python folder containing its own
-behavior and hardware map, so the same installation can run a Mecanum, tank,
+behavior and an optional hardware map, so the same installation can run a Mecanum, tank,
 walking, or other robot.
 
 > [!CAUTION]
@@ -28,6 +28,12 @@ See the root-level **[bill of materials](BOM.md)** for the reference parts:
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
 wiring. Never connect motor battery positive or the PCA9685 servo V+ rail to a
 Pi header power pin.
+
+The exact motor-driver and PCA9685 products are recorded. The motor and servo
+models, battery, regulator ratings, and fuse/wire sizing are still unspecified;
+**Debug → Parts** lists those open choices alongside the complete reference
+BOM. Parts and wiring instructions are available inside the app without an
+internet connection.
 
 ## Install on a Raspberry Pi
 
@@ -76,50 +82,87 @@ and can rename the robot. A reboot always tries saved Wi-Fi first.
 
 ## Dashboard
 
-- **Overview** shows live motor output, servo commands and I2C responses,
-  watchdog state, temperature, memory, disk, uptime, and network status.
-- **Debug** combines the full generic GPIO pinout, driver and servo wiring,
-  USB-device inventory, guarded hardware tests, Doctor, logs, useful commands,
-  Wi-Fi, hostname, and hotspot controls.
-- **Code** is the browser Driver Station. It deploys one local Python robot
-  folder, shows communications/code/network/output state, provides guarded
-  keyboard drive, and includes the time-limited web terminal.
+Three pages, each split into tabs:
+
+- **Overview** — live motor power labelled with your own names, servo commands
+  and I2C responses, watchdog state, temperature, memory, disk, uptime, network
+  status, and a three-step guide for a first-time build.
+- **Debug** — **Wiring** (colour-coded 40-pin header map, driver and servo
+  wiring, separate 16-output servo-board diagrams, the names you can use in
+  code, and USB inventory), **Parts** (complete reference BOM and missing
+  specifications),
+  **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
+  **Checks & logs** (Doctor, service log, command reference), and **Network**
+  (Wi-Fi, hostname, hotspot).
+- **Code** — the browser Driver Station: **Deploy** a local Python folder,
+  **Drive** it from the keyboard, and open the time-limited **Terminal**.
 
 ## Deploy robot code from the browser
 
 No editor plugin or remote coding connection is required. Code the project in
 any local editor, then:
 
-1. Open **Code** in the robot dashboard.
-2. Press **Choose one robot project folder**.
-3. Select the whole folder containing `robot.py` and `hardware.py`.
+1. Open **Code → Deploy** in the robot dashboard.
+2. Press **Choose your robot folder**.
+3. Select the whole folder containing `robot.py`.
 4. Review the files, accept the stop/restart confirmation, and press
    **Deploy and run**.
 5. Wait for the dashboard to reconnect after the service restarts.
 
 The Pi accepts Python and project documentation only, checks every Python file,
-parses `hardware.py` without executing it, validates the pins and safety limits,
-stops all outputs, backs up an older project with the same name, atomically
-installs the new folder, makes it active, and restarts MotionModule. A validation
-error leaves the working project in place.
+parses any `hardware.py` without executing it, validates the pins and safety
+limits, stops all outputs, backs up an older project with the same name,
+atomically installs the new folder, makes it active, and restarts MotionModule.
+A validation error leaves the working project in place.
 
 Press **Download Mecanum sample** on that page for a complete starting folder.
 Unzip it, rename the folder, edit it locally, and deploy the renamed folder.
 
+## One hardware definition file
+
+MotionModule ships with one editable `hardware.py` containing every motor's
+name, BCM pin pair, inversion setting and driver/output explanation, plus
+servo names, board addresses and timing settings. The installed copy is
+`~/.config/motionmodule/hardware.py`. Debug and Code offer a download of the
+configuration currently in use.
+
+Your smallest browser project needs only `robot.py`: it uses the installed
+hardware map. Add a `hardware.py` next to it when that robot needs different
+names or wiring. MotionModule uses the project copy first, then the installed
+map, then the default shipped with the runtime. Existing TOML configurations
+remain supported for compatibility.
+
+Use the names directly in your robot code:
+
+```python
+module.motor("motor_1").set(0.25)
+module.servo("servo_1").set_angle(90)
+module.stop_all()
+```
+
+The Mecanum sample's own hardware file names its four wheels `front_left`,
+`rear_left`, `front_right` and `rear_right`, preserving the tested pinout and
+inversions. For your own robot, change a name in the hardware file and use
+that name in code. No second pin-definition or driver-wrapper file is needed.
+
 ## Robot project format
 
-Every project is self-contained:
+Every project is self-contained, and only the first file is required:
 
 ```text
 MyRobot/
 ├── robot.py          # required browser-control entry point
-├── hardware.py       # required pins and electrical settings
+├── hardware.py       # optional: your own names, pins, and inversions
 ├── drivetrain.py     # optional Python modules
 ├── mechanisms.py
 └── README.md         # optional project notes
 ```
 
 ### `hardware.py`
+
+A project folder does not need this file. Include it only when this robot
+needs its own names or wiring; without it, the robot uses the installed
+hardware map described above.
 
 `hardware.py` contains exactly one literal `HARDWARE` dictionary. It cannot
 contain imports, function calls, calculations, or executable setup code. This
@@ -157,11 +200,14 @@ HARDWARE = {
 }
 ```
 
-Use BCM GPIO numbers in this file. Debug converts them to physical header pins.
-The included Mecanum sample contains the complete eight-motor reference map.
-Older installed projects without `hardware.py` continue to use the persistent
-`~/.config/motionmodule/config.toml` fallback, but every new browser deployment
-must include `hardware.py`.
+Use BCM GPIO numbers in this file. Debug converts them to physical header pins
+and lists every name it defines. The shipped `hardware.py` contains the complete
+eight-motor reference map with a comment showing each output's driver, header
+pin, and GPIO, so the easiest way to start is to download it from Debug or Code
+and rename the outputs you actually use.
+
+Every name must be unique across motors and servos, and must start with a
+letter and use only letters, numbers, and underscores.
 
 ### `robot.py`
 
@@ -173,6 +219,10 @@ this file during startup.
 This is a complete two-sided drive example:
 
 ```python
+LEFT = ("motor_1", "motor_2")
+RIGHT = ("motor_3", "motor_4")
+
+
 def clamp(value):
     return max(-1.0, min(1.0, value))
 
@@ -185,22 +235,22 @@ class TankDrive:
         left = forward + rotate
         right = forward - rotate
         scale = max(1.0, abs(left), abs(right))
-        outputs = {
-            1: clamp(left / scale * speed),
-            2: clamp(left / scale * speed),
-            3: clamp(right / scale * speed),
-            4: clamp(right / scale * speed),
-        }
+        outputs = {name: clamp(left / scale * speed) for name in LEFT}
+        outputs.update({name: clamp(right / scale * speed) for name in RIGHT})
         self.module.set_motors(outputs)
         return {"outputs": outputs}
 
     def stop(self):
-        self.module.set_motors({1: 0, 2: 0, 3: 0, 4: 0})
+        self.module.set_motors({name: 0 for name in LEFT + RIGHT})
 
 
 def create_drive(module):
     return TankDrive(module)
 ```
+
+Those four names come from the shipped `hardware.py`. Rename them there to
+`left_front`, `right_rear`, or whatever matches your machine, and use the new
+names here.
 
 The Driver Station supplies values from `-1.0` to `1.0` for `forward`,
 `strafe`, and `rotate`; `speed` is its `0.0` to `1.0` limit. The returned
@@ -208,18 +258,18 @@ dictionary must contain JSON-compatible data.
 
 ### Motors
 
-Motor channels are 1–8. Use a single channel for a mechanism:
+Use a name from the active `hardware.py`, or a motor channel from 1–8:
 
 ```python
-intake = module.motor(5)
+intake = module.motor("motor_5")  # or module.motor(5)
 intake.set(0.30)
 intake.stop()
 ```
 
-Update a drivetrain together:
+Update a drivetrain together, by name or by channel:
 
 ```python
-module.set_motors({1: 0.4, 2: 0.4, 3: 0.4, 4: 0.4})
+module.set_motors({"motor_1": 0.4, "motor_2": 0.4, "motor_3": 0.4, "motor_4": 0.4})
 ```
 
 Values are clamped to `-1.0` through `1.0`. MotionModule applies the project
@@ -229,10 +279,11 @@ watchdog timeout and call `module.stop_all()` for a whole-robot stop.
 
 ### Servos
 
-PCA9685 boards count from 0, and each has channels 0–15:
+Use a servo name, or an explicit board/channel pair. PCA9685 boards count
+from 0, and each has channels 0–15:
 
 ```python
-claw = module.servo(channel=0, board=0)
+claw = module.servo("servo_1")  # or module.servo(channel=0, board=0)
 claw.set_angle(30)
 claw.set_angle(110)
 claw.release()
@@ -290,7 +341,7 @@ mode.
 
 Use this order:
 
-1. Open **Debug** and inspect warnings, the generic pinout, USB/I2C devices,
+1. Open **Debug** and inspect warnings, the active pinout, USB/I2C devices,
    network addresses, and service log.
 2. Run `motionmodule doctor`; it does not intentionally move hardware.
 3. Run `motionmodule pinout` and compare every wire before applying power.
@@ -354,14 +405,14 @@ Detailed references are in [Setup](docs/SETUP.md), [Coding](docs/CODING.md),
 ```text
 MotionModule/
 ├── core/motion_module/    # controller, safety, dashboard, deploy, USB, network
+│   ├── hardware.py        # the shipped pin and name definitions
+│   └── hardware_guide.py  # offline parts list and wiring reference
 ├── installer/             # Pi install, services, Wi-Fi, versions, rollback
-├── config/default.toml    # compatibility/default hardware configuration
 ├── docs/                  # setup, coding, pinout, and architecture
 ├── examples/
 │   └── Mecanum/           # complete downloadable Python robot folder
 │       ├── robot.py
-│       ├── hardware.py
-│       └── mecanum.py
+│       └── hardware.py
 ├── tests/                 # hardware-independent automated tests
 ├── BOM.md
 ├── install.sh

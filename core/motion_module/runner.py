@@ -9,6 +9,7 @@ import sys
 import threading
 from pathlib import Path
 
+from .config import load_config
 from .controller import MotionModule
 
 
@@ -42,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     if not callable(run):
         raise RuntimeError(f"{args.project} must define run(module, stop_event)")
 
-    with MotionModule() as controller:
+    with MotionModule(load_config(project=args.project.resolve().parent)) as controller:
         try:
             run(controller, stop_event)
         finally:
@@ -53,4 +54,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

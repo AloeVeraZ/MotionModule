@@ -30,12 +30,15 @@ leaves the previous runtime selected.
 
 Bundled examples are copied once into `~/MotionModule/robots`; existing robot
 folders are never overwritten. The `active` symlink selects the project loaded
-by the dashboard. Current projects include a data-only `hardware.py`; older
-projects may continue using `~/.config/motionmodule/config.toml`.
+by the dashboard. A project may include its own data-only `hardware.py`;
+otherwise the installed `~/.config/motionmodule/hardware.py` supplies the pins
+and names. Installs made before that file existed keep using their
+`~/.config/motionmodule/config.toml`.
 
 The browser Driver Station accepts one local Python project folder. Deployment
-validates paths, size, file types, Python syntax, `robot.py`, and `hardware.py`,
-stops output, backs up an existing target, installs it atomically, switches
+validates paths, size, file types, Python syntax, `robot.py`, and any
+`hardware.py`, stops output, backs up an existing target, installs it
+atomically, switches
 `active`, and cleanly restarts the service. Nginx allows the bounded multipart
 upload and exposes the dashboard on port 80.
 

@@ -22,6 +22,13 @@ from flask import Flask, jsonify, render_template, request, send_file
 from werkzeug.serving import make_server
 
 from . import __version__
+from .config import (
+    DEFAULT_HARDWARE_PATH,
+    PROJECT_CONFIG_NAME,
+    hardware_source,
+    load_config,
+    resolve_config_path,
+)
 from .controller import MotionModule
 from .deploy import (
     MAX_BROWSER_FILE_BYTES,
@@ -30,8 +37,9 @@ from .deploy import (
 )
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
+from .hardware_guide import hardware_guide
 from .network import NetworkClient
-from .pinout import header_rows, motor_rows
+from .pinout import header_rows, motor_rows, servo_rows
 from .runner import load_project
 from .terminal import TerminalManager
 from .usb import usb_devices
@@ -39,6 +47,8 @@ from .usb import usb_devices
 
 DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
 PAGE_ALIASES = {"drive": "code", "hardware": "diagnostics", "network": "diagnostics"}
+# Older links land on the matching tab inside the page that replaced them.
+ALIAS_TABS = {"drive": "drive", "hardware": "wiring", "network": "network"}
 
 
 def servo_profiles(config) -> list[dict]:
@@ -226,6 +236,7 @@ def create_app(
     terminal_manager=None,
     workspace_directory: str | os.PathLike[str] | None = None,
     restart_callback=None,
+    config_path: str | os.PathLike[str] | None = None,
 ) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
@@ -253,6 +264,7 @@ def create_app(
     @app.get("/")
     @app.get("/<page>")
     def dashboard(page: str = "overview"):
+        requested = page
         page = PAGE_ALIASES.get(page, page)
         if page not in DASHBOARD_PAGES:
             return "Not found", 404
@@ -260,6 +272,7 @@ def create_app(
             "dashboard.html",
             dashboard_token=dashboard_token,
             active_page=page,
+            active_tab=ALIAS_TABS.get(requested, ""),
             project_name=project_name,
         )
 
@@ -282,10 +295,14 @@ def create_app(
     @app.get("/api/config")
     def configuration():
         servo = module.config.servos
+        source_file = active_hardware_file()
+        with command_lock:
+            sequence_floor = last_sequence
         return jsonify(
             {
                 "ok": True,
                 "project": project_name,
+                "drive_sequence_floor": sequence_floor,
                 "module": {
                     "pwm_hz": module.config.pwm_hz,
                     "deadtime_ms": module.config.deadtime_ms,
@@ -293,6 +310,16 @@ def create_app(
                 },
                 "motors": motor_rows(module.config),
                 "header": header_rows(module.config),
+                "hardware_file": {
+                    "source": (
+                        "runtime" if source_file is None else
+                        "default" if source_file == DEFAULT_HARDWARE_PATH else
+                        "project" if source_file.name == PROJECT_CONFIG_NAME and source_file.parent.joinpath("robot.py").is_file() else
+                        "installed"
+                    ),
+                    "path": str(source_file) if source_file else "Live runtime configuration",
+                    "download_url": "/api/hardware-file",
+                },
                 "servos": {
                     "enabled": servo.enabled,
                     "i2c_bus": servo.i2c_bus,
@@ -301,12 +328,47 @@ def create_app(
                     "minimum_pulse_us": servo.minimum_pulse_us,
                     "maximum_pulse_us": servo.maximum_pulse_us,
                     "channels": list(range(16)),
+                    "outputs": servo_rows(module.config),
                     "profiles": servo_profiles(servo),
                 },
                 "pinout_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md",
                 "bom_url": "https://github.com/AloeVeraZ/MotionModule/blob/main/BOM.md",
+                "hardware_guide": hardware_guide(module.config),
             }
         )
+
+    def active_hardware_file() -> Path | None:
+        """Identify the source only when its contents match the live pin map."""
+
+        candidate = resolve_config_path(
+            config_path, project=workspace / "active" if workspace is not None else None
+        )
+        try:
+            return candidate if load_config(candidate) == module.config else None
+        except (MotionModuleError, OSError):
+            # A supplied module or a file edited since startup may differ from
+            # disk. The downloadable live snapshot must still use the live pins.
+            return None
+
+    @app.get("/api/hardware-file")
+    def hardware_file():
+        source_file = active_hardware_file()
+        content = hardware_source(module.config)
+        if source_file is not None and source_file.suffix.casefold() == ".py":
+            try:
+                content = source_file.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                pass
+        return send_file(
+            io.BytesIO(content.encode("utf-8")),
+            mimetype="text/x-python",
+            as_attachment=True,
+            download_name=PROJECT_CONFIG_NAME,
+        )
+
+    @app.get("/api/hardware-guide")
+    def guide():
+        return jsonify({"ok": True, **hardware_guide(module.config)})
 
     @app.get("/api/diagnostics")
     def diagnostics():
@@ -439,20 +501,45 @@ def create_app(
                 if sequence <= last_sequence:
                     return jsonify({"ok": True, "ignored": "stale sequence"})
                 last_sequence = sequence
-            result = active_drive.drive(
-                body.get("forward", 0),
-                body.get("strafe", 0),
-                body.get("rotate", 0),
-                body.get("speed", 0.4),
-            )
+                result = active_drive.drive(
+                    body.get("forward", 0),
+                    body.get("strafe", 0),
+                    body.get("rotate", 0),
+                    body.get("speed", 0.4),
+                )
         except (TypeError, ValueError) as error:
-            active_drive.stop()
+            with command_lock:
+                stop_outputs()
             return jsonify({"ok": False, "error": str(error)}), 400
         return jsonify({"ok": True, **result})
 
+    def stop_outputs():
+        """Caller holds command_lock; stop every output even if robot code fails."""
+
+        try:
+            active_drive.stop()
+        finally:
+            try:
+                module.stop_all()
+            finally:
+                with servo_lock:
+                    for timer in servo_timers.values():
+                        timer.cancel()
+                    servo_timers.clear()
+                    servo_commands.clear()
+                # Forgetting a servo command is not the same as stopping the
+                # pulse. Release the outputs too, so the page and the wires
+                # agree about what is being driven.
+                module.release_all_servos()
+
     @app.post("/api/stop")
     def stop_command():
-        active_drive.stop()
+        with command_lock:
+            try:
+                stop_outputs()
+            except Exception:
+                app.logger.exception("An output stop handler failed")
+                return jsonify({"ok": False, "error": "A stop handler failed. Check the service log and use the physical power cutoff."}), 500
         return jsonify({"ok": True})
 
     @app.post("/api/motors/test")
@@ -469,20 +556,28 @@ def create_app(
                 raise ValueError("That motor channel is not configured")
             if not -0.2 <= power <= 0.2:
                 raise ValueError("Dashboard motor tests are limited to 20% power")
-            module.set_motors({channel: power})
+            with command_lock:
+                module.set_motors({channel: power})
         except (TypeError, ValueError) as error:
-            module.stop_all()
+            with command_lock:
+                stop_outputs()
             return jsonify({"ok": False, "error": str(error)}), 400
         return jsonify({"ok": True, "channel": channel, "power": power})
 
-    def release_servo(board: int, channel: int) -> None:
-        try:
-            module.servo(channel=channel, board=board).release()
-        except (MotionModuleError, ValueError):
-            pass
-        with servo_lock:
-            servo_timers.pop((board, channel), None)
-            servo_commands.pop((board, channel), None)
+    def release_servo(board: int, channel: int, expected_timer=None) -> None:
+        key = (board, channel)
+        with command_lock:
+            with servo_lock:
+                if expected_timer is not None and servo_timers.get(key) is not expected_timer:
+                    return
+                timer = servo_timers.pop(key, None)
+                if timer is not None:
+                    timer.cancel()
+                servo_commands.pop(key, None)
+            try:
+                module.servo(channel=channel, board=board).release()
+            except (MotionModuleError, ValueError):
+                pass
 
     @app.post("/api/servos/set")
     def set_servo():
@@ -498,29 +593,30 @@ def create_app(
             profile_id = str(body.get("profile", "generic_180_position"))
             value = float(body.get("angle", 90) if legacy_angle else body.get("value"))
             profile, pulse_us = servo_profile_command(module.config.servos, profile_id, value)
-            servo = module.servo(channel=channel, board=board)
-            if legacy_angle:
-                servo.set_angle(value)
-            else:
-                servo.set_pulse_us(pulse_us)
+            with command_lock:
+                servo = module.servo(channel=channel, board=board)
+                if legacy_angle:
+                    servo.set_angle(value)
+                else:
+                    servo.set_pulse_us(pulse_us)
+                key = (board, channel)
+                with servo_lock:
+                    if key in servo_timers:
+                        servo_timers[key].cancel()
+                    servo_commands[key] = {
+                        "profile": profile_id,
+                        "profile_label": profile["label"],
+                        "kind": profile["kind"],
+                        "value": value,
+                        "unit": profile["unit"],
+                        "pulse_us": round(pulse_us, 1),
+                    }
+                    timer = threading.Timer(1.5, lambda: release_servo(board, channel, timer))
+                    timer.daemon = True
+                    servo_timers[key] = timer
+                    timer.start()
         except (MotionModuleError, TypeError, ValueError) as error:
             return jsonify({"ok": False, "error": str(error)}), 400
-        key = (board, channel)
-        with servo_lock:
-            if key in servo_timers:
-                servo_timers[key].cancel()
-            servo_commands[key] = {
-                "profile": profile_id,
-                "profile_label": profile["label"],
-                "kind": profile["kind"],
-                "value": value,
-                "unit": profile["unit"],
-                "pulse_us": round(pulse_us, 1),
-            }
-            timer = threading.Timer(1.5, release_servo, args=key)
-            timer.daemon = True
-            servo_timers[key] = timer
-            timer.start()
         response = {
             "ok": True,
             "board": board,
@@ -763,6 +859,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         project_name=project_name,
         workspace_directory=workspace,
         restart_callback=stop_event.set,
+        config_path=resolve_config_path(project=project_path.parent if project_path else None),
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.
@@ -788,8 +885,9 @@ def main(argv: list[str] | None = None) -> int:
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
-    with MotionModule() as module:
-        serve(module, stop_event, args.project.resolve() if args.project else None)
+    project_path = args.project.resolve() if args.project else None
+    with MotionModule(load_config(project=project_path.parent if project_path else None)) as module:
+        serve(module, stop_event, project_path)
     return 0
 
 

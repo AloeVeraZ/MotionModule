@@ -91,29 +91,66 @@ def motor_rows(config) -> list[dict]:
 def header_rows(config) -> list[dict]:
     """Return every Pi header pin with its configured MotionModule role."""
 
+    enabled = config.servos.enabled
+    servo_state = "" if enabled else " (servos disabled)"
     roles: dict[int, tuple[str, str]] = {
-        1: ("PCA9685 VCC (3.3 V logic)", "servo"),
+        1: (f"PCA9685 VCC (3.3 V logic){servo_state}", "servo"),
         2: ("5 V — do not use for servo power", "power"),
-        3: ("PCA9685 SDA", "servo"),
+        3: (f"PCA9685 SDA{servo_state}", "servo"),
         4: ("5 V — do not use for servo power", "power"),
-        5: ("PCA9685 SCL", "servo"),
+        5: (f"PCA9685 SCL{servo_state}", "servo"),
+        8: ("Reserved UART transmit — no MotionModule connection", "reserved"),
+        10: ("Reserved UART receive — no MotionModule connection", "reserved"),
         17: ("3.3 V available", "power"),
         27: ("Reserved ID EEPROM — leave disconnected", "reserved"),
         28: ("Reserved ID EEPROM — leave disconnected", "reserved"),
     }
-    for physical, role in GROUND_ROLES.items():
-        roles[physical] = (role, "ground")
-    for row in motor_rows(config):
-        roles[row["in1_physical"]] = (
-            f"Driver {row['driver']}{row['output']} IN1", "motor"
-        )
-        roles[row["in2_physical"]] = (
-            f"Driver {row['driver']}{row['output']} IN2", "motor"
-        )
+    motor_connections = motor_rows(config)
+    active_drivers = {row["driver"] for row in motor_connections}
+    details = {
+        1: "Connect to PCA9685 VCC for 3.3 V logic only. The servo V+ rail has a separate regulated supply.",
+        2: "Pi 5 V power rail. Not used by the reference harness; never connect the motor battery or servo V+ here.",
+        3: "I2C data to PCA9685 SDA. All configured servo boards share this wire. Reserved for I2C even with servos disabled.",
+        4: "Pi 5 V power rail. Not used by the reference harness; never connect the motor battery or servo V+ here.",
+        5: "I2C clock to PCA9685 SCL. All configured servo boards share this wire. Reserved for I2C even with servos disabled.",
+        6: "Connect to PCA9685 logic GND. The servo supply negative joins common ground separately; its load current must not return through the Pi.",
+        8: "GPIO14 is the UART TX signal. The default harness leaves it disconnected for serial access; no sensor is configured here.",
+        10: "GPIO15 is the UART RX signal. The default harness leaves it disconnected for serial access; no sensor is configured here.",
+        17: "Unused 3.3 V logic supply. Not a motor or servo power source.",
+        27: "GPIO0 / ID_SD is the Raspberry Pi HAT identification EEPROM data pin. MotionModule rejects motor assignments here.",
+        28: "GPIO1 / ID_SC is the Raspberry Pi HAT identification EEPROM clock pin. MotionModule rejects motor assignments here.",
+    }
+    configured_pins = {1, 3, 5, 6} if enabled else set()
+    for physical, function in HEADER_FUNCTIONS.items():
+        if function == "GND":
+            roles[physical] = ("Available signal ground — not connected in reference harness", "ground")
+            details.setdefault(physical, "Pi signal ground, currently unused. High-current motor and servo returns go to the power distribution ground.")
+    roles[6] = (f"Servo controller logic ground{servo_state}", "ground")
+    for driver in active_drivers:
+        physical = DRIVER_GROUNDS[driver]
+        roles[physical] = (f"Driver {driver} signal ground", "ground")
+        details[physical] = f"Connect to Driver {driver} signal ground. Connect its heavy power negative directly to the battery ground distribution, not through this Pi pin."
+        configured_pins.add(physical)
+    for row in motor_connections:
+        label = f"{row['name']} · Driver {row['driver']}{row['output']}"
+        roles[row["in1_physical"]] = (f"{label} IN1", "motor")
+        roles[row["in2_physical"]] = (f"{label} IN2", "motor")
+        for signal in ("in1", "in2"):
+            physical = row[f"{signal}_physical"]
+            details[physical] = (
+                f"Connect to Driver {row['driver']}, output {row['output']}, {signal.upper()} for {row['name']} (motor {row['motor']}). "
+                "This is a 3.3 V control signal, not a motor output. Fit a 10 kΩ pull-down to signal ground at the driver."
+            )
+            if row[f"{signal}_bcm"] in {7, 8, 9, 10, 11}:
+                details[physical] += " Disable SPI before using this pin for the motor driver."
+            if row[f"{signal}_bcm"] in {14, 15}:
+                details[physical] += " Disable the serial console and any UART use of this pin first."
+            configured_pins.add(physical)
 
+    bcm_by_physical = {physical: bcm for bcm, physical in PHYSICAL_BY_BCM.items()}
     rows = []
     for physical in range(1, 41):
-        role, category = roles.get(physical, ("Available / not assigned", "unused"))
+        role, category = roles.get(physical, ("Unused GPIO — no configured device", "unused"))
         function = HEADER_FUNCTIONS[physical]
         if function in {"3.3 V", "5 V"} and physical not in roles:
             category = "power"
@@ -125,6 +162,27 @@ def header_rows(config) -> list[dict]:
                 "function": function,
                 "role": role,
                 "category": category,
+                "bcm": bcm_by_physical.get(physical),
+                "configured": physical in configured_pins,
+                "connection": role,
+                "detail": details.get(physical, "Not used by the active motor map. No sensor support is implemented; this label does not configure a device."),
             }
         )
     return rows
+
+
+def servo_rows(config) -> list[dict]:
+    """Return every named servo output with the board that carries it."""
+
+    addresses = config.servos.addresses
+    return [
+        {
+            "name": slot.name,
+            "board": slot.board,
+            "channel": slot.channel,
+            "address": f"0x{addresses[slot.board]:02x}"
+            if 0 <= slot.board < len(addresses)
+            else "unconfigured",
+        }
+        for slot in config.servos.channels
+    ]

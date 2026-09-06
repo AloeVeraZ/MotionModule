@@ -4,10 +4,11 @@ import tempfile
 import unittest
 import sys
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from motion_module.config import load_config
+from motion_module.config import hardware_source, load_hardware_file, load_project_config
 from motion_module.dashboard import create_app, load_drive
 from motion_module.servo import MockServoController, Servo
 
@@ -15,22 +16,27 @@ EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(EXAMPLE_DIR) not in sys.path:
     sys.path.insert(0, str(EXAMPLE_DIR))
 
-from mecanum import MecanumDrive  # noqa: E402
+from robot import MecanumDrive  # noqa: E402
 
 
 class FakeModule:
     def __init__(self):
-        self.config = load_config()
+        self.config = load_project_config(EXAMPLE_DIR)
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
         self.stopped = False
         self._servos = MockServoController(self.config.servos)
 
     def set_motors(self, outputs):
-        self.outputs.update(outputs)
+        for reference, value in outputs.items():
+            self.outputs[self.config.motor_channel(reference)] = value
 
     def stop_all(self):
         self.stopped = True
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
+
+    def release_all_servos(self):
+        for board, channel in sorted({*self._servos.angles, *self._servos.pulses}):
+            self._servos.release(board, channel)
 
     def servo(self, channel, board=0):
         return Servo(self._servos, board, channel)
@@ -165,7 +171,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn(b'data-page="drive"', debug)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
-        self.assertIn(b"activePage==='diagnostics'?'Debug'", debug)
+        self.assertIn(b"activePage === 'diagnostics' ? 'Debug'", debug)
         code = self.client.get("/code").data
         self.assertIn(b"Manual test control", code)
         self.assertIn(b'id="driveEnable"', code)
@@ -173,6 +179,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="projectFolder"', code)
         self.assertIn(b"Download Mecanum sample", code)
         self.assertIn(b"hardware.py", code)
+        self.assertIn(b"Names you can use in code", debug)
+        self.assertIn(b'id="motorNameRows"', debug)
+        self.assertIn(b'id="servoNameRows"', debug)
         self.assertNotIn(b"Remote-SSH", code)
         self.assertNotIn(b"tools/push_robot.py", code)
         self.assertIn(b"Time-limited robot shell", code)
@@ -214,7 +223,42 @@ class DashboardTests(unittest.TestCase):
         by_motor = {item["motor"]: item for item in data["motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))
         self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (1, "A"))
-        self.assertEqual(data["header"][39]["role"], "Driver 1A IN2")
+        self.assertEqual(data["header"][39]["role"], "front_right · Driver 1A IN2")
+
+    def test_embedded_guide_is_available_locally_and_uses_active_names(self):
+        data = self.client.get("/api/config").get_json()
+        guide = data["hardware_guide"]
+        standalone = self.client.get("/api/hardware-guide").get_json()
+        self.assertEqual(guide, {key: value for key, value in standalone.items() if key != "ok"})
+        self.assertEqual(len(guide["wiring"]["servo_boards"][0]["outputs"]), 16)
+        self.assertEqual(guide["wiring"]["motor_connections"][0]["name"], "front_left")
+        self.assertTrue(guide["parts_groups"])
+        self.assertTrue(all(pin["detail"] for pin in data["header"]))
+
+    def test_hardware_download_preserves_live_configuration_when_source_differs(self):
+        motor = replace(self.module.config.motors[0], name="custom_intake", forward_gpio=4)
+        self.module.config = replace(self.module.config, motors=(motor,))
+        response = self.client.get("/api/hardware-file")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("hardware.py", response.headers["Content-Disposition"])
+        with tempfile.TemporaryDirectory() as directory:
+            downloaded = Path(directory) / "hardware.py"
+            downloaded.write_bytes(response.data)
+            self.assertEqual(load_hardware_file(downloaded), self.module.config)
+        self.assertEqual(self.client.get("/api/config").get_json()["hardware_file"]["source"], "runtime")
+
+    def test_hardware_download_tracks_runtime_after_source_file_is_edited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "hardware.py"
+            source.write_text(hardware_source(self.module.config), encoding="utf-8")
+            app = create_app(self.module, config_path=source)
+            client = app.test_client()
+            self.assertEqual(client.get("/api/config").get_json()["hardware_file"]["path"], str(source))
+            source.write_text("HARDWARE = {}\n", encoding="utf-8")
+            downloaded = Path(directory) / "downloaded.py"
+            downloaded.write_bytes(client.get("/api/hardware-file").data)
+            self.assertEqual(load_hardware_file(downloaded), self.module.config)
+            self.assertEqual(client.get("/api/config").get_json()["hardware_file"]["source"], "runtime")
 
     def test_dashboard_reports_custom_active_project(self):
         app = create_app(
@@ -234,7 +278,7 @@ class DashboardTests(unittest.TestCase):
             names = set(archive.namelist())
         self.assertIn("Mecanum/robot.py", names)
         self.assertIn("Mecanum/hardware.py", names)
-        self.assertIn("Mecanum/mecanum.py", names)
+        self.assertIn("Mecanum/README.md", names)
 
     def test_browser_folder_deploy_requires_token_and_restarts(self):
         hardware = b'''HARDWARE = {"module": {"pwm_hz": 1000, "deadtime_ms": 2, "watchdog_ms": 500}, "motors": {1: {"forward_gpio": 4, "reverse_gpio": 17, "inverted": False}}, "servos": {"enabled": True, "i2c_bus": 1, "frequency_hz": 50, "addresses": [0x40], "minimum_pulse_us": 500, "maximum_pulse_us": 2500}}\n'''
@@ -304,12 +348,58 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.module.outputs[1], 0.4)
-        stale = self.client.post(
+
+    def test_page_reload_can_resume_above_server_sequence_floor(self):
+        first = self.client.post(
             "/api/drive", headers=self.headers,
-            json={"sequence": 2, "forward": 1, "strafe": 0, "rotate": 0, "speed": 1},
+            json={"sequence": 250, "forward": 0.5, "speed": 0.2},
         )
+        self.assertEqual(first.status_code, 200)
+        self.client.post("/api/stop")
+        floor = self.client.get("/api/config").get_json()["drive_sequence_floor"]
+        self.assertEqual(floor, 250)
+        stale = self.client.post("/api/drive", headers=self.headers, json={"sequence": floor})
         self.assertEqual(stale.get_json()["ignored"], "stale sequence")
-        self.assertEqual(self.module.outputs[1], 0.4)
+        resumed = self.client.post(
+            "/api/drive", headers=self.headers,
+            json={"sequence": floor + 1, "forward": 0.5, "speed": 0.2},
+        )
+        self.assertNotIn("ignored", resumed.get_json())
+        self.assertEqual(resumed.status_code, 200)
+
+    def test_stop_reaches_all_motor_outputs_even_when_robot_stop_hook_fails(self):
+        class BrokenDrive:
+            def stop(self):
+                raise RuntimeError("broken student stop hook")
+
+        app = create_app(self.module, drive=BrokenDrive())
+        self.module.outputs[8] = 0.2
+        with self.assertLogs(app.logger, level="ERROR"):
+            response = app.test_client().post("/api/stop")
+        self.assertEqual(response.status_code, 500)
+        self.assertTrue(self.module.stopped)
+        self.assertTrue(all(value == 0 for value in self.module.outputs.values()))
+
+    def test_stop_releases_servo_commands_and_cancels_pending_timers(self):
+        with patch("motion_module.dashboard.threading.Timer") as timer_type:
+            command = self.client.post(
+                "/api/servos/set", headers=self.headers,
+                json={"board": 0, "channel": 4, "angle": 90, "confirmed": True},
+            )
+            self.assertEqual(command.status_code, 200)
+            # Also stop a servo commanded by robot code outside the debug UI.
+            self.module.servo(8).set_angle(45)
+            self.module.outputs[8] = 0.2
+            response = self.client.post("/api/stop")
+            self.assertEqual(response.status_code, 200)
+            timer_type.return_value.cancel.assert_called()
+        self.assertTrue(all(value == 0 for value in self.module.outputs.values()))
+        self.assertEqual(self.module._servos.pulses, {})
+        self.assertEqual(self.module._servos.angles, {})
+        status = self.client.get("/api/status").get_json()["robot"]
+        self.assertEqual(status["servo_commands"], {})
+        self.assertEqual(status["servos"], {})
+        self.assertEqual(status["servo_outputs"], {})
 
     def test_motor_test_requires_confirmation_and_caps_power(self):
         denied = self.client.post(

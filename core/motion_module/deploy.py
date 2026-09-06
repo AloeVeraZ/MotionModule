@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Iterable
 
-from .config import load_project_config
+from .config import PROJECT_CONFIG_NAME, load_project_config
 from .errors import ConfigurationError, MotionModuleError
 
 
@@ -99,14 +99,12 @@ def _extract_archive(archive_path: Path, staging: Path) -> None:
         raise MotionModuleError(f"Uploaded project is not a valid archive: {error}") from error
 
 
-def _check_python(project: Path, *, require_hardware: bool = False) -> None:
+def _check_python(project: Path, *, strict: bool = False) -> None:
+    """Check Python and pins; browser uploads also need a dashboard entry point."""
+
     robot = project / "robot.py"
     if not robot.is_file():
         raise MotionModuleError("The uploaded project must contain robot.py at its top level")
-    if require_hardware and not (project / "hardware.py").is_file():
-        raise MotionModuleError(
-            "The robot folder must contain hardware.py with its pins and hardware setup"
-        )
     for source_path in sorted(project.rglob("*.py")):
         try:
             with tokenize.open(source_path) as source_file:
@@ -114,9 +112,10 @@ def _check_python(project: Path, *, require_hardware: bool = False) -> None:
         except (OSError, SyntaxError, UnicodeError) as error:
             relative = source_path.relative_to(project)
             raise MotionModuleError(f"Python check failed for {relative}: {error}") from error
-    if require_hardware:
+    if strict:
         try:
-            tree = ast.parse(robot.read_text(encoding="utf-8"), filename=str(robot))
+            with tokenize.open(robot) as source_file:
+                tree = ast.parse(source_file.read(), filename=str(robot))
         except (OSError, SyntaxError, UnicodeError) as error:
             raise MotionModuleError(f"Could not validate robot.py: {error}") from error
         if not any(
@@ -124,6 +123,9 @@ def _check_python(project: Path, *, require_hardware: bool = False) -> None:
             for node in tree.body
         ):
             raise MotionModuleError("robot.py must define create_drive(module)")
+    # hardware.py is optional: a folder without one runs on the pin map that
+    # ships with MotionModule. A folder that has one must be valid.
+    if (project / PROJECT_CONFIG_NAME).is_file():
         try:
             load_project_config(project)
         except ConfigurationError as error:
@@ -264,7 +266,7 @@ def deploy_project_files(
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)
             destination.chmod(0o644)
-        _check_python(staging, require_hardware=True)
+        _check_python(staging, strict=True)
         backup = _replace_project(staging, target, backups, name)
     except MotionModuleError:
         raise
