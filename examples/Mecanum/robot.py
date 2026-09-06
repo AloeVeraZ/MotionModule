@@ -1,7 +1,16 @@
 """Mecanum drive sample — the only file you have to write for a robot.
 
 `hardware.py` next to this file names the four wheels. This file turns the
-Driver Station's forward / strafe / rotate commands into wheel power.
+Drive page's forward / strafe / rotate commands into wheel power.
+
+The same three numbers arrive whether someone is using the keyboard or a game
+controller, the way an FTC opmode reads one gamepad's sticks:
+
+    forward  left stick Y   (W / S)
+    strafe   left stick X   (A / D)
+    rotate   right stick X  (Q / E)
+
+so nothing here needs to know which one is driving.
 
 MotionModule calls `create_drive(module)` once at startup, then calls
 `drive(...)` on the object it returns every time a control command arrives.
@@ -73,6 +82,28 @@ class MecanumDrive:
         """Called whenever control stops: keys released, page hidden, STOP."""
 
         self.module.set_motors({name: 0 for name in self.wheels})
+
+    # ---- optional: extra buttons and sliders on the Drive page -------------
+
+    def controls(self):
+        """Describe controls for the Drive page. Delete this if you want none."""
+
+        return [
+            {"name": "spin_test", "label": "Spin in place", "kind": "hold",
+             "detail": "Turns slowly for as long as you hold it"},
+            {"name": "creep", "label": "Creep forward", "kind": "slider",
+             "minimum": -0.3, "maximum": 0.3, "step": 0.05,
+             "detail": "Fine positioning without touching the sticks"},
+        ]
+
+    def control(self, name, value):
+        """Handle one control from the Drive page. `value` is a number."""
+
+        if name == "spin_test":
+            return self.drive(0, 0, 1 if value else 0, speed=0.2)
+        if name == "creep":
+            return self.drive(value, 0, 0, speed=1.0)
+        raise ValueError(f"Unknown control: {name}")
 
 
 def create_drive(module):

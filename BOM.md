@@ -1,81 +1,114 @@
 # MotionModule bill of materials
 
-This is the reference hardware list for one eight-motor MotionModule robot. The
-two linked control boards are the exact products selected for this project.
-Items marked **size after measurement** cannot be chosen safely until the motor
-stall current, servo stall current, battery voltage, and wire lengths are known.
+The reference hardware for one eight-motor, sixteen-servo MotionModule robot.
+The whole machine runs from a **single 12 V battery**: the motor drivers take
+that 12 V directly, the Raspberry Pi gets 5 V from a USB-C converter, and the
+servos get their own regulated rail.
 
-## Controller and control boards
+The same list is built into the dashboard under **Debug → Parts list**, so it
+works on the robot hotspot with no internet connection.
 
-| Qty | Part | Exact selection / requirement | Purpose |
+**The first two sections are the robot.** Buy those and MotionModule boots,
+serves its dashboard and drives outputs. Everything after them — motors,
+servos, wire — is a recommendation, not a requirement.
+
+---
+
+## Required · Controller and control boards
+
+| Qty | Part | Selection | Purpose |
 | ---: | --- | --- | --- |
 | 1 | Raspberry Pi 5 | 40-pin GPIO header; 4 GB is sufficient | Runs MotionModule, the dashboard, Wi-Fi, and robot code |
 | 1 | microSD card | 32 GB or larger, Application Performance Class A2 recommended | Raspberry Pi OS and versioned releases |
-| 1 | Raspberry Pi 5 Active Cooler or fan case | [Official Active Cooler](https://www.raspberrypi.com/products/active-cooler/) | Prevents thermal throttling in an enclosed robot |
-| 4 | Dual H-bridge motor driver | [GODIYMODULES DC 3–18 V, dual H-bridge PWM driver](https://www.amazon.com/dp/B0FKH352D2) | Two brushed motors per board; eight total channels |
-| 1 installed | 16-channel servo controller | [AITRIP PCA9685 two-board pack](https://www.amazon.com/dp/B07WS5XY63); use address `0x40` for the first board | Sixteen servo PWM channels over I²C |
-| 1 spare / optional | Second PCA9685 from the same pack | Solder A0 and configure address `0x41` before connecting both boards | Adds another sixteen servo channels |
+| 1 | Pi 5 active cooler | [Argon THRML 30 mm active cooler](https://argon40.com/products/argon-thrml-30mm-active-cooler) | Prevents thermal throttling in an enclosed robot |
+| 4 | Dual H-bridge motor driver | [GODIYMODULES DC 3–18 V, dual H-bridge PWM driver](https://www.amazon.com/dp/B0FKH352D2) | Two brushed motors per board; eight channels total |
+| 1 | 16-channel servo controller | [AITRIP PCA9685](https://www.amazon.com/dp/B07WS5XY63) at address `0x40`, all pads open | Sixteen servo PWM channels over I²C |
+| 1 set | Controller mounting CAD | [`cad/` in this repository](https://github.com/AloeVeraZ/MotionModule/tree/main/cad) | Printable mounts holding the Pi, drivers and servo board together |
 
-The motor driver's advertised current is not a safe system design value by
-itself. Verify every motor's measured or documented stall current and provide
-cooling as required. The PCA9685 confirms that its logic is present over I²C,
-but it cannot report whether an individual servo is plugged into an output.
+The PCA9685 confirms over I²C that its logic is present, but it cannot report
+whether an individual servo is plugged into an output. The H-bridge inputs have
+no return path at all, so a configured motor channel is never proof of a
+connection.
 
-## Motors, servos, and robot power
+## Required · Power module
 
-| Qty | Part | Selection rule | Status |
+| Qty | Part | Selection | Status |
 | ---: | --- | --- | --- |
-| Up to 8 | Brushed DC gearmotors | Motor voltage must match the battery and remain within the driver's 3–18 V range; record stall current | **Motor model required** |
-| As needed | Hobby servos | Voltage must match the regulated servo rail; record running and stall current | **Servo model and quantity required** |
-| 1 | Robot battery | Match the motors and expected total load | **Size after measurement** |
-| 1 | Raspberry Pi power converter | Stable Pi-rated 5 V supply with enough current and a protected USB-C connection | **Size after battery selection** |
-| 1 | Servo BEC / regulator | Normally 5–6 V; continuous and peak ratings must cover all simultaneously moving servos | **Size after servo selection** |
-| 1 | Main fuse or circuit breaker | Below the battery, connector, main-wire, and distribution limits | **Size after current calculation** |
-| 4 | Motor-driver branch fuses | One protected battery branch per H-bridge board | **Size after motor stall-current calculation** |
-| 1 | Main power switch / physical cutoff | DC-rated for the robot battery and maximum expected current | Required |
-| 1 | Power distribution block | Separate fused branches for Pi logic, servo power, and motor power | Required |
+| 1 | 12 V battery | [goBILDA 12 V NiMH, 3000 mAh, XT30](https://www.gobilda.com/12v-nimh-nested-battery-3000mah-mh-fc-xt30-connector/) | Selected |
+| or | 12 V battery | [REV 12 V Slim, 3000 mAh, XT30](https://www.revrobotics.com/rev-31-1302/) — inline 20 A replaceable ATM fuse | Selected |
+| 1 pack | XT30 pigtails | [XT30 male & female leads on silicone wire](https://www.amazon.com/dp/B0FY2ZCR83) | Selected |
+| 1 | 12 V → 5 V USB-C converter | [Amazon B0FD735LFG](https://www.amazon.com/dp/B0FD735LFG) | Selected |
+| 1 | Rocker switch | [DaierTek KCD1 automotive rocker switch](https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462) | Selected |
+| 1 set | Power module CAD | [`cad/` in this repository](https://github.com/AloeVeraZ/MotionModule/tree/main/cad) | **Being drawn** |
 
-For bench setup, Raspberry Pi recommends a 5 V / 5 A supply for Raspberry Pi 5;
-its official option is the 27 W USB-C supply. Do not power motors or a bank of
-servos from the Pi's header. See the
-[official Raspberry Pi power guidance](https://www.raspberrypi.com/documentation/computers/getting-started.html#recommended-power-supply).
+**Both batteries ship with their own fuse**, so there is no separate fuse or
+breaker to buy. The rocker switch is the physical cutoff. The servo rail is
+stepped down on the power module itself, which is why there is no separate
+regulator in this list.
 
-## Wiring and protection
+> [!WARNING]
+> The PCA9685 **V+ terminal is rated 3.3–6 V**, and the servos it feeds top out
+> around 8.4 V. The 12 V battery rail must never reach it. Neither the 12 V rail
+> nor the servo V+ rail may touch a Raspberry Pi header pin; the Pi is powered
+> only through its USB-C input.
+
+---
+
+## Recommended · Motors and servos
+
+None of this is needed to make the controller run. These are the parts known to
+work well on it.
+
+| Qty | Part | Selection | Notes |
+| ---: | --- | --- | --- |
+| Up to 8 | Brushed DC motors | [goBILDA Yellow Jacket planetary gear motors](https://www.gobilda.com/yellow-jacket-planetary-gear-motors) | What we run. **Any brushed DC motor rated for 12 V works** |
+| Up to 8 | 3.5 mm bullet lead, MH-FC to bare wire | [goBILDA GB-3800-0013-0300](https://www.gobilda.com/3-5mm-bullet-lead-mh-fc-300mm-length/), 300 mm, 16 AWG | Bullets plug onto the motor; the bare end screws into the driver's terminal block |
+| Up to 16 | Servo | [goBILDA Axon Mini MK2](https://www.gobilda.com/axon-mini-servo-mk2/) | **Recommended.** Any Axon servo is a step up: programmable range, mode and centring |
+| Alternative | Servo | [Standard three-pin servos](https://www.gobilda.com/standard-size-servos) | Any standard 3-pin hobby servo works; match its voltage to the servo rail |
+
+Each dual H-bridge board is rated **10 A in total, shared between its two
+outputs** — that budget covers both motors on the board, not 10 A each. Size
+the motors so two of them together stay inside it.
+
+**Motor connectors.** Yellow Jacket motor leads end in 3.5 mm **FH-MC** bullets
+(female housing, male contact), so the part that mates with them is the
+**MH-FC** lead above. Its bullets push onto the motor and its bare end goes
+straight into the driver's screw terminal — no crimping, no adaptor. goBILDA's
+*JST VH adaptor* converts those same bullets to a REV Expansion Hub connector
+and is not used in this build. Swapping which bullet lands on which terminal
+reverses that motor, but set direction with `inverted` in `hardware.py` rather
+than in the wiring.
+
+## Recommended · Wiring
 
 | Qty | Part | Requirement |
 | ---: | --- | --- |
-| 16 | 10 kΩ resistors | One pull-down from every H-bridge input to signal ground, placed at the driver connector |
-| 1 set | 40-pin GPIO harness or breakout | Must preserve physical pin numbering and provide strain relief |
-| 4 sets | Motor-driver signal connectors | Four control signals plus low-current Pi ground reference per driver |
-| 8 sets | Motor output connectors | One appropriately rated two-wire output connection per motor |
-| As needed | Motor and battery wire | Stranded copper; gauge and insulation sized for stall/fault current and length |
-| As needed | Servo extensions / distribution | Rated for the combined servo current; do not pass bank current through thin daisy chains |
-| As needed | Signal wire | Stranded 22–26 AWG is typical for short GPIO/I²C runs; use secure connectors |
-| 1 set | Common-ground distribution | Joins Pi signal ground, driver signal reference, battery negative, and servo-regulator negative at a planned point |
-| As needed | Ferrules, heat-shrink, loom, and strain relief | Prevents loose strands, connector pullout, and abrasion |
-| 4 | Driver heatsinks or directed airflow provisions | Required when testing shows significant driver heating |
+| As needed | Jumper wires | [Multicoloured breadboard jumper set](https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78); female-to-female for the Pi header |
+| As needed | Wago 221 lever connectors | [Wago 221-2401 compact splicing connectors](https://www.amazon.com/221-2401-Compact-Splicing-Inline-Connectors/dp/B0BT8DHLJJ) for every 12 V join |
+| As needed | Motor and battery wire | Stranded copper; gauge sized for the current each run carries |
 
-## Setup and test equipment
+That is the whole wiring list. Control signals are ordinary jumper wires from
+the Pi header, every 12 V join is a Wago connector, and the boards, motors and
+servos all arrive with their own leads.
 
-These tools are not installed on the robot, but they are required for safe
-assembly and commissioning:
+Raspberry Pi GPIOs are inputs during early boot, so keep motor power switched
+off until you have watched the outputs stay still. If one driver twitches at
+boot, a 10 kΩ pull-down from that input to signal ground holds it low.
+
+## Recommended · Tools for setup
 
 - Digital multimeter with continuity and DC-voltage modes.
 - Current-limited bench supply when available.
-- Correct crimp tool and terminals for the chosen connectors.
 - Stable robot stand that keeps every wheel off the floor.
-- Small screwdriver set, wire stripper, and fuse assortment.
+- Small screwdriver set and wire stripper.
 
-## Before purchasing the remaining power parts
+---
 
-Record these values in the robot build notes:
+## Still to decide
 
-1. Motor model, rated voltage, and stall current for all eight motors.
-2. Servo model, quantity, voltage, and stall current.
-3. Battery chemistry, nominal voltage, maximum voltage, and discharge rating.
-4. Longest high-current wire run and connector ratings.
-5. Whether the robot must run untethered or may use the official Pi supply on a bench.
+1. The servo rail output on the power module, sized for every servo that can
+   move at once and set to your servos' voltage.
+2. Motor and battery wire gauge, from the longest high-current run.
+3. The CAD files themselves — both `cad/` folders are still being filled in.
 
-Those measurements determine the battery, regulators, fuses, wire gauges,
-connectors, power distribution, and cooling. The complete signal wiring is in
-[docs/PINOUT.md](docs/PINOUT.md).
+The complete signal wiring is in [docs/PINOUT.md](docs/PINOUT.md).

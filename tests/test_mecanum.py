@@ -85,15 +85,15 @@ class MecanumTests(unittest.TestCase):
             "right_front": -0.25, "right_back": 0.25,
         })
 
-    def test_sample_names_preserve_the_tested_motor_pin_behavior(self):
+    def test_sample_names_reach_the_wheel_pins_in_the_shipped_map(self):
         config = load_project_config(PROJECT_DIR)
         gpio = MockGPIO()
         with MotionModule(config, gpio=gpio) as module:
             drive = MecanumDrive(module)
             drive.drive(1, 0, 0, speed=0.25)
-            for gpio_number in (6, 16, 21, 13):
+            for gpio_number in (26, 13, 21, 16):
                 self.assertEqual(gpio.values[gpio_number], 0.25)
-            for gpio_number in (12, 19, 20, 26):
+            for gpio_number in (19, 6, 20, 12):
                 self.assertEqual(gpio.values[gpio_number], 0)
             drive.stop()
             self.assertEqual(set(gpio.values.values()), {0})

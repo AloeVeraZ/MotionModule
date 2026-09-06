@@ -168,13 +168,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Connect to Wi", debug)
         self.assertIn(b"Useful commands", debug)
         self.assertIn(b"Stops outputs, reloads the active robot project", debug)
-        self.assertNotIn(b'data-page="drive"', debug)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
         self.assertIn(b"activePage === 'diagnostics' ? 'Debug'", debug)
         code = self.client.get("/code").data
-        self.assertIn(b"Manual test control", code)
-        self.assertIn(b'id="driveEnable"', code)
         self.assertIn(b"Driver Station", code)
         self.assertIn(b'id="projectFolder"', code)
         self.assertIn(b"Download Mecanum sample", code)
@@ -186,7 +183,6 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn(b"tools/push_robot.py", code)
         self.assertIn(b"Time-limited robot shell", code)
         self.assertIn(b'id="terminalCommand"', code)
-        self.assertGreater(code.index(b"Time-limited robot shell"), code.index(b"Manual test control"))
         overview = self.client.get("/").data
         self.assertIn(b"Servo activity", overview)
         self.assertIn(b'id="servoChannel"', debug)
@@ -197,8 +193,20 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="usbDevices"', debug)
         self.assertIn(b"hostname is this robot", debug)
 
+    def test_drive_is_its_own_page_with_bindings_and_a_controller(self):
+        drive = self.client.get("/drive").data
+        self.assertIn(b'data-view="drive"', drive)
+        self.assertIn(b'id="driveEnable"', drive)
+        self.assertIn(b'id="bindingList"', drive)      # remappable keys
+        self.assertIn(b'id="padIdentity"', drive)      # game controller
+        self.assertIn(b'id="customControls"', drive)   # project-declared controls
+        self.assertIn(b"gamepadconnected", drive)
+        # Drive left the Code page entirely.
+        code = self.client.get("/code").data
+        self.assertNotIn(b'data-tab="drive"', code)
+
     def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
-        for path, active in (("/drive", b'data-page="code"'), ("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
+        for path, active in (("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertIn(active, response.data)
@@ -221,9 +229,9 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(len(data["header"]), 40)
         by_motor = {item["motor"]: item for item in data["motors"]}
-        self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (2, "A"))
-        self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (1, "A"))
-        self.assertEqual(data["header"][39]["role"], "front_right · Driver 1A IN2")
+        self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (1, "A"))
+        self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (2, "A"))
+        self.assertEqual(data["header"][39]["role"], "front_right · Driver 2A IN1")
 
     def test_embedded_guide_is_available_locally_and_uses_active_names(self):
         data = self.client.get("/api/config").get_json()

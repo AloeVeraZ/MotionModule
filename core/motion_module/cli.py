@@ -16,7 +16,7 @@ from .config import load_config
 from .controller import MotionModule
 from .errors import MotionModuleError
 from .gpio import is_raspberry_pi
-from .pinout import motor_rows, servo_rows
+from .pinout import DRIVER_GROUNDS, motor_rows, servo_rows
 
 
 def _service_active() -> bool:
@@ -136,7 +136,10 @@ def show_pinout() -> int:
             f"pin {row['in2_physical']:>2}/GPIO{row['in2_bcm']:<2}   "
             f"{'yes' if row['inverted'] else 'no'}"
         )
-    print("Grounds: Driver 1 pin 39; Driver 2 pin 34; Driver 3 pin 20; Driver 4 pin 25")
+    grounds = "; ".join(
+        f"Driver {driver} pin {DRIVER_GROUNDS[driver]}" for driver in sorted(DRIVER_GROUNDS)
+    )
+    print(f"Grounds: {grounds}")
     print("Servo I2C: SDA pin 3/GPIO2; SCL pin 5/GPIO3; logic VCC pin 1/3.3V; GND pin 6")
     print('Servo outputs (use module.servo("name")):')
     for row in servo_rows(config):

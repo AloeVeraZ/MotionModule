@@ -19,21 +19,24 @@ walking, or other robot.
 
 See the root-level **[bill of materials](BOM.md)** for the reference parts:
 
-- four dual H-bridge boards for eight brushed-motor outputs;
-- one or more PCA9685 I2C boards, with 16 servo channels per board;
 - Raspberry Pi 5 with a 40-pin header;
-- separate, fused motor and servo power supplies; and
-- a 10 kΩ pull-down from every H-bridge input to signal ground.
+- four dual H-bridge boards for eight brushed-motor outputs;
+- one PCA9685 I2C board, giving 16 servo channels;
+- one 12 V battery for the whole robot, stepped down to 5 V USB-C for the Pi
+  and to a separate regulated rail for the servos; and
+- Wago 221 lever connectors for the 12 V joins and ordinary jumper wires for
+  the Pi's control signals.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
 wiring. Never connect motor battery positive or the PCA9685 servo V+ rail to a
 Pi header power pin.
 
-The exact motor-driver and PCA9685 products are recorded. The motor and servo
-models, battery, regulator ratings, and fuse/wire sizing are still unspecified;
-**Debug → Parts** lists those open choices alongside the complete reference
-BOM. Parts and wiring instructions are available inside the app without an
-internet connection.
+The controller boards and the power module are what the robot actually needs;
+motors, servos and wire below them are recommendations. Both batteries ship
+already fused, so there is no separate breaker to buy. The only open choice left
+is the servo rail regulator. **Debug → Parts list** shows the whole reference
+BOM, marked required or recommended, and works inside the app with no internet
+connection.
 
 ## Install on a Raspberry Pi
 
@@ -94,8 +97,10 @@ Three pages, each split into tabs:
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
   (Wi-Fi, hostname, hotspot).
-- **Code** — the browser Driver Station: **Deploy** a local Python folder,
-  **Drive** it from the keyboard, and open the time-limited **Terminal**.
+- **Drive** — the driver station: arm keyboard or game-controller control,
+  remap the keys, and use any extra buttons and sliders your robot code declares.
+- **Code** — **Deploy** a local Python folder and open the time-limited
+  **Terminal**.
 
 ## Deploy robot code from the browser
 
@@ -178,14 +183,14 @@ HARDWARE = {
     "motors": {
         1: {
             "name": "left_drive",
-            "forward_gpio": 12,
-            "reverse_gpio": 6,
-            "inverted": True,
+            "forward_gpio": 26,   # physical pin 37
+            "reverse_gpio": 19,   # physical pin 35, right next to it
+            "inverted": False,
         },
         2: {
             "name": "right_drive",
-            "forward_gpio": 19,
-            "reverse_gpio": 16,
+            "forward_gpio": 13,   # physical pin 33
+            "reverse_gpio": 6,    # physical pin 31
             "inverted": False,
         },
     },

@@ -19,22 +19,28 @@ HARDWARE = {
         "watchdog_ms": 500,  # All motors stop if no new command arrives in time.
     },
 
+    # Each driver owns a short run of header positions with its own ground
+    # inside the run, so one driver is one small bundle of wires.
+    #
     # channel  name          driver / output   IN1 wire        IN2 wire
     # -------  ------------  ---------------   -------------   -------------
-    #    1     front_left    Driver 2 · A      pin 32/GPIO12   pin 31/GPIO6
-    #    2     rear_left     Driver 2 · B      pin 35/GPIO19   pin 36/GPIO16
-    #    3     front_right   Driver 1 · A      pin 38/GPIO20   pin 40/GPIO21
-    #    4     rear_right    Driver 1 · B      pin 37/GPIO26   pin 33/GPIO13
+    #    1     front_left    Driver 1 · A      pin 37/GPIO26   pin 35/GPIO19
+    #    2     rear_left     Driver 1 · B      pin 33/GPIO13   pin 31/GPIO6
+    #    3     front_right   Driver 2 · A      pin 40/GPIO21   pin 38/GPIO20
+    #    4     rear_right    Driver 2 · B      pin 36/GPIO16   pin 32/GPIO12
     #    5-8   spare         Drivers 3 and 4   see docs/PINOUT.md
+    #
+    # Every wheel starts uninverted. Test each one raised, then set `inverted`
+    # True on any wheel that turns the wrong way.
     "motors": {
-        1: {"name": "front_left", "forward_gpio": 12, "reverse_gpio": 6, "inverted": True},
-        2: {"name": "rear_left", "forward_gpio": 19, "reverse_gpio": 16, "inverted": True},
-        3: {"name": "front_right", "forward_gpio": 20, "reverse_gpio": 21, "inverted": True},
-        4: {"name": "rear_right", "forward_gpio": 26, "reverse_gpio": 13, "inverted": True},
-        5: {"name": "motor_5", "forward_gpio": 5, "reverse_gpio": 25, "inverted": False},
-        6: {"name": "motor_6", "forward_gpio": 9, "reverse_gpio": 11, "inverted": False},
-        7: {"name": "motor_7", "forward_gpio": 8, "reverse_gpio": 7, "inverted": False},
-        8: {"name": "motor_8", "forward_gpio": 23, "reverse_gpio": 24, "inverted": False},
+        1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": False},
+        2: {"name": "rear_left", "forward_gpio": 13, "reverse_gpio": 6, "inverted": False},
+        3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": False},
+        4: {"name": "rear_right", "forward_gpio": 16, "reverse_gpio": 12, "inverted": False},
+        5: {"name": "motor_5", "forward_gpio": 11, "reverse_gpio": 9, "inverted": False},
+        6: {"name": "motor_6", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},
+        7: {"name": "motor_7", "forward_gpio": 22, "reverse_gpio": 27, "inverted": False},
+        8: {"name": "motor_8", "forward_gpio": 24, "reverse_gpio": 23, "inverted": False},
     },
 
     # One PCA9685 board on I2C: SDA pin 3, SCL pin 5, VCC pin 1, GND pin 6.

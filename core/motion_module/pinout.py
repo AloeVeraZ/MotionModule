@@ -31,19 +31,19 @@ PHYSICAL_BY_BCM = {
     27: 13,
 }
 
-# The tested harness is intentionally not ordered by motor channel. Channels
-# 1/2 live on Driver 2 while channels 3/4 live on Driver 1.
+# Motor channels run straight down the drivers: 1/2 on Driver 1, 3/4 on
+# Driver 2, and so on. Each driver's four inputs are grouped on the header.
 DRIVER_ASSIGNMENTS = {
-    1: (2, "A"),
-    2: (2, "B"),
-    3: (1, "A"),
-    4: (1, "B"),
+    1: (1, "A"),
+    2: (1, "B"),
+    3: (2, "A"),
+    4: (2, "B"),
     5: (3, "A"),
     6: (3, "B"),
     7: (4, "A"),
     8: (4, "B"),
 }
-DRIVER_GROUNDS = {1: 39, 2: 34, 3: 20, 4: 25}
+DRIVER_GROUNDS = {1: 39, 2: 34, 3: 25, 4: 14}
 
 HEADER_FUNCTIONS = {
     1: "3.3 V", 2: "5 V", 3: "GPIO2 / SDA", 4: "5 V", 5: "GPIO3 / SCL",
@@ -59,8 +59,10 @@ HEADER_FUNCTIONS = {
 
 GROUND_ROLES = {
     6: "Servo controller logic ground",
-    20: "Driver 3 signal ground",
-    25: "Driver 4 signal ground",
+    9: "Available signal ground",
+    14: "Driver 4 signal ground",
+    20: "Available signal ground",
+    25: "Driver 3 signal ground",
     30: "Available signal ground",
     34: "Driver 2 signal ground",
     39: "Driver 1 signal ground",
@@ -139,7 +141,7 @@ def header_rows(config) -> list[dict]:
             physical = row[f"{signal}_physical"]
             details[physical] = (
                 f"Connect to Driver {row['driver']}, output {row['output']}, {signal.upper()} for {row['name']} (motor {row['motor']}). "
-                "This is a 3.3 V control signal, not a motor output. Fit a 10 kΩ pull-down to signal ground at the driver."
+                "This is a 3.3 V control signal, not a motor output. It carries direction and speed to the driver; the motor's own two wires go to that driver's output pair."
             )
             if row[f"{signal}_bcm"] in {7, 8, 9, 10, 11}:
                 details[physical] += " Disable SPI before using this pin for the motor driver."

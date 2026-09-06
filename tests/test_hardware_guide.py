@@ -18,6 +18,8 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertEqual({pin["physical"] for pin in pins if pin["category"] == "reserved"}, {8, 10, 27, 28})
         self.assertIn("ID EEPROM", pins[26]["role"])
         self.assertIn("UART", pins[7]["role"])
+        # Both UART pins stay free for the serial console.
+        self.assertIn("UART", pins[9]["role"])
         self.assertIsNone(pins[0]["bcm"])
         self.assertEqual(pins[31]["bcm"], 12)
         self.assertTrue(pins[5]["configured"])
@@ -30,10 +32,10 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertEqual(pins[7]["category"], "motor")
         self.assertIn("intake", pins[7]["role"])
         self.assertIn("serial console", pins[7]["detail"])
-        self.assertEqual(pins[31]["category"], "unused")
-        self.assertFalse(pins[38]["configured"])
-        self.assertNotIn("Driver 1", pins[38]["role"])
-        self.assertTrue(pins[33]["configured"])
+        self.assertEqual(pins[35]["category"], "unused")
+        self.assertTrue(pins[38]["configured"])
+        self.assertIn("Driver 1", pins[38]["role"])
+        self.assertFalse(pins[33]["configured"])
 
     def test_disabled_servos_keep_i2c_reserved_without_claiming_active_wiring(self):
         config = replace(self.config, servos=replace(self.config.servos, enabled=False))
@@ -74,17 +76,57 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertFalse(boards[1]["outputs"][0]["configured"])
         self.assertEqual(len(boards[0]["outputs"]), 16)
 
-    def test_bom_selected_boards_match_repository_and_missing_models_are_explicit(self):
+    def test_every_selected_part_is_linked_and_also_listed_in_the_repository_bom(self):
         guide = hardware_guide(self.config)
         bom = Path(__file__).resolve().parents[1].joinpath("BOM.md").read_text(encoding="utf-8")
         parts = [part for group in guide["parts_groups"] for part in group["items"]]
-        for product_id in ("B0FKH352D2", "B07WS5XY63"):
-            self.assertIn(product_id, bom)
-            self.assertTrue(any(product_id in (part["url"] or "") for part in parts))
-        unspecified = {part["name"] for part in parts if part["status"] == "needs_spec"}
-        self.assertTrue({"Brushed DC gearmotors", "Hobby servos", "Robot battery"}.issubset(unspecified))
+        linked = [part for part in parts if part["url"] and part["status"] == "selected"]
+        self.assertGreaterEqual(len(linked), 8)
+        for part in linked:
+            self.assertIn(part["url"].rstrip("/").rsplit("/", 1)[-1], bom, part["name"])
         self.assertIn("not detected inventory", guide["inventory_note"])
         self.assertIn("No sensors", guide["inventory_note"])
+
+    def test_the_two_required_groups_come_first_and_the_rest_are_advice(self):
+        groups = hardware_guide(self.config)["parts_groups"]
+        self.assertEqual(
+            [group["id"] for group in groups],
+            ["controllers", "power", "actuators", "wiring", "tools"],
+        )
+        self.assertEqual(
+            [group["requirement"] for group in groups],
+            ["required", "required", "recommended", "recommended", "recommended"],
+        )
+        by_id = {group["id"]: group for group in groups}
+        self.assertIn("recommendations, not requirements", by_id["actuators"]["note"].lower())
+
+    def test_the_battery_is_chosen_and_carries_its_own_fuse(self):
+        power = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "power")
+        names = " ".join(part["name"] for part in power["items"]).lower()
+        self.assertIn("12 v battery", names)
+        self.assertNotIn("fuse or breaker", names)
+        self.assertIn("fuse", power["note"].lower())
+        batteries = [part for part in power["items"] if "battery" in part["name"].lower()]
+        self.assertEqual({part["status"] for part in batteries}, {"selected"})
+        self.assertTrue(all(part["url"] for part in batteries))
+        # The only unfinished thing in the power group is its own CAD.
+        pending = {part["name"] for part in power["items"] if part["status"] == "placeholder"}
+        self.assertEqual(pending, {"Power module CAD"})
+        self.assertIn("3.3-6 V", power["note"])
+
+    def test_wiring_drops_the_parts_that_ship_with_the_boards(self):
+        wiring = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "wiring")
+        names = " ".join(part["name"] for part in wiring["items"]).lower()
+        for gone in ("servo extension", "common-ground", "strain relief", "cooling", "connector pack"):
+            self.assertNotIn(gone, names)
+        self.assertEqual(len(wiring["items"]), 3)
+
+    def test_only_one_servo_board_and_no_pull_down_resistors_are_listed(self):
+        parts = [part for group in hardware_guide(self.config)["parts_groups"] for part in group["items"]]
+        names = " ".join(part["name"] for part in parts).lower()
+        self.assertNotIn("second pca9685", names)
+        self.assertNotIn("pull-down", names)
+        self.assertEqual(sum("pca9685" in part["name"].lower() for part in parts), 1)
 
 
 if __name__ == "__main__":

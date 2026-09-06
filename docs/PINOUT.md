@@ -30,32 +30,34 @@ direction inputs for that motor; match them to the board's A/B input labels.
 
 | Driver | Output | Motor channel | Default use | IN1 | IN2 | Pi ground |
 | ---: | :---: | ---: | --- | --- | --- | --- |
-| 1 | A | 3 | Front right | physical 38 / GPIO20 | physical 40 / GPIO21 | physical 39 |
-| 1 | B | 4 | Rear right | physical 37 / GPIO26 | physical 33 / GPIO13 | physical 39 |
-| 2 | A | 1 | Front left | physical 32 / GPIO12 | physical 31 / GPIO6 | physical 34 |
-| 2 | B | 2 | Rear left | physical 35 / GPIO19 | physical 36 / GPIO16 | physical 34 |
-| 3 | A | 5 | Extra motor A | physical 29 / GPIO5 | physical 22 / GPIO25 | physical 20 |
-| 3 | B | 6 | Extra motor B | physical 21 / GPIO9 | physical 23 / GPIO11 | physical 20 |
-| 4 | A | 7 | Extra motor C | physical 24 / GPIO8 | physical 26 / GPIO7 | physical 25 |
-| 4 | B | 8 | Extra motor D | physical 16 / GPIO23 | physical 18 / GPIO24 | physical 25 |
+| 1 | A | 1 | Front left | physical 37 / GPIO26 | physical 35 / GPIO19 | physical 39 |
+| 1 | B | 2 | Rear left | physical 33 / GPIO13 | physical 31 / GPIO6 | physical 39 |
+| 2 | A | 3 | Front right | physical 40 / GPIO21 | physical 38 / GPIO20 | physical 34 |
+| 2 | B | 4 | Rear right | physical 36 / GPIO16 | physical 32 / GPIO12 | physical 34 |
+| 3 | A | 5 | Extra motor A | physical 23 / GPIO11 | physical 21 / GPIO9 | physical 25 |
+| 3 | B | 6 | Extra motor B | physical 26 / GPIO7 | physical 24 / GPIO8 | physical 25 |
+| 4 | A | 7 | Extra motor C | physical 15 / GPIO22 | physical 13 / GPIO27 | physical 14 |
+| 4 | B | 8 | Extra motor D | physical 18 / GPIO24 | physical 16 / GPIO23 | physical 14 |
 
-Drivers 1 and 2 preserve the supplied physical pin 30–40 block. Physical pin
-30 is another available Pi ground but is not required by the reference harness.
-Drivers 3 and 4 use the safe signals in physical pins 20–29, plus pins 16 and
-18. There are not eight usable signals in 20–29 alone:
+**Each driver is one short bundle of wires.** Its four signal pins and its
+ground sit in a single run of header positions, so you wire a driver without
+tracing across the board:
 
-| Physical pin | Function in this design |
-| ---: | --- |
-| 20 | Ground — Driver 3 reference |
-| 21 | GPIO9 — Driver 3 B IN1 |
-| 22 | GPIO25 — Driver 3 A IN2 |
-| 23 | GPIO11 — Driver 3 B IN2 |
-| 24 | GPIO8 — Driver 4 A IN1 |
-| 25 | Ground — Driver 4 reference |
-| 26 | GPIO7 — Driver 4 A IN2 |
-| 27 | GPIO0 / ID_SD — **leave disconnected** |
-| 28 | GPIO1 / ID_SC — **leave disconnected** |
-| 29 | GPIO5 — Driver 3 A IN1 |
+| Driver | Signal pins | Ground | Shape |
+| ---: | --- | ---: | --- |
+| 1 | 31, 33, 35, 37 | 39 | Five in a row down the left column |
+| 2 | 32, 36, 38, 40 | 34 | Five in a row down the right column |
+| 3 | 21, 23 and 24, 26 | 25 | Facing pairs, ground between them |
+| 4 | 13, 15 and 16, 18 | 14 | Facing pairs, ground between them |
+
+Drivers 1 and 2 face each other across the bottom of the connector. Every
+motor's two inputs are neighbouring positions on the same side, except
+Driver 2's output B, whose inputs sit either side of that driver's own ground
+at physical 34.
+
+Eight GPIOs stay free for later use: physical 7, 8, 10, 11, 12, 19, 22 and 29.
+That includes the whole default UART pair (physical 8 and 10), so the GPIO
+serial console still works.
 
 This direct-GPIO profile intentionally supports four dual drivers/eight motors.
 Adding still more direct H-bridges would consume pins reserved for other Pi
@@ -67,11 +69,11 @@ GPIO7/8/9/11 normally have alternate SPI functions. The reference Raspberry Pi
 OS image has SPI disabled. `motionmodule doctor` warns if a `/dev/spidev*`
 device is active; disable SPI before using Drivers 3 and 4.
 
-Install a 10 kΩ pull-down resistor from every one of the 16 driver inputs to
-signal ground, preferably at the driver connector. Raspberry Pi GPIOs are inputs
-during early boot and cannot be relied on to hold an H-bridge input low until
-Linux and the service have started. Keep motor power physically switched off
-during boot until these pull-downs and the stopped-output behavior are verified.
+Raspberry Pi GPIOs are inputs during early boot, so they cannot be relied on to
+hold a driver input low until Linux and the MotionModule service have started.
+Keep motor power physically switched off through boot and watch that every
+output stays still before you trust it. If a particular driver does twitch at
+boot, a 10 kΩ pull-down from that input to signal ground holds it low.
 
 ## PCA9685 servo controller
 
@@ -206,8 +208,8 @@ high continuous current. Use one motor per H-bridge channel.
 3. Verify no motor supply positive is connected to a Pi header pin.
 4. Set the servo regulator voltage before attaching servos.
 5. Put the chassis on a stable stand with all wheels clear.
-6. Confirm every driver input has its 10 kΩ pull-down, power the Pi first, and
-   run `motionmodule doctor`.
+6. Power the Pi first with motor power still off, and run
+   `motionmodule doctor`.
 7. Apply motor power with the physical cutoff in reach.
 8. Stop the service and pulse one channel: `motionmodule stop`, then
    `motionmodule test-motor 1`.

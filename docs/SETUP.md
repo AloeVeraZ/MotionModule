@@ -58,7 +58,7 @@ applying motor or servo power.
 - PCA9685 VCC is Pi-side logic power; servo V+ comes from a separate fused
   5–6 V supply.
 - Connect all signal grounds.
-- Add 10 kΩ pull-downs to H-bridge inputs.
+- Keep motor power off through boot and confirm the outputs stay still.
 - Keep a physical motor-power cutoff reachable.
 
 Open Debug. Its header and H-bridge labels are generic Driver 1A through 4B,
@@ -71,7 +71,7 @@ servos one channel at a time after selecting the correct voltage and behavior.
 
 ## 5. Create and deploy robot code
 
-Open **Code → Driver Station** and download the Mecanum sample. Unzip it and
+Open **Code → Deploy** and download the Mecanum sample. Unzip it and
 rename the folder for the robot. Every browser-deployed folder contains:
 
 ```text

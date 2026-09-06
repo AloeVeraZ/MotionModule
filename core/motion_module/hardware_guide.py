@@ -10,6 +10,10 @@ from __future__ import annotations
 from .pinout import motor_rows, servo_rows
 
 
+# CAD for the controller stack and the power module lives in the repository.
+CAD_REPO = "https://github.com/AloeVeraZ/MotionModule/tree/main/cad"
+
+
 def _part(quantity, name, selection, purpose, status="required", url=None):
     return {
         "quantity": quantity, "name": name, "selection": selection,
@@ -18,53 +22,69 @@ def _part(quantity, name, selection, purpose, status="required", url=None):
 
 
 def parts_groups() -> list[dict]:
-    """The complete reference BOM, including unspecified purchasing choices."""
+    """The reference build.
+
+    The first two groups are the robot: buy those and MotionModule runs.
+    Everything after them is what actually moves, plus the wire to join it
+    up, and those are recommendations rather than a required list.
+    """
 
     return [
         {
-            "id": "controllers", "title": "Controller & control boards", "items": [
+            "id": "controllers", "title": "Controller & control boards",
+            "requirement": "required",
+            "items": [
                 _part("1", "Raspberry Pi 5", "40-pin GPIO header; 4 GB is sufficient", "Runs robot code, the dashboard and network", "selected"),
                 _part("1", "microSD card", "32 GB or larger; A2 recommended", "Stores Raspberry Pi OS, runtime and robot projects"),
-                _part("1", "Pi 5 cooler or fan case", "Active cooling", "Prevents thermal throttling", url="https://www.raspberrypi.com/products/active-cooler/"),
-                _part("4", "GODIYMODULES dual H-bridge", "DC 3–18 V dual PWM motor driver", "Two brushed motors per board; eight channels total", "selected", "https://www.amazon.com/dp/B0FKH352D2"),
-                _part("1 installed", "AITRIP PCA9685", "16-channel servo board from the two-board pack; default address 0x40", "Converts two I2C signal wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
-                _part("1 spare / optional", "Second PCA9685", "The other board from the pack; change its address before connecting", "Optional 16 extra servo outputs; not part of the default configuration", "optional"),
+                _part("1", "Argon THRML 30mm active cooler", "Recommended Pi 5 cooler", "Prevents thermal throttling", "selected", "https://argon40.com/products/argon-thrml-30mm-active-cooler"),
+                _part("4", "GODIYMODULES dual H-bridge", "DC 3-18 V dual PWM motor driver", "Two brushed motors per board; eight channels total", "selected", "https://www.amazon.com/dp/B0FKH352D2"),
+                _part("1", "AITRIP PCA9685", "16-channel servo board, address 0x40 with all pads open", "Turns two I2C wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
+                _part("1 set", "Controller mounting CAD", "Printable mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "placeholder", CAD_REPO),
             ],
+            "note": "These five boards plus the power group are the whole controller. With them wired up, MotionModule boots, serves this dashboard and drives outputs.",
         },
         {
-            "id": "power", "title": "Motors, servos & power", "items": [
-                _part("Up to 8", "Brushed DC gearmotors", "Exact model, voltage and stall current not recorded", "Match battery voltage and the driver operating range", "needs_spec"),
-                _part("As needed", "Hobby servos", "Exact model, quantity, voltage and stall current not recorded", "Connect to outputs 0–15 on the servo board", "needs_spec"),
-                _part("1", "Robot battery", "Choose after motor and total-load measurements", "Supplies the motor rail and regulators", "needs_spec"),
-                _part("1", "Pi power converter", "Stable Pi-rated 5 V supply with protected USB-C connection", "Powers the Pi independently of motor/servo load changes", "needs_spec"),
-                _part("1", "Servo BEC / regulator", "Normally 5–6 V, matched to every connected servo; current rating still required", "Separate servo V+ power rail", "needs_spec"),
-                _part("1", "Main fuse or circuit breaker", "Size below battery, connector, wire and distribution limits", "Protects the main power path", "needs_spec"),
-                _part("4", "Motor-driver branch fuses", "Size from motor stall current and branch ratings", "One protected battery branch per dual driver", "needs_spec"),
-                _part("1", "Main switch / physical cutoff", "DC-rated for the robot battery and maximum load", "Disconnects robot power physically"),
-                _part("1", "Power distribution block", "Separate fused Pi, servo and motor branches", "Distributes power without carrying load current through Pi pins"),
+            "id": "power", "title": "Power module",
+            "requirement": "required",
+            "items": [
+                _part("1", "12 V battery - goBILDA NiMH", "12 V, 3000 mAh, XT30 connector", "Powers the whole robot. Already fused, so there is no separate breaker to buy", "selected", "https://www.gobilda.com/12v-nimh-nested-battery-3000mah-mh-fc-xt30-connector/"),
+                _part("or", "12 V battery - REV Slim", "12 V, 3000 mAh, XT30, with an inline 20 A replaceable ATM fuse", "The other battery in use; same job, same connector", "selected", "https://www.revrobotics.com/rev-31-1302/"),
+                _part("1 pack", "XT30 pigtails", "Male and female XT30 leads on silicone wire", "Mates the battery's XT30 and gives bare wire for the Wago joins", "selected", "https://www.amazon.com/dp/B0FY2ZCR83"),
+                _part("1", "12 V to 5 V USB-C converter", "Steps the 12 V rail down to a Pi-rated 5 V USB-C supply", "Powers the Raspberry Pi independently of motor load", "selected", "https://www.amazon.com/dp/B0FD735LFG"),
+                _part("1", "Rocker switch", "KCD1 automotive rocker switch, DC rated", "The battery module's physical on/off cutoff", "selected", "https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462"),
+                _part("1 set", "Power module CAD", "Enclosure and mounting for the battery, switch and converters", "Holds the power side together as one assembly", "placeholder", CAD_REPO),
             ],
+            "note": "One 12 V battery runs everything. Both batteries above ship with their own fuse, so no separate fuse or breaker is needed. The drivers take 12 V directly and the Pi gets 5 V from the USB-C converter. The servo rail is stepped down on the power module itself: the PCA9685 V+ terminal is rated 3.3-6 V, and the servos on it top out around 8.4 V, so 12 V must never reach that terminal.",
         },
         {
-            "id": "wiring", "title": "Wiring & protection", "items": [
-                _part("16", "10 kΩ pull-down resistors", "One at every H-bridge input, to signal ground", "Holds motor commands low while the Pi boots"),
-                _part("1 set", "40-pin GPIO harness / breakout", "Physical pin labels and strain relief", "Connects the Pi to driver signals"),
-                _part("4 sets", "Driver signal connectors", "Four signals plus a low-current ground reference per board", "Connects both motor channels on each driver"),
-                _part("8 sets", "Motor output connectors", "Rated two-wire connection per motor", "Connects each motor to its own output pair"),
-                _part("As needed", "Motor and battery wire", "Stranded copper sized for stall/fault current and length", "Carries high-current power", "needs_spec"),
-                _part("As needed", "Servo extensions / distribution", "Rated for combined servo current", "Distributes V+, GND and each servo signal", "needs_spec"),
-                _part("As needed", "Signal wire", "Stranded 22–26 AWG is typical for short GPIO/I2C runs", "Carries low-current control signals"),
-                _part("1 set", "Common-ground distribution", "Planned connection between all supply negatives and signal grounds", "Gives control signals a shared voltage reference"),
-                _part("As needed", "Terminations & strain relief", "Ferrules, heat-shrink, loom and secure connectors", "Prevents shorts, loose strands and pulled wires"),
-                _part("4", "Driver cooling provisions", "Heatsinks or directed airflow as indicated by heat testing", "Manages motor-driver temperature"),
+            "id": "actuators", "title": "Motors & servos",
+            "requirement": "recommended",
+            "items": [
+                _part("Up to 8", "Brushed DC motors", "goBILDA Yellow Jacket planetary gear motors are what we run. Any brushed DC motor rated for 12 V works", "Two motors per driver board, eight in total", "selected", "https://www.gobilda.com/yellow-jacket-planetary-gear-motors"),
+                _part("Up to 8", "3.5 mm bullet lead, MH-FC to bare wire", "goBILDA GB-3800-0013-0300, 300 mm, 16 AWG", "Bullets plug straight onto the motor; the bare end screws into the driver's terminal block", "selected", "https://www.gobilda.com/3-5mm-bullet-lead-mh-fc-300mm-length/"),
+                _part("Up to 16", "Axon Mini MK2 servo", "The servo we recommend. Any Axon servo is a step up: programmable range, mode and centring", "One per PCA9685 output", "selected", "https://www.gobilda.com/axon-mini-servo-mk2/"),
+                _part("Alternative", "Standard three-pin servos", "Any standard 3-pin hobby servo works; match its voltage to the servo rail", "Drop-in alternative to the Axon", "optional", "https://www.gobilda.com/standard-size-servos"),
             ],
+            "note": "Recommendations, not requirements. The controller runs without any of this; these are the parts known to work well on it.",
         },
         {
-            "id": "tools", "title": "Tools for setup", "items": [
+            "id": "wiring", "title": "Wiring",
+            "requirement": "recommended",
+            "items": [
+                _part("As needed", "Motor & battery wire", "Stranded copper; gauge sized for the current each run carries", "Carries battery and motor current", "needs_spec"),
+                _part("As needed", "Jumper wires", "Multicoloured breadboard jumper set; female-to-female for the Pi header", "Carries the Pi's control signals to each driver and to the servo board", "selected", "https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78"),
+                _part("As needed", "Wago 221 lever connectors", "Compact splicing connectors used for every 12 V power join", "Branches the battery rail to the drivers and regulators without soldering", "selected", "https://www.amazon.com/221-2401-Compact-Splicing-Inline-Connectors/dp/B0BT8DHLJJ"),
+            ],
+            "note": "Signals are ordinary jumper wires from the Pi header; every 12 V join is a Wago connector. Nothing else is needed - the boards, motors and servos come with their own leads.",
+        },
+        {
+            "id": "tools", "title": "Tools for setup",
+            "requirement": "recommended",
+            "items": [
                 _part("1", "Digital multimeter", "Continuity and DC-voltage modes", "Verifies pin-to-pin wiring and regulator voltage"),
                 _part("1 if available", "Current-limited bench supply", "Appropriate voltage and current range", "Helps with first electrical tests", "optional"),
-                _part("1 set", "Crimp tool & terminals", "Match the chosen connectors", "Makes secure electrical connections"),
                 _part("1", "Robot stand", "Stable support with every wheel off the floor", "Holds the robot during motor tests"),
-                _part("1 set", "Hand tools & fuses", "Small screwdrivers, wire stripper and fuse assortment", "Assembly and commissioning"),
+                _part("1 set", "Hand tools", "Small screwdrivers and a wire stripper", "Assembly and commissioning"),
             ],
         },
     ]
@@ -77,18 +97,32 @@ def hardware_guide(config) -> dict:
     slots = {(row["board"], row["channel"]): row["name"] for row in servo_rows(config)}
     servo = config.servos
     logic_connections = [
-        {"label": "SDA · data", "from": "Pi physical 3 / GPIO2", "to": "PCA9685 SDA", "purpose": "Carries commands for all 16 outputs over I2C."},
-        {"label": "SCL · clock", "from": "Pi physical 5 / GPIO3", "to": "PCA9685 SCL", "purpose": "Times the I2C communication; shared by every configured board."},
-        {"label": "VCC · logic power", "from": "Pi physical 1 / 3.3 V", "to": "PCA9685 VCC", "purpose": "Powers only the control chip; it does not power the servos."},
-        {"label": "GND · logic reference", "from": "Pi physical 6 / GND", "to": "PCA9685 GND", "purpose": "Provides a common reference for the data and clock signals."},
+        {"label": "VCC · logic power", "from": "Pi physical 1 / 3.3 V", "to": "PCA9685 VCC",
+         "purpose": "Powers only the PCA9685 chip, about 10 mA. It does not power a single servo."},
+        {"label": "GND · shared reference", "from": "Pi physical 6 / GND", "to": "PCA9685 GND",
+         "purpose": "The one ground wire the Pi needs. It gives SDA and SCL something to measure against, and ties the Pi to the same reference as the servo supply."},
+        {"label": "SDA · data", "from": "Pi physical 3 / GPIO2", "to": "PCA9685 SDA",
+         "purpose": "Carries commands for all 16 outputs. Fixed by the Pi's hardware I2C; it cannot be moved to another pin."},
+        {"label": "SCL · clock", "from": "Pi physical 5 / GPIO3", "to": "PCA9685 SCL",
+         "purpose": "Times that data. Also fixed by the Pi's hardware I2C, and shared by every board on the bus."},
     ]
     servo_connections = [
-        {"label": "V+ · servo power", "from": "Separate regulated servo supply +", "to": "PCA9685 V+ screw terminal", "purpose": "Feeds the power pin on all 16 output headers. Set voltage for your servo model before connecting."},
-        {"label": "GND · servo return", "from": "Servo regulator negative / common ground", "to": "PCA9685 power-terminal GND", "purpose": "Returns servo current to its supply, not through a Pi ground wire."},
-        {"label": "OE · output enable", "from": "Board enable circuit; no Pi GPIO assigned", "to": "PCA9685 OE", "purpose": "Active low: low enables PWM; high disables the signals. MotionModule does not control OE. Verify the fitted board's pull-down; do not leave OE floating or treat it as a power cutoff."},
-        {"label": "A0–A5 · address pads", "from": "Board solder pads", "to": "Configured I2C address", "purpose": "Default 0x40 has all pads open. Each extra board needs a unique address, matching hardware.py."},
-        {"label": "Side headers · chaining", "from": "Existing board SDA / SCL / VCC / GND", "to": "Next board with a unique address", "purpose": "Repeated labels are the same electrical nets, not extra Pi pins. Size servo power separately; do not daisy-chain bank current through thin leads."},
+        {"label": "V+ · screw terminal", "from": "Servo regulator positive", "to": "PCA9685 V+ terminal",
+         "purpose": "The only supply that moves servos, feeding the middle contact of all 16 outputs. This terminal is rated 3.3-6 V and the servos on it top out near 8.4 V, so it takes the stepped-down rail, never the 12 V battery."},
+        {"label": "GND · screw terminal", "from": "Servo regulator negative", "to": "PCA9685 power-terminal GND",
+         "purpose": "Returns servo current to its own supply. Join it to the common ground point, never through the Pi's ground wire."},
+        {"label": "V+ · header pin", "from": "Nothing", "to": "PCA9685 V+ header pin",
+         "purpose": "Leave this one alone. It is the same electrical net as the screw terminal, offered for chaining. Connecting it to a Pi 5 V pin would push servo current through the Pi."},
+        {"label": "OE · output enable", "from": "Nothing", "to": "PCA9685 OE",
+         "purpose": "Active low, and the board holds it low by itself, so MotionModule assigns no GPIO to it. Leave it unconnected; do not treat it as a power cutoff."},
+        {"label": "A0–A5 · address pads", "from": "Solder pads on the board", "to": "Its I2C address",
+         "purpose": "All open gives 0x40, which is what hardware.py expects. Only close pads if you add a second board that needs a different address."},
+        {"label": "Side headers · chaining", "from": "This board's SDA / SCL / VCC / GND", "to": "A second board with a unique address",
+         "purpose": "The repeated labels along the edges are the same four nets again, for daisy-chaining. They are not extra Pi pins, and each added board still needs its own servo power."},
+        {"label": "16 outputs · three contacts each", "from": "PCA9685 output header", "to": "One servo per column",
+         "purpose": "Signal from the chip, V+ from the screw terminal, GND from the same supply. Follow the board's printed labels, not wire colour."},
     ]
+
     boards = []
     for index, address in enumerate(servo.addresses):
         closed = [f"A{bit}" for bit in range(6) if (address - 0x40) & (1 << bit)]
@@ -115,28 +149,30 @@ def hardware_guide(config) -> dict:
         "reference": "MotionModule reference build · BOM.md + docs/PINOUT.md",
         "summary": "Eight motor channels and sixteen servo outputs in the reference build. The Pi header map shows controller connections; the servo output headers are on the PCA9685 board.",
         "capacity": {"motors": 8, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
-        "inventory_note": "Parts below describe the reference build, not detected inventory. Exact motor, servo and power component models still need to be recorded. No sensors are implemented.",
+        "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos and wire are recommendations. No sensors are implemented.",
         "parts_groups": parts_groups(),
         "missing_specs": [
-            {"name": "Motor model & load", "needed": "Record rated voltage and stall current for each motor."},
-            {"name": "Servo model & quantity", "needed": "Record voltage, pulse range, behavior and stall current for each servo."},
-            {"name": "Battery & power protection", "needed": "Record battery chemistry/voltage/discharge rating, regulator ratings, fuse sizes and wire/connector limits."},
+            {"name": "Servo rail on the power module", "needed": "Set its output for the servos you fit, and size it for every servo that can move at once. PCA9685 V+ is rated 3.3-6 V, so the 12 V battery rail must never reach it."},
+            {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},
+            {"name": "Wire gauge", "needed": "Pick the motor and battery wire gauge from the current each run actually carries. Control signals use ordinary GPIO jumper wires."},
         ],
         "wiring": {
-            "summary": "Four Pi connections serve the PCA9685 logic: two signals, 3.3 V and ground. The board then provides 16 separate three-pin servo outputs; servo power arrives from another supply.",
+            "summary": "Four wires reach the Pi and that is all: 3.3 V, ground, SDA and SCL. Every other terminal on the board either belongs to the separate servo supply, is a chaining duplicate, or is left alone. The 16 servo outputs live on the board, not on Pi pins.",
             "motor_connections": motors,
             "logic_connections": logic_connections,
             "servo_connections": servo_connections,
             "servo_boards": boards,
             "power_domains": [
-                {"name": "Pi logic", "source": "Pi-rated 5 V supply / converter", "destination": "Pi USB-C power input", "note": "Separate supply branch; the Pi header is for logic connections."},
-                {"name": "Motor power", "source": "Robot battery through main cutoff and fuses", "destination": "Each H-bridge power input", "note": "Heavy positive and negative wires go to power distribution. Use one motor per output pair."},
+                {"name": "Pi logic", "source": "12 V battery through the 12 V to 5 V USB-C converter", "destination": "Pi USB-C power input", "note": "Separate supply branch; the Pi header is for logic connections only."},
+                {"name": "Motor power", "source": "12 V battery through main cutoff and fuses", "destination": "Each H-bridge power input", "note": "12 V sits inside the driver's 3-18 V range. Wago 221 connectors branch the rail. Use one motor per output pair."},
                 {"name": "Servo power", "source": "Regulated supply matched to your servos", "destination": "PCA9685 V+ and power GND", "note": "Normally 5–6 V; size from simultaneous servo current. V+ must never connect to Pi VCC or a header power pin."},
             ],
             "notes": [
                 "Use physical pin numbers to locate the connector, and BCM/GPIO numbers in hardware.py. They are different numbering systems.",
                 "Pins 27/28 belong to the Pi ID EEPROM interface and must stay disconnected. Default UART pins 8/10 are left for serial use. Unused GPIO pins have no configured sensor or device.",
-                "Every motor input needs a 10 kΩ pull-down at the driver. SPI must be disabled for the reference GPIO7/8/9/11 motor connections.",
+                "SPI must be disabled for the reference GPIO7/8/9/11 motor connections.",
+                "Yellow Jacket motor leads end in 3.5 mm FH-MC bullets, so the mating lead is the MH-FC one; its bare end goes straight into the driver's screw terminals. goBILDA's JST VH adaptor is for a REV Expansion Hub and is not used here. Swapping which bullet goes to which terminal reverses that motor, but set direction with `inverted` in hardware.py instead.",
+                "Pi GPIO pins are inputs until Linux starts, so keep motor power switched off through boot and confirm nothing moves before trusting the outputs.",
                 "Join all supply negatives at a planned common-ground point. Motor and servo load currents return directly to their supplies.",
                 "Use the labels printed on your servo board and the servo connector specification to orient signal, V+ and GND. Header diagrams show function, not physical board orientation.",
                 "I2C can verify the controller chip responds; it cannot detect an attached servo. Motor drivers and motors also provide no attachment feedback.",
@@ -144,7 +180,7 @@ def hardware_guide(config) -> dict:
         },
         "checklist": [
             {"title": "Start with actuator power off", "detail": "Disconnect the motor battery and servo supply before moving wires."},
-            {"title": "Match every connection", "detail": "Check BCM and physical numbers, each motor's two inputs, common ground and pull-down resistors with a meter."},
+            {"title": "Match every connection", "detail": "Check BCM and physical numbers, each motor's two inputs and the common ground with a meter."},
             {"title": "Check the power rails", "detail": "Set servo regulator voltage before attaching servos. Keep motor battery and V+ away from Pi header pins."},
             {"title": "Power the Pi and run checks", "detail": "Open Checks & logs and run MotionModule Doctor. Verify the configured I2C board addresses respond."},
             {"title": "Test one output at a time", "detail": "Raise every wheel, keep the physical cutoff in reach, then use Debug motor and servo tests. Choose the actual servo's behavior and pulse limits."},

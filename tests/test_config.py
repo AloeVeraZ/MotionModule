@@ -46,16 +46,42 @@ class DefaultConfigTests(unittest.TestCase):
         self.assertEqual(DEFAULT_HARDWARE_PATH.name, "hardware.py")
         self.assertEqual(load_config(), default_config())
 
-    def test_existing_and_expansion_physical_pin_assignments(self):
+    def test_every_motor_uses_two_close_header_pins_on_one_side(self):
         rows = motor_rows(load_config())
         self.assertEqual(
-            [(row["in1_physical"], row["in2_physical"]) for row in rows[:4]],
-            [(32, 31), (35, 36), (38, 40), (37, 33)],
+            [(row["in1_physical"], row["in2_physical"]) for row in rows],
+            [(37, 35), (33, 31), (40, 38), (36, 32),
+             (23, 21), (26, 24), (15, 13), (18, 16)],
         )
-        self.assertEqual(
-            [(row["in1_physical"], row["in2_physical"]) for row in rows[4:]],
-            [(29, 22), (21, 23), (24, 26), (16, 18)],
-        )
+        for row in rows:
+            first, second = row["in1_physical"], row["in2_physical"]
+            self.assertEqual(first % 2, second % 2, row["name"])
+            gap = abs(first - second)
+            if gap == 2:
+                continue
+            # The one exception is allowed to straddle its own driver ground.
+            self.assertEqual(gap, 4, row["name"])
+            self.assertEqual((first + second) // 2, row["ground_physical"], row["name"])
+
+    def test_each_driver_is_one_run_of_header_positions_around_its_ground(self):
+        blocks = {}
+        for row in motor_rows(load_config()):
+            blocks.setdefault(row["driver"], set()).update(
+                [row["in1_physical"], row["in2_physical"], row["ground_physical"]]
+            )
+        self.assertEqual(sorted(blocks[1]), [31, 33, 35, 37, 39])
+        self.assertEqual(sorted(blocks[2]), [32, 34, 36, 38, 40])
+        self.assertEqual(sorted(blocks[3]), [21, 23, 24, 25, 26])
+        self.assertEqual(sorted(blocks[4]), [13, 14, 15, 16, 18])
+        # Every driver's pins stay inside a five-position window.
+        for driver, pins in blocks.items():
+            self.assertLessEqual(max(pins) - min(pins), 8, f"driver {driver}")
+
+    def test_the_default_uart_pair_is_left_free(self):
+        used = {pin for row in motor_rows(load_config())
+                for pin in (row["in1_physical"], row["in2_physical"])}
+        self.assertNotIn(8, used)   # GPIO14 / TXD
+        self.assertNotIn(10, used)  # GPIO15 / RXD
 
     def test_servo_board_uses_default_i2c_address(self):
         config = load_config()
@@ -65,11 +91,11 @@ class DefaultConfigTests(unittest.TestCase):
     def test_driver_labels_and_full_header_match_documented_harness(self):
         config = load_config()
         rows = motor_rows(config)
-        self.assertEqual([(row["driver"], row["output"]) for row in rows[:4]], [(2, "A"), (2, "B"), (1, "A"), (1, "B")])
+        self.assertEqual([(row["driver"], row["output"]) for row in rows[:4]], [(1, "A"), (1, "B"), (2, "A"), (2, "B")])
         header = header_rows(config)
         self.assertEqual(len(header), 40)
         self.assertEqual(header[26]["category"], "reserved")
-        self.assertEqual(header[39]["role"], "motor_3 · Driver 1A IN2")
+        self.assertEqual(header[39]["role"], "motor_3 · Driver 2A IN1")
 
     def test_default_names_follow_the_motor_and_servo_channel_numbers(self):
         config = load_config()
@@ -119,7 +145,7 @@ HARDWARE = {
         project = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
         config = load_project_config(project)
         self.assertEqual(len(config.motors), 8)
-        self.assertEqual(config.motors[0].forward_gpio, 12)
+        self.assertEqual(config.motors[0].forward_gpio, 26)
         self.assertEqual(config.motors[0].name, "front_left")
         with patch.dict(os.environ, {"MOTIONMODULE_ACTIVE_PROJECT": str(project)}):
             self.assertEqual(load_config(), config)

@@ -64,7 +64,7 @@
   --blue: #2f6fc4;
   --blue-soft: #ecf3fc;
   --blue-line: #cfe0f5;
-  --green: #14806a;
+  --green: #0f6d59;
   --green-soft: #ecf8f3;
   --green-line: #c7e5d7;
   --amber: #91600c;
@@ -102,6 +102,7 @@
   --board-text: #eff9f6;
   --board-muted: #b5d3cc;
 
+  --chip-ink: #ffffff;
   --focus: #2a86c4;
   --radius: 12px;
   --radius-sm: 9px;
@@ -177,6 +178,7 @@
     --board-text: #eaf6f2;
     --board-muted: #9dc0b9;
 
+    --chip-ink: #0d1520;
     --focus: #6cc2f0;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
     --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, .6);
@@ -246,6 +248,7 @@
   --board-text: #eaf6f2;
   --board-muted: #9dc0b9;
 
+  --chip-ink: #0d1520;
   --focus: #6cc2f0;
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
   --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, .6);
@@ -348,7 +351,7 @@ nav a.active::before {
   background: var(--accent);
 }
 nav a.active small { color: var(--accent-text); opacity: .8; }
-nav a.active .nav-icon { color: var(--accent); }
+nav a.active .nav-icon { color: var(--accent-text); }
 .nav-icon { grid-row: span 2; text-align: center; color: var(--muted); font-size: 20px; }
 
 .rail-guide {
@@ -654,13 +657,13 @@ output { color: var(--text); font-weight: 700; }
 /* ----------------------------------------------------------- motor output */
 
 .motor-grid { display: grid; }
-.motor {
+.motor-card {
   position: relative;
   padding: 15px 2px 15px 43px;
   border-bottom: 1px solid var(--line-soft);
 }
-.motor:last-child { border-bottom: 0; }
-.motor::before {
+.motor-card:last-child { border-bottom: 0; }
+.motor-card::before {
   content: attr(data-channel);
   position: absolute; left: 0; top: 17px;
   width: 28px; height: 28px;
@@ -673,7 +676,7 @@ output { color: var(--text); font-weight: 700; }
 .motor-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .motor-top strong { font-size: 12px; font-family: var(--mono); }
 .motor-top span { font-size: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; }
-.motor small { display: block; margin-top: 4px; color: var(--faint); font-size: 10px; }
+.motor-card small { display: block; margin-top: 4px; color: var(--faint); font-size: 10px; }
 .track { margin-top: 11px; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .track i {
   display: block; height: 100%; width: 0;
@@ -681,7 +684,7 @@ output { color: var(--text); font-weight: 700; }
   background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 72%, var(--accent)), var(--blue));
   transition: width .12s linear;
 }
-.motor.reverse .track i { background: var(--amber); }
+.motor-card.reverse .track i { background: var(--amber); }
 .stale #motorGrid, .stale #servoActivity { opacity: .45; }
 
 .health { display: grid; }
@@ -706,10 +709,10 @@ output { color: var(--text); font-weight: 700; }
 .header-grid { display: grid; gap: 4px; }
 .pin-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .pin {
-  display: grid; grid-template-columns: 22px 1fr;
+  display: grid; grid-template-columns: 26px 1fr;
   align-items: center; gap: 7px;
-  width: 100%; min-height: 39px;
-  padding: 5px 7px;
+  width: 100%; min-height: 42px;
+  padding: 6px 8px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-xs);
   background: var(--surface-2);
@@ -718,27 +721,48 @@ output { color: var(--text); font-weight: 700; }
 }
 .pin:hover { border-color: var(--faint); }
 .pin.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pin.even { direction: rtl; }
-.pin.even .pin-copy { direction: ltr; text-align: right; }
+/* The right-hand column mirrors the connector. Order the grid explicitly
+   rather than flipping `direction`, which would drag bidi reordering into
+   labels like "GPIO14 / TXD". */
+.pin.even { grid-template-columns: 1fr 26px; }
+.pin.even .pin-number { order: 2; }
+.pin.even .pin-copy { order: 1; text-align: right; }
+/* The physical pin number is what you count along the connector, so it is
+   the loudest thing in the row: a filled badge in its category colour. */
 .pin-number {
-  width: 22px; height: 22px;
+  width: 26px; height: 26px;
   display: grid; place-items: center;
-  border-radius: 6px;
+  border-radius: 7px;
   background: var(--surface-3);
-  color: var(--muted);
-  font-weight: 750; font-size: 10.5px;
+  color: var(--text);
+  font-family: var(--mono); font-weight: 800; font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .pin-copy { min-width: 0; }
-.pin-copy strong { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pin-copy small { display: block; color: var(--faint); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-copy strong { display: block; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-copy small { display: block; color: var(--faint); font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pin.motor { border-color: var(--motor-line); background: var(--motor-soft); }
-.pin.motor .pin-number { color: var(--motor); }
+.pin.motor .pin-number { background: var(--motor); color: var(--chip-ink); }
 .pin.servo { border-color: var(--servo-line); background: var(--servo-soft); }
-.pin.servo .pin-number { color: var(--servo); }
-.pin.ground .pin-number { color: var(--ground); }
+.pin.servo .pin-number { background: var(--servo); color: var(--chip-ink); }
+.pin.ground .pin-number { background: var(--ground); color: var(--chip-ink); }
 .pin.power { border-color: var(--power-line); }
-.pin.power .pin-number { color: var(--power); }
-.pin.reserved .pin-number { color: var(--reserved); }
+.pin.power .pin-number { background: var(--power); color: var(--chip-ink); }
+.pin.reserved .pin-number { background: var(--reserved); color: var(--chip-ink); }
+
+/* Reported hardware state: green when the board answers, red when it does not. */
+.io-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface-2); color: var(--muted);
+  font-size: 10px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.io-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.io-status.ok { border-color: var(--green-line); background: var(--green-soft); color: var(--green); }
+.io-status.bad { border-color: var(--red-line); background: var(--red-soft); color: var(--red); }
+.io-status.sim { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber); }
 
 .pin-inspector { border-color: var(--accent-line); background: var(--accent-soft); }
 .pin-inspector h2 { margin: 6px 0; font-size: 18px; }
@@ -779,6 +803,10 @@ output { color: var(--text); font-weight: 700; }
 .servo-board-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .servo-board-head strong { font-size: 14px; }
 .servo-board-head span { font: 11px var(--mono); color: var(--board-muted); }
+.servo-board-head .io-status { border-color: var(--board-line); background: rgba(255, 255, 255, .06); color: var(--board-muted); }
+.servo-board-head .io-status.ok { border-color: #2f6d58; background: rgba(69, 207, 154, .16); color: #74e2b8; }
+.servo-board-head .io-status.bad { border-color: #7a3a42; background: rgba(255, 129, 137, .16); color: #ff9ba2; }
+.servo-board-head .io-status.sim { border-color: #6b5628; background: rgba(240, 192, 99, .16); color: #f3d083; }
 .servo-outputs { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 5px; }
 .servo-port {
   display: grid; gap: 7px; place-items: center;
@@ -845,6 +873,16 @@ output { color: var(--text); font-weight: 700; }
   font-size: 9px;
 }
 .part-status.needed { background: var(--amber-soft); color: var(--amber); }
+.part-status.pending { background: var(--blue-soft); color: var(--motor); }
+.part-status.optional { background: var(--surface-2); color: var(--faint); }
+.parts-note { padding: 14px 20px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; line-height: 1.7; }
+.group-flag {
+  padding: 4px 9px;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase;
+}
+.group-flag.required { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.group-flag.recommended { border-color: var(--line); background: var(--surface-2); color: var(--faint); }
 
 .spec-grid, .glossary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .spec-grid strong, .glossary dt { font-size: 12px; font-weight: 650; }
@@ -891,7 +929,7 @@ output { color: var(--text); font-weight: 700; }
   font-weight: 800; font-size: 12px;
 }
 .doctor-check.warn .badge { background: var(--amber-soft); color: var(--amber); }
-.doctor-check.info .badge { background: var(--blue-soft); color: var(--blue); }
+.doctor-check.info .badge { background: var(--blue-soft); color: var(--motor); }
 .doctor-check strong { font-size: 13.5px; }
 .doctor-check p { margin-top: 3px; color: var(--muted); font-size: 12.5px; }
 
@@ -1181,6 +1219,10 @@ kbd:empty { border: 0; background: transparent; }
         <span class="nav-icon" aria-hidden="true">⌘</span>Debug
         <small>Understand your hardware</small>
       </a>
+      <a href="/drive" data-page="drive">
+        <span class="nav-icon">&#9678;</span>Drive
+        <small>Keys, controller, tests</small>
+      </a>
       <a href="/code" data-page="code">
         <span class="nav-icon">{ }</span>Code
         <small>Build &amp; control</small>
@@ -1380,10 +1422,11 @@ kbd:empty { border: 0; background: transparent; }
         <!-- ---------------------------------------------------- wiring -->
         <div data-panel="wiring">
           <div class="notice danger" style="margin-bottom:16px">
-            <strong>Before you connect anything:</strong> never run motor battery
-            positive or the servo V+ rail into a Raspberry Pi header pin. Use
-            separate fused power rails, one common signal ground, a 10&nbsp;k&#8486;
-            pull-down on every driver input, and keep a physical cutoff in reach.
+            <strong>Before you connect anything:</strong> never run the 12&nbsp;V
+            battery rail or the servo V+ rail into a Raspberry Pi header pin. Keep
+            the power rails fused and separate, join every supply negative at one
+            common ground, and keep a physical cutoff in reach. Leave motor power
+            switched off through boot until you have watched the outputs stay still.
           </div>
 
           <div class="section-heading"><div><p class="eyebrow">01 / CONTROLLER &amp; MOTOR DRIVERS</p><h2>Follow the signal.</h2><p>Choose any header pin to see its full connection. Pin numbers are physical positions; GPIO numbers are the names used by Python.</p></div><span class="pill">40 HEADER PINS</span></div>
@@ -1424,8 +1467,8 @@ kbd:empty { border: 0; background: transparent; }
             <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors are not implemented.</div>
             <div class="wire" id="servoDetection"></div>
           </div></article>
-          <div class="section-heading spaced"><div><p class="eyebrow">03 / POWER &amp; FIRST CHECKS</p><h2>Give each part the right power.</h2></div></div>
-          <div class="grid equal"><article class="card"><div class="panel-head"><h2>Power connections</h2><span>Separate rails · common ground</span></div><div class="panel-body stack" id="powerDomains"></div></article><article class="card"><div class="panel-head"><h2>Before your first test</h2><span>Check with power off</span></div><div class="panel-body stack" id="wiringChecklist"></div></article></div>
+          <div class="section-heading spaced"><div><p class="eyebrow">03 / POWER</p><h2>Give each rail the right supply.</h2></div></div>
+          <div class="stack"><article class="card"><div class="panel-head"><h2>Power connections</h2><span>Separate rails · common ground</span></div><div class="panel-body stack" id="powerDomains"></div></article></div>
 
           <article class="card spaced">
             <div class="panel-head">
@@ -1462,24 +1505,7 @@ kbd:empty { border: 0; background: transparent; }
             </div>
           </article>
 
-          <article class="card spaced">
-            <div class="panel-head">
-              <h2>Connected USB devices</h2>
-              <div class="button-row">
-                <span id="usbSummary">Scanning&hellip;</span>
-                <button class="button" id="refreshUsb" type="button">Refresh USB</button>
-              </div>
-            </div>
-            <div class="panel-body">
-              <div class="usb-grid" id="usbDevices">
-                <p class="muted">Reading the Pi USB bus&hellip;</p>
-              </div>
-              <p class="muted small" style="margin-top:12px">USB devices identify
-                themselves, so MotionModule can list what is plugged in, its USB
-                ID, driver, port, and access. Basic GPIO motor drivers send
-                nothing back to the Pi and stay marked configured but unverified.</p>
-            </div>
-          </article>
+          
         </div>
 
         <div data-panel="parts" hidden>
@@ -1505,8 +1531,10 @@ kbd:empty { border: 0; background: transparent; }
                 <h2>Motor bench test</h2>
                 <span>Hold to run &middot; max 20% power</span>
               </div>
-              <p class="lead">Press and hold a button to run one motor. Release
-                to stop. Watch which way that wheel turns, then write it down.</p>
+              <p class="lead">Press and hold to run one motor at 20% for as long
+                as you hold it. This talks straight to the driver pins on the
+                installed hardware map, so deployed robot code cannot change or
+                disable it. Watch which way the wheel turns, then write it down.</p>
               <div class="panel-body">
                 <label class="check">
                   <input id="motorSafe" type="checkbox">
@@ -1525,6 +1553,8 @@ kbd:empty { border: 0; background: transparent; }
               <p class="lead">Pick the servo by name, choose the kind of servo it
                 is, then send one position.</p>
               <div class="panel-body stack">
+                <p class="notice warn" id="servoTestMissing" hidden>Checking for a servo board&hellip;</p>
+                <div id="servoTestControls" class="stack">
                 <label class="check">
                   <input id="servoSafe" type="checkbox">
                   <span>Servo voltage and the selected profile are correct, the
@@ -1554,6 +1584,7 @@ kbd:empty { border: 0; background: transparent; }
                   <button class="button" id="servoZero" type="button">Zero servo</button>
                   <button class="button" id="servoRelease" type="button">Release now</button>
                 </div>
+                </div>
               </div>
             </article>
           </div>
@@ -1561,6 +1592,8 @@ kbd:empty { border: 0; background: transparent; }
 
         <!-- ---------------------------------------------------- checks -->
         <div data-panel="checks" hidden>
+          
+
           <div class="grid equal">
             <article class="card">
               <div class="panel-head">
@@ -1624,6 +1657,25 @@ kbd:empty { border: 0; background: transparent; }
                 <code>motionmodule rollback</code>
                 <p>Returns to the previous runtime release while preserving every robot project.</p>
               </div>
+            </div>
+          </article>
+        
+          <article class="card spaced">
+            <div class="panel-head">
+              <h2>Connected USB devices</h2>
+              <div class="button-row">
+                <span id="usbSummary">Scanning&hellip;</span>
+                <button class="button" id="refreshUsb" type="button">Refresh USB</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <div class="usb-grid" id="usbDevices">
+                <p class="muted">Reading the Pi USB bus&hellip;</p>
+              </div>
+              <p class="muted small" style="margin-top:12px">USB devices identify
+                themselves, so MotionModule can list what is plugged in, its USB
+                ID, driver, port, and access. Basic GPIO motor drivers send
+                nothing back to the Pi and stay marked configured but unverified.</p>
             </div>
           </article>
         </div>
@@ -1742,6 +1794,144 @@ kbd:empty { border: 0; background: transparent; }
         </div>
       </section>
 
+
+      <!-- =============================================================== -->
+      <!-- DRIVE                                                           -->
+      <!-- =============================================================== -->
+      <section class="view" data-view="drive" hidden>
+        <div class="hero">
+          <div>
+            <p class="eyebrow">Driver station</p>
+            <h1>Drive it.</h1>
+            <p>Keyboard or game controller, straight to the robot code you
+              deployed. Every control here stops the moment you let go, leave the
+              page, or lose connection.</p>
+          </div>
+          <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
+        </div>
+
+        <div class="driver-status">
+          <div class="driver-signal" id="driveSignalLink"><i></i>
+            <div><small>Connection</small><strong>Checking</strong></div></div>
+          <div class="driver-signal" id="driveSignalInput"><i></i>
+            <div><small>Input</small><strong>None</strong></div></div>
+          <div class="driver-signal" id="driveSignalArmed"><i></i>
+            <div><small>Control</small><strong>Disarmed</strong></div></div>
+          <div class="driver-signal good" id="driveSignalOutputs"><i></i>
+            <div><small>Outputs</small><strong>Idle</strong></div></div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button type="button" data-tab="pilot" class="active">Pilot</button>
+          <button type="button" data-tab="bindings">Controls</button>
+        </div>
+
+        <!-- ----------------------------------------------------- pilot -->
+        <div data-panel="pilot">
+          <div class="notice danger" style="margin-bottom:16px">
+            <strong>Clear the area first.</strong> This moves the real robot
+            through your own <code>drive()</code> code. Keep a hand on the
+            physical cutoff.
+          </div>
+
+          <div class="grid equal">
+            <article class="card">
+              <div class="panel-head">
+                <h2>Arm control</h2>
+                <span>Hold-to-move · releases stop</span>
+              </div>
+              <div class="panel-body stack">
+                <label class="check">
+                  <input id="driveEnable" type="checkbox">
+                  <span>I am deliberately enabling drive, the area is clear, and
+                    the physical cutoff is in reach.</span>
+                </label>
+                <label class="speed">Maximum speed <output id="speedLabel">40%</output>
+                  <input id="speed" type="range" min="10" max="100" step="5" value="40">
+                </label>
+                <div class="keys" id="driveKeys"></div>
+                <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="panel-head">
+                <h2>Game controller</h2>
+                <span id="padSummary">No controller detected</span>
+              </div>
+              <p class="lead">Plug in or pair any gamepad, then press a button on
+                it so the browser can see it. Left stick drives and strafes;
+                right stick turns.</p>
+              <div class="panel-body stack">
+                <div class="kv-grid" id="padIdentity">
+                  <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
+                </div>
+                <div id="padAxes" class="stack"></div>
+                <p class="muted small">Detected from the browser's gamepad list.
+                  A controller reporting the standard layout is mapped
+                  automatically; anything else still shows its raw sticks so you
+                  can check it is alive.</p>
+              </div>
+            </article>
+          </div>
+
+          <article class="card spaced">
+            <div class="panel-head">
+              <h2>Project controls</h2>
+              <span id="customControlSummary">Checking the robot project&hellip;</span>
+            </div>
+            <p class="lead">Extra buttons and sliders this robot's own code asks
+              for. Define <code>controls()</code> and <code>control(name, value)</code>
+              in your drive object and they appear here.</p>
+            <div class="panel-body" id="customControls"></div>
+          </article>
+        </div>
+
+        <!-- -------------------------------------------------- bindings -->
+        <div data-panel="bindings" hidden>
+          <div class="grid equal">
+            <article class="card">
+              <div class="panel-head">
+                <h2>Key bindings</h2>
+                <button class="button" id="resetBindings" type="button">Reset to defaults</button>
+              </div>
+              <p class="lead">Click a key, then press the one you want. Bindings
+                are saved in this browser.</p>
+              <div class="panel-body" id="bindingList"></div>
+            </article>
+
+            <article class="card">
+              <div class="panel-head">
+                <h2>How a command is built</h2>
+                <span>Same shape for keys and sticks</span>
+              </div>
+              <div class="panel-body stack">
+                <div class="snippet">
+                  <button class="copy" type="button" data-copy="#driveSnippet">Copy</button>
+<pre id="driveSnippet">def drive(self, forward, strafe, rotate, speed=0.5):
+    # forward  +1 ahead, -1 back      (left stick Y / W and S)
+    # strafe   +1 right, -1 left      (left stick X / D and A)
+    # rotate   +1 counter-clockwise   (right stick X / Q and E)
+    # speed    0.0 to 1.0 limit from the slider
+    ...
+
+def controls(self):
+    # optional: adds buttons and sliders to the Drive page
+    return [{"name": "intake", "label": "Intake", "kind": "hold"}]
+
+def control(self, name, value):
+    if name == "intake":
+        self.module.motor("motor_5").set(value)</pre>
+                </div>
+                <p class="muted small">Both input methods call the same
+                  <code>drive()</code>, so code written for the keyboard works
+                  with a controller without changes.</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
       <!-- =============================================================== -->
       <!-- CODE                                                            -->
       <!-- =============================================================== -->
@@ -1777,7 +1967,6 @@ kbd:empty { border: 0; background: transparent; }
 
         <div class="tabs" role="tablist">
           <button type="button" data-tab="deploy" class="active">Deploy</button>
-          <button type="button" data-tab="drive">Drive</button>
           <button type="button" data-tab="terminal">Terminal</button>
         </div>
 
@@ -1902,83 +2091,6 @@ def create_drive(module):
         </div>
 
         <!-- ----------------------------------------------------- drive -->
-        <div data-panel="drive" hidden>
-          <div class="hero" style="margin-bottom:16px">
-            <div>
-              <p class="eyebrow">Manual test control</p>
-              <h1 style="font-size:21px">Keyboard drive</h1>
-              <p>These keys call the <code>drive()</code> method in your own
-                <code>robot.py</code>. Releasing a key, disabling control, hiding
-                the page, or losing connection stops the motors.</p>
-            </div>
-            <span class="pill" id="driveWatchdog">WATCHDOG</span>
-          </div>
-
-          <div class="grid equal">
-            <article class="card">
-              <div class="panel-body stack">
-                <label class="check">
-                  <input id="driveEnable" type="checkbox">
-                  <span>I am intentionally enabling keyboard drive, the area is
-                    clear, and the physical cutoff is in reach.</span>
-                </label>
-                <div class="keys">
-                  <kbd></kbd>
-                  <kbd data-key="w"><b>W</b>forward</kbd>
-                  <kbd></kbd>
-                  <kbd data-key="a"><b>A</b>left</kbd>
-                  <kbd data-key="s"><b>S</b>back</kbd>
-                  <kbd data-key="d"><b>D</b>right</kbd>
-                  <kbd data-key="q"><b>Q</b>turn left</kbd>
-                  <kbd data-key=" "><b>SPACE</b>stop</kbd>
-                  <kbd data-key="e"><b>E</b>turn right</kbd>
-                </div>
-                <label class="speed">Maximum speed <output id="speedLabel">40%</output>
-                  <input id="speed" type="range" min="10" max="100" step="5" value="40">
-                </label>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="panel-head">
-                <h2>Before you drive</h2>
-                <span>Safety</span>
-              </div>
-              <div class="panel-body stack">
-                <div class="notice danger">Keep a physical motor-power cutoff in
-                  reach. Browser control is for supervised testing; it is not an
-                  emergency stop.</div>
-                <div class="steps">
-                  <div class="step">
-                    <i>1</i>
-                    <div>
-                      <strong>Test raised first</strong>
-                      <p>Put the robot on the floor only after every motor passed
-                        the raised-wheel direction test in Debug.</p>
-                    </div>
-                  </div>
-                  <div class="step">
-                    <i>2</i>
-                    <div>
-                      <strong>Enable on purpose</strong>
-                      <p>Tick the enable box, then use W/A/S/D to move, Q/E to
-                        rotate, and Space to stop.</p>
-                    </div>
-                  </div>
-                  <div class="step">
-                    <i>3</i>
-                    <div>
-                      <strong>Start slow</strong>
-                      <p>Keep the speed limit low until every wheel direction and
-                        inversion is confirmed.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </article>
-          </div>
-        </div>
-
         <!-- -------------------------------------------------- terminal -->
         <div data-panel="terminal" hidden>
           <div class="hero" style="margin-bottom:16px">
@@ -2066,8 +2178,6 @@ const apiHeaders = {
 const $ = selector => document.querySelector(selector);
 const $$ = selector => document.querySelectorAll(selector);
 
-const DRIVE_KEYS = new Set(['w', 'a', 's', 'd', 'q', 'e', ' ']);
-const heldKeys = new Set();
 
 let sequence = Date.now() * 1000;
 let connected = false;
@@ -2128,6 +2238,12 @@ function element(tag, className, text) {
 
 function replaceWith(container, nodes) {
   container.replaceChildren(...nodes);
+}
+
+/* Green when the board answered on I2C, red when it did not, amber in
+   simulation. Only devices that can talk back ever show green. */
+function ioStatus(state, label) {
+  return element('span', `io-status ${state}`, label);
 }
 
 /* ---------------------------------------------------------------- theme */
@@ -2262,7 +2378,7 @@ function motorDetail(channel) {
 function renderMotorCards(motors) {
   const cards = Object.entries(motors).map(([channel, value]) => {
     const detail = motorDetail(channel);
-    const card = element('div', value < 0 ? 'motor reverse' : 'motor');
+    const card = element('div', value < 0 ? 'motor-card reverse' : 'motor-card');
     card.dataset.channel = `M${channel}`;
     const top = element('div', 'motor-top');
     top.append(
@@ -2345,7 +2461,7 @@ function renderServos(robot) {
 
   const rows = boards.map(board => healthRow(
     `Board ${board.index} · ${board.address}`,
-    board.available ? (simulated ? 'Simulated' : 'Detected') : 'No response',
+    board.available ? (simulated ? 'Simulated' : 'Connected') : 'Not connected',
     board.available,
   ));
   active.forEach(([key, command]) => {
@@ -2361,15 +2477,37 @@ function renderServos(robot) {
     const cells = [];
     boards.forEach(board => {
       cells.push(element('b', null, `Board ${board.index} · ${board.address}`));
-      cells.push(element('span', null, board.available ? (simulated ? 'Simulated response' : 'Detected on I²C') : 'No response — board disabled'));
+      const cell = element('span');
+      cell.append(simulated
+        ? ioStatus('sim', 'Simulated')
+        : board.available ? ioStatus('ok', 'Connected') : ioStatus('bad', 'Not connected'));
+      cells.push(cell);
     });
     if (!boards.length) {
-      cells.push(element('b', null, 'Status'), element('span', null, 'No PCA9685 boards configured'));
+      const cell = element('span');
+      cell.append(ioStatus('bad', 'None configured'));
+      cells.push(element('b', null, 'Status'), cell);
     }
     replaceWith(detection, cells);
   }
-  if ($('#servoSummary')) {
-    $('#servoSummary').textContent = `${available}/${boards.length} ${simulated ? 'simulated responses' : 'detected over I²C'}`;
+  boards.forEach(board => {
+    const cell = document.querySelector(`.servo-board-state[data-board="${board.index}"]`);
+    if (!cell) return;
+    replaceWith(cell, [simulated
+      ? ioStatus('sim', 'Simulated')
+      : board.available ? ioStatus('ok', 'Connected') : ioStatus('bad', 'Not connected')]);
+  });
+
+  syncServoPicker(boards, simulated);
+
+  const summary = $('#servoSummary');
+  if (summary) {
+    const state = simulated ? 'sim' : available === boards.length && boards.length ? 'ok' : 'bad';
+    const label = !boards.length ? 'No board configured'
+      : simulated ? `${available}/${boards.length} simulated`
+      : available === boards.length ? `${available}/${boards.length} connected`
+      : `${boards.length - available}/${boards.length} not connected`;
+    replaceWith(summary, [ioStatus(state, label)]);
   }
 }
 
@@ -2415,7 +2553,19 @@ async function refreshStatus() {
     renderMotorCards(motors);
     renderServos(robot);
     renderHealth(robot, system);
+    if (!connected) {
+      connected = true;
+      document.body.classList.remove('stale');
+      const notice = $('#connectionNotice');
+      if (notice) notice.hidden = true;
+      for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) {
+        const box = $(`#${id}`);
+        if (box) box.disabled = false;
+      }
+    }
     setDriverSignal('#signalComms', 'good', 'Connected');
+    setDriverSignal('#driveSignalLink', 'good', 'Connected');
+    setDriverSignal('#driveSignalOutputs', outputsActive ? 'bad' : 'good', outputsActive ? 'Moving' : 'Idle');
     const hasProject = system.active_project && system.active_project !== 'No project';
     setDriverSignal('#signalCode', hasProject ? 'good' : '', hasProject ? system.active_project : 'No project loaded');
     setDriverSignal('#signalOutputs', outputsActive ? 'bad' : 'good', outputsActive ? 'Active' : 'Idle');
@@ -2424,25 +2574,29 @@ async function refreshStatus() {
   }
 }
 
-/* -------------------------------------------------------- keyboard drive */
-
-const axis = (positive, negative) => (heldKeys.has(positive) ? 1 : 0) - (heldKeys.has(negative) ? 1 : 0);
-const driveEnabled = () => connected && Boolean(configData) && activePage === 'code'
-  && !document.querySelector('[data-panel="drive"]').hidden && Boolean($('#driveEnable')?.checked);
-
+/* Connection loss is a safety event, not just a stale reading: the robot may
+   still be moving and we can no longer see it. Disarm everything and make the
+   operator re-arm deliberately once the link is back. */
 function markDisconnected() {
   const wasConnected = connected;
   connected = false;
   document.body.classList.add('stale');
-  $('#connectionNotice').hidden = false;
+  const notice = $('#connectionNotice');
+  if (notice) notice.hidden = false;
   $('#liveDot').className = 'dot offline';
   $('#liveText').textContent = 'Disconnected · state unknown';
   $('#safetyPill').textContent = 'OUTPUT STATE UNKNOWN';
   $('#safetyPill').className = 'pill busy';
   $('#controllerState').textContent = 'Disconnected';
   $('#controllerNote').textContent = 'Waiting to reconnect';
-  for (const id of ['activeMotors', 'servoBoards', 'temperature', 'uptime']) $(`#${id}`).textContent = '—';
-  for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) { $(`#${id}`).checked = false; $(`#${id}`).disabled = true; }
+  for (const id of ['activeMotors', 'servoBoards', 'temperature', 'uptime']) {
+    const cell = $(`#${id}`);
+    if (cell) cell.textContent = '—';
+  }
+  for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) {
+    const box = $(`#${id}`);
+    if (box) { box.checked = false; box.disabled = true; }
+  }
   heldKeys.clear();
   motorGeneration++;
   clearTimeout(motorTimer);
@@ -2451,83 +2605,277 @@ function markDisconnected() {
   setDriverSignal('#signalComms', 'bad', 'Disconnected');
   setDriverSignal('#signalCode', 'bad', 'Unknown');
   setDriverSignal('#signalOutputs', 'bad', 'Unknown');
+  setDriverSignal('#driveSignalLink', 'bad', 'Lost');
+  setDriverSignal('#driveSignalOutputs', 'bad', 'Unknown');
+  lastInputKind = 'none';
+  setDriveSignals();
   if (wasConnected) stopAll();
 }
 
-async function sendDrive() {
-  if (!driveEnabled() || driveInFlight) return;
-  const pending = jsonFetch('/api/drive', {
-    method: 'POST', headers: apiHeaders,
-    body: JSON.stringify({sequence: ++sequence, forward: axis('w', 's'), strafe: axis('d', 'a'), rotate: axis('q', 'e'), speed: Number($('#speed').value) / 100}),
-  });
-  driveInFlight = pending;
+/* ----------------------------------------------------------- driver station */
+
+/* Two input paths, one command shape. Keys and sticks both resolve to
+   forward / strafe / rotate, so robot code never learns which was used. */
+
+const DEFAULT_BINDINGS = {
+  forward: 'w', back: 's', left: 'a', right: 'd',
+  turnLeft: 'q', turnRight: 'e', stop: ' ',
+};
+const AXIS_LABELS = {
+  forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right',
+  turnLeft: 'Turn left', turnRight: 'Turn right', stop: 'Stop everything',
+};
+const BINDINGS_KEY = 'motionmodule-bindings';
+const STICK_DEADZONE = 0.12;
+
+let bindings = { ...DEFAULT_BINDINGS };
+let capturing = null;
+const heldKeys = new Set();
+let padIndex = null;
+let padCommand = null;
+let lastInputKind = 'none';
+
+function loadBindings() {
   try {
-    const result = await pending;
-    if (result.ignored) { await stopAll(); toast('Drive session changed. Reload this page before enabling drive.', true); }
-  } catch (error) { markDisconnected(); toast(`Drive paused: ${error.message}`, true); }
-  finally { if (driveInFlight === pending) driveInFlight = null; }
+    const saved = JSON.parse(localStorage.getItem(BINDINGS_KEY) || '{}');
+    for (const action of Object.keys(DEFAULT_BINDINGS)) {
+      if (typeof saved[action] === 'string' && saved[action]) bindings[action] = saved[action];
+    }
+  } catch (error) { /* defaults are fine */ }
+}
+
+function saveBindings() {
+  try {
+    localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
+  } catch (error) { /* the binding still applies for this page */ }
+}
+
+const keyLabel = key => key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
+const boundAction = key => Object.keys(bindings).find(
+  action => bindings[action].toLowerCase() === key.toLowerCase());
+
+/* ---------------------------------------------------------------- keys UI */
+
+function renderDriveKeys() {
+  const grid = $('#driveKeys');
+  if (!grid) return;
+  const layout = [null, 'forward', null, 'left', 'back', 'right', 'turnLeft', 'stop', 'turnRight'];
+  replaceWith(grid, layout.map(action => {
+    const key = element('kbd');
+    if (!action) return key;
+    key.dataset.action = action;
+    key.append(element('b', null, keyLabel(bindings[action])), document.createTextNode(AXIS_LABELS[action]));
+    return key;
+  }));
+}
+
+function renderBindings() {
+  const list = $('#bindingList');
+  if (!list) return;
+  replaceWith(list, Object.keys(DEFAULT_BINDINGS).map(action => {
+    const row = element('div', 'test-row');
+    const label = element('span');
+    label.append(element('strong', null, AXIS_LABELS[action]),
+                 element('small', null, `Currently ${keyLabel(bindings[action])}`));
+    const button = element('button', 'button', capturing === action ? 'Press a key…' : 'Change');
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      capturing = capturing === action ? null : action;
+      renderBindings();
+    });
+    row.append(label, button);
+    return row;
+  }));
+}
+
+$('#resetBindings')?.addEventListener('click', () => {
+  bindings = { ...DEFAULT_BINDINGS };
+  saveBindings();
+  renderBindings();
+  renderDriveKeys();
+  toast('Key bindings reset.');
+});
+
+/* ------------------------------------------------------------- game pads */
+
+/* Chrome only reveals a pad after the user presses something on it. */
+function activePad() {
+  if (typeof navigator?.getGamepads !== 'function') return null;
+  const pads = [...navigator.getGamepads()].filter(Boolean);
+  if (!pads.length) { padIndex = null; return null; }
+  const chosen = pads.find(pad => pad.index === padIndex) || pads[0];
+  padIndex = chosen.index;
+  return chosen;
+}
+
+/* "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)"
+   carries a readable name in front of the parenthesised ids. */
+function padName(pad) {
+  const raw = (pad.id || '').trim();
+  if (!raw) return 'Generic controller';
+  const name = raw.split('(')[0].trim();
+  return name || 'Generic controller';
+}
+
+const deadzone = value => Math.abs(value) < STICK_DEADZONE ? 0 : value;
+
+function readPad() {
+  const pad = activePad();
+  const panel = $('#padIdentity');
+  if (!pad) {
+    padCommand = null;
+    if (panel) replaceWith(panel, [keyValue('Controller', 'Not connected')]);
+    if ($('#padSummary')) $('#padSummary').textContent = 'No controller detected';
+    if ($('#padAxes')) replaceWith($('#padAxes'), []);
+    return null;
+  }
+
+  const standard = pad.mapping === 'standard';
+  const axes = pad.axes || [];
+  const forward = -deadzone(axes[1] ?? 0);
+  const strafe = deadzone(axes[0] ?? 0);
+  const rotate = -deadzone(axes[2] ?? 0);
+  const pressed = (pad.buttons || []).some(button => button?.pressed);
+
+  if (panel) {
+    replaceWith(panel, [
+      keyValue('Controller', padName(pad)),
+      keyValue('Layout', standard ? 'Standard mapping' : 'Non-standard — sticks shown raw'),
+      keyValue('Inputs', `${axes.length} axes · ${(pad.buttons || []).length} buttons`),
+    ]);
+  }
+  if ($('#padSummary')) $('#padSummary').textContent = padName(pad);
+  if ($('#padAxes')) {
+    replaceWith($('#padAxes'), [
+      axisBar('Forward', forward), axisBar('Strafe', strafe), axisBar('Turn', rotate),
+    ]);
+  }
+
+  const moving = forward || strafe || rotate;
+  padCommand = moving ? { forward, strafe, rotate } : null;
+  if (pressed && !moving) padCommand = null;
+  return padCommand;
+}
+
+function axisBar(label, value) {
+  const row = element('div', 'motor-card');
+  const top = element('div', 'motor-top');
+  top.append(element('strong', null, label), element('span', null, value.toFixed(2)));
+  const track = element('div', 'track');
+  const fill = element('i');
+  fill.style.width = `${Math.abs(value) * 100}%`;
+  track.append(fill);
+  row.append(top, track);
+  return row;
+}
+
+/* -------------------------------------------------------------- commands */
+
+const axis = (positive, negative) =>
+  (heldKeys.has(bindings[positive]) ? 1 : 0) - (heldKeys.has(bindings[negative]) ? 1 : 0);
+const driveEnabled = () => activePage === 'drive' && Boolean($('#driveEnable')?.checked);
+
+function setDriveSignals() {
+  setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Armed' : 'Disarmed');
+  setDriverSignal('#driveSignalInput', lastInputKind === 'none' ? '' : 'good',
+    lastInputKind === 'pad' ? 'Controller' : lastInputKind === 'keys' ? 'Keyboard' : 'None');
+}
+
+function disarmDrive(reason) {
+  const box = $('#driveEnable');
+  if (box?.checked) {
+    box.checked = false;
+    if (reason) toast(reason, true);
+  }
+  stopAll();
+  setDriveSignals();
+}
+
+async function sendDrive() {
+  if (!driveEnabled()) return;
+  const pad = readPad();
+  const keys = { forward: axis('forward', 'back'), strafe: axis('right', 'left'), rotate: axis('turnLeft', 'turnRight') };
+  const usingKeys = keys.forward || keys.strafe || keys.rotate;
+  const command = usingKeys ? keys : pad;
+  lastInputKind = usingKeys ? 'keys' : pad ? 'pad' : 'none';
+  setDriveSignals();
+  if (!command) return;
+  try {
+    const response = await fetch('/api/drive', {
+      method: 'POST',
+      headers: apiHeaders,
+      body: JSON.stringify({
+        sequence: ++sequence,
+        forward: command.forward, strafe: command.strafe, rotate: command.rotate,
+        speed: Number($('#speed').value) / 100,
+      }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      disarmDrive(data.error || `Drive command refused (${response.status})`);
+    }
+  } catch (error) {
+    markDisconnected();
+    disarmDrive('Lost contact with the robot. Re-arm when it is back.');
+  }
 }
 
 function paintKeys() {
-  $$('[data-key]').forEach(key => key.classList.toggle('active', heldKeys.has(key.dataset.key)));
+  $$('[data-action]').forEach(key =>
+    key.classList.toggle('active', heldKeys.has(bindings[key.dataset.action])));
 }
 
-async function stopAll(options = {}) {
+async function stopAll() {
   heldKeys.clear();
-  motorGeneration++;
-  clearTimeout(motorTimer);
+  clearInterval(motorTimer);
   motorTimer = null;
-  if ($('#driveEnable')) $('#driveEnable').checked = false;
-  if (!options.keepBenchConfirmation) {
-    if ($('#motorSafe')) $('#motorSafe').checked = false;
-    if ($('#servoSafe')) $('#servoSafe').checked = false;
-  }
   paintKeys();
-  const pending = [driveInFlight, testInFlight, servoInFlight].filter(Boolean);
-  let confirmed = false;
-  const requestStop = async () => {
-    try { await jsonFetch('/api/stop', {method: 'POST', keepalive: true}); confirmed = true; }
-    catch (_) { confirmed = false; }
-  };
-  await requestStop();
-  // A request already in flight may reach the server after the first stop.
-  // Confirm another stop once those commands settle, never queue another pulse.
-  if (pending.length) { await Promise.allSettled(pending); await requestStop(); }
-  return confirmed;
+  try {
+    await fetch('/api/stop', { method: 'POST', keepalive: true });
+  } catch (_) { /* the watchdog is the backstop */ }
 }
 
 addEventListener('keydown', event => {
-  if (event.key === 'Escape') { event.preventDefault(); stopAll(); return; }
-  if (!driveEnabled() || !DRIVE_KEYS.has(event.key)) return;
+  if (capturing) {
+    event.preventDefault();
+    bindings[capturing] = event.key;
+    capturing = null;
+    saveBindings();
+    renderBindings();
+    renderDriveKeys();
+    return;
+  }
+  if (!driveEnabled() || !boundAction(event.key)) return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   event.preventDefault();
-  if (event.key === ' ') { stopAll(); return; }
-  if (event.repeat) return;
+  if (event.key === bindings.stop) { disarmDrive(); return; }
   heldKeys.add(event.key);
   paintKeys();
   sendDrive();
 });
 
 addEventListener('keyup', event => {
-  if (!DRIVE_KEYS.has(event.key)) return;
+  if (!boundAction(event.key)) return;
   heldKeys.delete(event.key);
   paintKeys();
   sendDrive();
 });
 
-addEventListener('blur', stopAll);
+addEventListener('blur', () => disarmDrive());
 addEventListener('pagehide', stopAll);
-document.addEventListener('visibilitychange', () => { if (document.hidden) stopAll(); });
+addEventListener('gamepadconnected', () => { readPad(); toast('Controller connected.'); });
+addEventListener('gamepaddisconnected', () => { padIndex = null; disarmDrive('Controller disconnected.'); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) disarmDrive(); });
 
-$$('[data-stop]').forEach(button => button.addEventListener('click', async () => {
-  const stopped = await stopAll();
-  toast(stopped ? 'Stop confirmed. Motor and servo outputs are off.' : 'Stop could not be confirmed. Use the physical cutoff.', !stopped);
+$$('[data-stop]').forEach(button => button.addEventListener('click', () => {
+  disarmDrive();
+  toast('All outputs stopped.');
 }));
 
 $('#driveEnable')?.addEventListener('change', event => {
   if (!event.target.checked) stopAll();
-  else if (!connected || !configData) { event.target.checked = false; toast('Wait for the robot connection and hardware map.', true); }
-  else toast('Keyboard drive enabled. W/A/S/D move, Q/E rotate, Space stops.');
+  else toast('Drive armed. Release everything to stop.');
+  setDriveSignals();
 });
 
 if ($('#speed')) {
@@ -2536,6 +2884,74 @@ if ($('#speed')) {
     sendDrive();
   });
 }
+
+/* ------------------------------------------------- project-declared controls */
+
+async function loadCustomControls() {
+  const host = $('#customControls');
+  if (!host) return;
+  try {
+    const data = await jsonFetch('/api/drive/controls');
+    const summary = $('#customControlSummary');
+    if (!data.controls.length) {
+      if (summary) summary.textContent = 'None declared';
+      replaceWith(host, [element('p', 'muted small',
+        `${data.project} declares no extra controls. Add a controls() method to your drive object and they show up here.`)]);
+      return;
+    }
+    if (summary) summary.textContent = `${data.controls.length} from ${data.project}`;
+    replaceWith(host, data.controls.map(control => {
+      const row = element('div', 'test-row');
+      const label = element('span');
+      label.append(element('strong', null, control.label),
+                   element('small', null, control.detail || control.name));
+      row.append(label);
+      if (control.kind === 'slider') {
+        const slider = element('input');
+        slider.type = 'range';
+        slider.min = control.minimum; slider.max = control.maximum; slider.step = control.step;
+        slider.value = 0;
+        slider.addEventListener('input', () => sendCustomControl(control.name, slider.value));
+        row.append(slider);
+      } else if (control.kind === 'hold') {
+        const button = element('button', 'button hold primary', 'Hold');
+        button.type = 'button';
+        button.addEventListener('pointerdown', () => sendCustomControl(control.name, 1));
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(event =>
+          button.addEventListener(event, () => sendCustomControl(control.name, 0)));
+        row.append(button);
+      } else {
+        const button = element('button', 'button', control.kind === 'toggle' ? 'Toggle' : 'Run');
+        button.type = 'button';
+        let on = false;
+        button.addEventListener('click', () => {
+          on = control.kind === 'toggle' ? !on : true;
+          button.classList.toggle('primary', on);
+          sendCustomControl(control.name, on ? 1 : 0);
+        });
+        row.append(button);
+      }
+      return row;
+    }));
+  } catch (error) {
+    replaceWith(host, [element('p', 'muted small', error.message)]);
+  }
+}
+
+async function sendCustomControl(name, value) {
+  try {
+    await jsonFetch('/api/drive/control', {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({ name, value: Number(value) }),
+    });
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+loadBindings();
+renderDriveKeys();
+renderBindings();
 
 /* ------------------------------------------------- hardware map + names */
 
@@ -2658,24 +3074,45 @@ function renderNameTables(data) {
 }
 
 function renderServoPicker(data) {
-  $('#servoSummary').textContent = `${data.servos.addresses.length} board · ${data.servos.frequency_hz} Hz`;
-
-  const boardSelect = $('#servoBoard');
-  replaceWith(boardSelect, data.servos.addresses.map((address, index) => {
-    const option = element('option', null, `Board ${index} · ${address}`);
-    option.value = index;
-    return option;
-  }));
-
   const profileSelect = $('#servoProfile');
   replaceWith(profileSelect, data.servos.profiles.map(profile => {
     const option = element('option', null, profile.label);
     option.value = profile.id;
     return option;
   }));
-
-  renderServoChannels();
   updateServoProfile();
+}
+
+/* Only offer a board the robot has actually heard from. A configured address
+   that never answers cannot be commanded, so the picker stays closed rather
+   than pretending. */
+function syncServoPicker(boards, simulated) {
+  const select = $('#servoBoard');
+  if (!select) return;
+  const reachable = boards.filter(board => board.available);
+  const current = select.value;
+  const wanted = reachable.map(board => String(board.index)).join(',');
+  if (select.dataset.boards !== wanted) {
+    select.dataset.boards = wanted;
+    replaceWith(select, reachable.map(board => {
+      const option = element('option', null,
+        `Board ${board.index} · ${board.address}${simulated ? ' · simulated' : ''}`);
+      option.value = board.index;
+      return option;
+    }));
+    if (reachable.some(board => String(board.index) === current)) select.value = current;
+    renderServoChannels();
+  }
+  const missing = !reachable.length;
+  $$('#servoTestControls input, #servoTestControls select, #servoTestControls button')
+    .forEach(control => { control.disabled = missing; });
+  const notice = $('#servoTestMissing');
+  if (notice) {
+    notice.hidden = !missing;
+    notice.textContent = boards.length
+      ? 'No servo board is responding on I²C. Check the SDA, SCL, 3.3 V and ground wires, then reload.'
+      : 'No servo board is configured in hardware.py.';
+  }
 }
 
 function renderServoChannels() {
@@ -2693,18 +3130,18 @@ function renderServoChannels() {
 
 function renderMotorTests(motors) {
   const rows = [...motors]
-    .sort((a, b) => a.motor - b.motor)
+    .sort((a, b) => a.driver - b.driver || a.output.localeCompare(b.output))
     .map(motor => {
       const row = element('div', 'test-row');
       const label = element('span');
       label.append(
-        element('strong', null, motor.name),
-        element('small', null, `Driver ${motor.driver}${motor.output} · channel ${motor.motor}`),
+        element('strong', null, `Driver ${motor.driver}${motor.output}`),
+        element('small', null, `${motor.name} · pins ${motor.in1_physical}/${motor.in2_physical} · GPIO${motor.in1_bcm}/${motor.in2_bcm}`),
       );
       const reverse = element('button', 'button hold', 'Hold −');
       const forward = element('button', 'button hold primary', 'Hold +');
-      bindMotorHold(reverse, motor.motor, -0.15);
-      bindMotorHold(forward, motor.motor, 0.15);
+      bindMotorHold(reverse, motor.motor, -0.2);
+      bindMotorHold(forward, motor.motor, 0.2);
       row.append(label, reverse, forward);
       return row;
     });
@@ -2734,11 +3171,18 @@ function guideConnection(label, route, purpose) {
 
 function renderHardwareGuide(guide) {
   if (!guide) return;
-  const labels = {selected: 'Selected part', required: 'Required', optional: 'Optional', needs_spec: 'To specify'};
+  const labels = {selected: 'Selected part', required: 'Required', optional: 'Optional', needs_spec: 'To specify', placeholder: 'Not chosen yet'};
+  const statusClass = {needs_spec: ' needed', placeholder: ' pending', optional: ' optional'};
   replaceWith($('#partsGroups'), guide.parts_groups.map(group => {
     const card = element('article', 'card parts-group');
     const head = element('div', 'panel-head');
-    head.append(element('h2', null, group.title), element('span', null, `${group.items.length} items`));
+    const meta = element('div', 'button-row');
+    if (group.requirement) {
+      meta.append(element('span', `group-flag ${group.requirement}`,
+        group.requirement === 'required' ? 'Needed to run' : 'Recommended'));
+    }
+    meta.append(element('span', null, `${group.items.length} items`));
+    head.append(element('h2', null, group.title), meta);
     const scroll = element('div', 'parts-scroll');
     const table = element('table', 'parts-table');
     const thead = element('thead'); const titles = element('tr');
@@ -2754,10 +3198,13 @@ function renderHardwareGuide(guide) {
         const link = element('a', null, 'View selected product ↗');
         link.href = part.url; link.target = '_blank'; link.rel = 'noreferrer'; copy.append(link);
       }
-      const status = element('td'); status.append(element('span', `part-status${part.status === 'needs_spec' ? ' needed' : ''}`, labels[part.status] || part.status));
+      const status = element('td');
+      status.append(element('span', `part-status${statusClass[part.status] || ''}`, labels[part.status] || part.status));
       row.append(element('td', null, part.quantity), copy, status); body.append(row);
     });
-    table.append(body); scroll.append(table); card.append(head, scroll); return card;
+    table.append(body); scroll.append(table); card.append(head, scroll);
+    if (group.note) card.append(element('p', 'parts-note', group.note));
+    return card;
   }));
   replaceWith($('#missingSpecs'), guide.missing_specs.map(item => {
     const div = element('div'); div.append(element('strong', null, item.name), element('p', null, item.needed)); return div;
@@ -2769,14 +3216,12 @@ function renderHardwareGuide(guide) {
     replaceWith($(`#${id}`), items.map(item => guideConnection(item.label, `${item.from} → ${item.to}`, item.purpose)));
   }
   replaceWith($('#powerDomains'), guide.wiring.power_domains.map(item => guideConnection(item.name, `${item.source} → ${item.destination}`, item.note)));
-  replaceWith($('#wiringChecklist'), guide.checklist.map((item, index) => {
-    const row = element('div', 'step'); const copy = element('div');
-    copy.append(element('strong', null, item.title), element('p', null, item.detail));
-    row.append(element('i', null, index + 1), copy); return row;
-  }));
   const boards = guide.wiring.servo_boards.map(board => {
     const card = element('div', 'servo-board'); const head = element('div', 'servo-board-head');
-    head.append(element('strong', null, `PCA9685 · board ${board.index}`), element('span', null, `${board.address} / ${board.frequency_hz} Hz / ${board.enabled ? 'configured' : 'disabled'}`));
+    const meta = element('span', null, `${board.address} / ${board.frequency_hz} Hz / ${board.enabled ? 'configured' : 'disabled'}`);
+    const live = element('span', 'servo-board-state');
+    live.dataset.board = board.index;
+    head.append(element('strong', null, `PCA9685 · board ${board.index}`), meta, live);
     const ports = element('div', 'servo-outputs');
     const detail = element('div', 'servo-channel-detail'); detail.setAttribute('aria-live', 'polite');
     const select = (output, button) => {
@@ -2820,7 +3265,7 @@ function renderHardware(data) {
   renderDrivers(data.motors);
   renderNameTables(data);
   renderServoPicker(data);
-  renderMotorTests(data.motors);
+  renderMotorTests(data.bench_motors || data.motors);
 }
 
 async function loadConfig() {
@@ -3516,9 +3961,15 @@ setInterval(() => refreshNetwork(true), 5000);
 if (activePage === 'code') {
   refreshProjects();
   refreshTerminalStatus();
-  setInterval(sendDrive, 80);
   setInterval(pollTerminal, 300);
   setInterval(refreshTerminalStatus, 5000);
+}
+
+if (activePage === 'drive') {
+  loadCustomControls();
+  setDriveSignals();
+  setInterval(sendDrive, 80);
+  setInterval(readPad, 120);
 }
 
 if (activePage === 'diagnostics') {

@@ -23,7 +23,7 @@ class RunnerTests(unittest.TestCase):
             def run(module, stop_event):
                 module.motor("left_wheel").set(0.25)
                 observed.append((module, stop_event))
-                self.assertEqual(module.gpio.values[6], 0.25)
+                self.assertEqual(module.gpio.values[26], 0.25)
 
             with patch.dict(os.environ, {"MOTIONMODULE_MOCK": "1", "MOTIONMODULE_ACTIVE_PROJECT": ""}):
                 with patch("motion_module.runner.signal.signal"), patch(

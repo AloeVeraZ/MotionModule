@@ -52,30 +52,40 @@ HARDWARE = {
     # ------------------------------------------------------------------
     # Eight brushed-motor outputs: four dual H-bridge boards, two each.
     #
+    # Each driver owns a run of neighbouring header positions with its own
+    # ground inside the run, so one driver is one short bundle of wires:
+    #
+    #   Driver 1  pins 31 33 35 37, ground 39   (left column, bottom)
+    #   Driver 2  pins 32 34 36 38 40          (right column, bottom;
+    #                                           ground 34 sits between
+    #                                           output B's two inputs)
+    #   Driver 3  pins 21 23 + 24 26, ground 25 (facing pairs)
+    #   Driver 4  pins 13 15 + 16 18, ground 14 (facing pairs)
+    #
     # channel  name      driver / output   IN1 wire        IN2 wire        driver ground
     # -------  --------  ---------------   -------------   -------------   -------------
-    #    1     motor_1   Driver 2 · A      pin 32/GPIO12   pin 31/GPIO6    pin 34
-    #    2     motor_2   Driver 2 · B      pin 35/GPIO19   pin 36/GPIO16   pin 34
-    #    3     motor_3   Driver 1 · A      pin 38/GPIO20   pin 40/GPIO21   pin 39
-    #    4     motor_4   Driver 1 · B      pin 37/GPIO26   pin 33/GPIO13   pin 39
-    #    5     motor_5   Driver 3 · A      pin 29/GPIO5    pin 22/GPIO25   pin 20
-    #    6     motor_6   Driver 3 · B      pin 21/GPIO9    pin 23/GPIO11   pin 20
-    #    7     motor_7   Driver 4 · A      pin 24/GPIO8    pin 26/GPIO7    pin 25
-    #    8     motor_8   Driver 4 · B      pin 16/GPIO23   pin 18/GPIO24   pin 25
+    #    1     motor_1   Driver 1 · A      pin 37/GPIO26   pin 35/GPIO19   pin 39
+    #    2     motor_2   Driver 1 · B      pin 33/GPIO13   pin 31/GPIO6    pin 39
+    #    3     motor_3   Driver 2 · A      pin 40/GPIO21   pin 38/GPIO20   pin 34
+    #    4     motor_4   Driver 2 · B      pin 36/GPIO16   pin 32/GPIO12   pin 34
+    #    5     motor_5   Driver 3 · A      pin 23/GPIO11   pin 21/GPIO9    pin 25
+    #    6     motor_6   Driver 3 · B      pin 26/GPIO7    pin 24/GPIO8    pin 25
+    #    7     motor_7   Driver 4 · A      pin 15/GPIO22   pin 13/GPIO27   pin 14
+    #    8     motor_8   Driver 4 · B      pin 18/GPIO24   pin 16/GPIO23   pin 14
     #
-    # Channels 1-4 are the four drive positions on the reference chassis and
-    # are wired so that `inverted` is True. Channels 5-8 are free for
-    # intakes, arms, lifts, and other mechanisms.
+    # Every motor starts uninverted. Run the raised-wheel test in
+    # Debug -> Test outputs, and set `inverted` True on any motor that
+    # turns the wrong way. Never fix direction in the drive math.
     # ------------------------------------------------------------------
     "motors": {
-        1: {"name": "motor_1", "forward_gpio": 12, "reverse_gpio": 6, "inverted": True},
-        2: {"name": "motor_2", "forward_gpio": 19, "reverse_gpio": 16, "inverted": True},
-        3: {"name": "motor_3", "forward_gpio": 20, "reverse_gpio": 21, "inverted": True},
-        4: {"name": "motor_4", "forward_gpio": 26, "reverse_gpio": 13, "inverted": True},
-        5: {"name": "motor_5", "forward_gpio": 5, "reverse_gpio": 25, "inverted": False},
-        6: {"name": "motor_6", "forward_gpio": 9, "reverse_gpio": 11, "inverted": False},
-        7: {"name": "motor_7", "forward_gpio": 8, "reverse_gpio": 7, "inverted": False},
-        8: {"name": "motor_8", "forward_gpio": 23, "reverse_gpio": 24, "inverted": False},
+        1: {"name": "motor_1", "forward_gpio": 26, "reverse_gpio": 19, "inverted": False},
+        2: {"name": "motor_2", "forward_gpio": 13, "reverse_gpio": 6, "inverted": False},
+        3: {"name": "motor_3", "forward_gpio": 21, "reverse_gpio": 20, "inverted": False},
+        4: {"name": "motor_4", "forward_gpio": 16, "reverse_gpio": 12, "inverted": False},
+        5: {"name": "motor_5", "forward_gpio": 11, "reverse_gpio": 9, "inverted": False},
+        6: {"name": "motor_6", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},
+        7: {"name": "motor_7", "forward_gpio": 22, "reverse_gpio": 27, "inverted": False},
+        8: {"name": "motor_8", "forward_gpio": 24, "reverse_gpio": 23, "inverted": False},
     },
 
     # ------------------------------------------------------------------

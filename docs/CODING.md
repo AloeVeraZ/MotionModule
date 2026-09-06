@@ -39,9 +39,9 @@ HARDWARE = {
     "motors": {
         1: {
             "name": "front_left",
-            "forward_gpio": 12,
-            "reverse_gpio": 6,
-            "inverted": True,
+            "forward_gpio": 26,   # physical pin 37
+            "reverse_gpio": 19,   # physical pin 35, right next to it
+            "inverted": False,
         },
     },
     "servos": {
@@ -155,10 +155,26 @@ folder before deploying again.
 
 ## Manual testing
 
-The Code page's W/A/S/D/Q/E controls call your `drive()` method. Keyboard drive
-works only while its deliberate-enable box is selected. Releasing keys, Space,
-STOP, leaving the page, or losing communications produces a stop; the hardware
-watchdog is the final backstop.
+The **Drive** page calls your `drive()` method, from either the keyboard or a
+game controller. Both send the same `forward`, `strafe` and `rotate` numbers, so
+code written for one works with the other. Keys are remappable under
+**Drive → Controls**.
+
+Drive works only while its deliberate-enable box is ticked. Releasing keys, the
+stop key, STOP, leaving the page, or losing communications produces a stop, and
+a lost connection also disarms the box so you have to re-arm on purpose. The
+hardware watchdog is the final backstop.
+
+A drive object may also declare extra buttons and sliders for that page:
+
+```python
+def controls(self):
+    return [{"name": "intake", "label": "Intake", "kind": "hold"}]
+
+def control(self, name, value):
+    if name == "intake":
+        self.module.motor("motor_5").set(value)
+```
 
 Keep a physical power cutoff in reach. First verify every raw output using
 Debug with the chassis raised, then test the project's drive mapping slowly.

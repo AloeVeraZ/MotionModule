@@ -45,10 +45,10 @@ from .terminal import TerminalManager
 from .usb import usb_devices
 
 
-DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
-PAGE_ALIASES = {"drive": "code", "hardware": "diagnostics", "network": "diagnostics"}
+DASHBOARD_PAGES = {"overview", "diagnostics", "code", "drive"}
+PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics"}
 # Older links land on the matching tab inside the page that replaced them.
-ALIAS_TABS = {"drive": "drive", "hardware": "wiring", "network": "network"}
+ALIAS_TABS = {"hardware": "wiring", "network": "network"}
 
 
 def servo_profiles(config) -> list[dict]:
@@ -253,6 +253,13 @@ def create_app(
     network_state = {"busy": False, "last_error": ""}
     deployment_lock = threading.Lock()
     workspace = Path(workspace_directory).resolve() if workspace_directory else None
+    # The bench test belongs to the Pi, not to the deployed project: it reads
+    # the installed hardware map so pushed code cannot relabel or extend it.
+    try:
+        bench_config = load_config(project="")
+    except MotionModuleError:
+        bench_config = module.config
+    bench_channels = {item.channel for item in bench_config.motors}
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
     last_sequence = -1
@@ -309,6 +316,7 @@ def create_app(
                     "watchdog_ms": module.config.watchdog_ms,
                 },
                 "motors": motor_rows(module.config),
+                "bench_motors": motor_rows(bench_config),
                 "header": header_rows(module.config),
                 "hardware_file": {
                     "source": (
@@ -532,6 +540,78 @@ def create_app(
                 # agree about what is being driven.
                 module.release_all_servos()
 
+    def drive_controls() -> list[dict]:
+        """Extra controls the active project asks the Drive page to show.
+
+        A project opts in by giving its drive object a `controls()` method that
+        returns plain dictionaries. Anything malformed is dropped rather than
+        breaking the page.
+        """
+
+        describe = getattr(active_drive, "controls", None)
+        if not callable(describe):
+            return []
+        try:
+            declared = describe()
+        except Exception:
+            app.logger.exception("The robot project's controls() call failed")
+            return []
+        controls = []
+        for item in declared if isinstance(declared, (list, tuple)) else []:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                continue
+            kind = item.get("kind", "button")
+            control = {
+                "name": item["name"][:40],
+                "label": str(item.get("label", item["name"]))[:60],
+                "kind": kind if kind in {"button", "hold", "slider", "toggle"} else "button",
+                "detail": str(item.get("detail", ""))[:160],
+            }
+            if control["kind"] == "slider":
+                try:
+                    control["minimum"] = float(item.get("minimum", -1))
+                    control["maximum"] = float(item.get("maximum", 1))
+                    control["step"] = float(item.get("step", 0.05))
+                except (TypeError, ValueError):
+                    continue
+                if not control["minimum"] < control["maximum"]:
+                    continue
+            controls.append(control)
+            if len(controls) >= 24:
+                break
+        return controls
+
+    @app.get("/api/drive/controls")
+    def drive_control_list():
+        return jsonify({"ok": True, "controls": drive_controls(), "project": project_name})
+
+    @app.post("/api/drive/control")
+    def drive_control_command():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        handler = getattr(active_drive, "control", None)
+        if not callable(handler):
+            return jsonify({"ok": False, "error": "This robot project defines no custom controls"}), 400
+        body = request.get_json(silent=True) or {}
+        name = str(body.get("name", ""))
+        if not any(control["name"] == name for control in drive_controls()):
+            return jsonify({"ok": False, "error": "That control is not declared by the robot project"}), 400
+        try:
+            value = float(body.get("value", 0))
+            if not math.isfinite(value):
+                raise ValueError("Control values must be finite")
+            with command_lock:
+                result = handler(name, value)
+        except (TypeError, ValueError) as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        except Exception as error:
+            with command_lock:
+                stop_outputs()
+            app.logger.exception("A custom control handler failed")
+            return jsonify({"ok": False, "error": f"The robot project's control failed: {error}"}), 500
+        return jsonify({"ok": True, "name": name, "value": value,
+                        "result": result if isinstance(result, (dict, list, str, int, float, bool)) else None})
+
     @app.post("/api/stop")
     def stop_command():
         with command_lock:
@@ -552,8 +632,8 @@ def create_app(
         try:
             channel = int(body.get("channel"))
             power = float(body.get("power"))
-            if channel not in {item.channel for item in module.config.motors}:
-                raise ValueError("That motor channel is not configured")
+            if channel not in bench_channels:
+                raise ValueError("That motor channel is not on the installed hardware map")
             if not -0.2 <= power <= 0.2:
                 raise ValueError("Dashboard motor tests are limited to 20% power")
             with command_lock:
