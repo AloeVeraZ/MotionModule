@@ -16,7 +16,7 @@
   --line-soft: #1c2530;
   --text: #f5f7fa;
   --muted: #9aa5b4;
-  --faint: #707c8d;
+  --faint: #7f8899;
   --blue: #78a4ff;
   --blue-soft: #172541;
   --green: #3de0a1;
@@ -98,6 +98,23 @@ button { cursor: pointer; }
 .mode-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .mode-name { padding: 10px 11px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--panel-2); }
 .mode-name strong { display: block; margin-top: 3px; font-size: 12px; }
+
+/* Mode is chosen before enabling, the way a driver station works: pick what
+   ENABLE is going to start, then start it. */
+.mode-switch { display: grid; grid-auto-flow: column; gap: 6px; padding: 3px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel-2); }
+.mode-switch button {
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 7px;
+  background: none; color: var(--muted); cursor: pointer;
+  font: 700 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+}
+.mode-switch button:hover:not(:disabled) { color: var(--text); }
+.mode-switch button.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.mode-switch button:disabled { color: var(--faint); cursor: not-allowed; }
+.auto-status { display: grid; gap: 5px; padding: 10px 11px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--panel-2); }
+.auto-status strong { font: 800 12px/1 var(--mono); letter-spacing: .05em; }
+.auto-status small { color: var(--faint); font-size: 9px; line-height: 1.6; }
+.auto-status.running strong { color: var(--green); }
+.auto-status.failed strong { color: var(--red); }
 .robot-state {
   padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-2); text-align: center;
 }
@@ -262,9 +279,14 @@ kbd:empty { border-color: transparent; background: transparent; }
     <section class="panel">
       <div class="panel-head"><h2>Robot control</h2><span id="watchdogLabel">WATCHDOG</span></div>
       <div class="panel-body stack">
-        <div class="mode-row">
-          <div class="mode-name"><span class="eyebrow">Mode</span><strong>Teleoperated</strong></div>
-          <span class="eyebrow">Operator</span>
+        <div class="mode-switch" role="group" aria-label="Robot mode">
+          <button type="button" id="modeTeleop" class="active" data-mode="teleop">Teleoperated</button>
+          <button type="button" id="modeAuto" data-mode="autonomous" disabled>Autonomous</button>
+        </div>
+        <div class="auto-status" id="autoStatus" hidden>
+          <span class="eyebrow">Autonomous routine</span>
+          <strong id="autoState">Idle</strong>
+          <small id="autoDetail">autonomous.py has not been run yet.</small>
         </div>
         <div class="robot-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
         <label class="safety-check"><input id="armConfirm" type="checkbox"><span>The area is clear and the physical cutoff is within reach.</span></label>
@@ -283,7 +305,7 @@ kbd:empty { border-color: transparent; background: transparent; }
         <div class="controller-name" id="controllerName">No game controller detected</div>
         <div id="axisList" class="stack"></div>
         <div class="key-grid" id="keyGrid"></div>
-        <p class="empty-copy">W/S drive, A/D strafe, Q/E turn. Space disables and stops. Controller: left stick drive/strafe, right stick turn.</p>
+        <p class="empty-copy" id="keyLegend">Loading this project's key layout&hellip;</p>
       </div>
     </section>
   </aside>
@@ -352,8 +374,19 @@ let heldKeys = new Set();
 let padIndex = null;
 let cameraMode = 'both';
 let cameraSignature = '';
-const bindings = {forward: 'w', back: 's', left: 'a', right: 'd', turnLeft: 'q', turnRight: 'e'};
+/* The competition console's key layout belongs to the robot project: it comes
+   from dashboard.py's driver_bindings(). This is deliberately unrelated to the
+   Drive debug page, which each browser remaps for itself in local storage. */
+const DEFAULT_BINDINGS = {forward:'w', back:'s', left:'a', right:'d', turn_left:'q', turn_right:'e', stop:' '};
+const ACTION_LABELS = {forward:'Forward', back:'Back', left:'Left', right:'Right', turn_left:'Turn L', turn_right:'Turn R', stop:'Stop'};
+let bindings = {...DEFAULT_BINDINGS};
+let bindingSignature = '';
+let mode = 'teleop';
+let autoState = {configured: false, state: 'idle', error: '', elapsed_seconds: 0, duration_seconds: null};
 const IDLE = {forward: 0, strafe: 0, rotate: 0};
+
+const keyLabel = key => key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
+const boundKeys = () => new Set(Object.values(bindings));
 
 async function jsonFetch(url, options = {}) {
   const response = await fetch(url, {cache: 'no-store', ...options});
@@ -369,7 +402,75 @@ function setSignal(id, state, text) {
 }
 
 function updateEnableButton() {
-  $('#enableButton').disabled = !connected || !$('#armConfirm').checked || armed;
+  const ready = connected && $('#armConfirm').checked && !armed;
+  $('#enableButton').disabled = !ready || (mode === 'autonomous' && !autoState.configured);
+  $('#enableButton').textContent = mode === 'autonomous' ? 'RUN AUTO' : 'ENABLE';
+  // Switching modes mid-run would leave the routine driving under a teleop
+  // label, so the choice is locked while the robot is enabled.
+  $('#modeTeleop').disabled = armed;
+  $('#modeAuto').disabled = armed || !autoState.configured;
+}
+
+function setMode(next) {
+  if (armed || next === mode) return;
+  mode = next;
+  $$('.mode-switch button').forEach(button =>
+    button.classList.toggle('active', button.dataset.mode === mode));
+  $('#autoStatus').hidden = mode !== 'autonomous';
+  $('#robotState').querySelector('small').textContent = mode === 'autonomous'
+    ? 'The routine will not start until you enable it'
+    : 'Driver commands are blocked';
+  updateEnableButton();
+  renderAutoStatus();
+}
+
+const AUTO_WORDS = {
+  idle: ['Idle', 'autonomous.py is loaded and has not been run yet.'],
+  running: ['Running', 'The routine is driving. Disable to stop it.'],
+  finished: ['Finished', 'The routine returned on its own.'],
+  stopped: ['Stopped', 'The routine was stopped before it finished.'],
+  expired: ['Cut short', 'The routine ran past its time limit and was stopped.'],
+  failed: ['Failed', 'The routine raised an error. Outputs were stopped.'],
+};
+
+function renderAutoStatus() {
+  const box = $('#autoStatus');
+  if (!box) return;
+  const [title, detail] = AUTO_WORDS[autoState.state] || ['Unknown', ''];
+  box.className = `auto-status ${autoState.state === 'running' ? 'running'
+    : ['failed', 'expired'].includes(autoState.state) ? 'failed' : ''}`;
+  $('#autoState').textContent = !autoState.configured ? 'Not available'
+    : autoState.state === 'running' ? `${title} · ${autoState.elapsed_seconds.toFixed(1)}s`
+    : title;
+  $('#autoDetail').textContent = autoState.configured
+    ? (autoState.error || detail)
+    : 'This project has no autonomous.py, so it has no autonomous routine. Adding one is optional.';
+}
+
+async function refreshAutonomous() {
+  try {
+    const data = await jsonFetch('/api/autonomous');
+    const wasRunning = autoState.state === 'running';
+    autoState = data;
+    // The routine ending is the end of the enabled period, the same way
+    // letting go of a key ends a teleop command.
+    if (wasRunning && data.state !== 'running' && mode === 'autonomous' && armed) setArmed(false);
+    renderAutoStatus();
+    updateEnableButton();
+  } catch (_) { /* the connection banner already says the link is down */ }
+}
+
+async function startAutonomous() {
+  try {
+    autoState = await jsonFetch('/api/autonomous/start', {
+      method: 'POST', headers: apiHeaders, body: JSON.stringify({confirmed: true}),
+    });
+    renderAutoStatus();
+    return true;
+  } catch (error) {
+    $('#autoDetail').textContent = error.message;
+    return false;
+  }
 }
 
 function setArmed(value) {
@@ -377,8 +478,11 @@ function setArmed(value) {
   const state = $('#robotState');
   state.classList.toggle('armed', armed);
   state.querySelector('strong').textContent = armed ? 'ENABLED' : 'DISABLED';
-  state.querySelector('small').textContent = armed ? 'Driver commands are live' : 'Driver commands are blocked';
-  setSignal('#inputSignal', armed ? 'good' : '', armed ? 'Ready' : 'Blocked');
+  state.querySelector('small').textContent = armed
+    ? (mode === 'autonomous' ? 'The autonomous routine is running' : 'Driver commands are live')
+    : (mode === 'autonomous' ? 'The routine will not start until you enable it' : 'Driver commands are blocked');
+  setSignal('#inputSignal', armed ? 'good' : '',
+    armed ? (mode === 'autonomous' ? 'Autonomous' : 'Ready') : 'Blocked');
   updateEnableButton();
   if (!armed) stopAll();
 }
@@ -386,6 +490,8 @@ function setArmed(value) {
 async function stopAll() {
   heldKeys.clear();
   paintKeys();
+  // /api/stop also ends a running autonomous routine, so every path that
+  // disables the robot - button, stop key, blur, lost link - stops the script.
   try { await fetch('/api/stop', {method: 'POST', keepalive: true}); } catch (_) {}
 }
 
@@ -426,11 +532,13 @@ function readPad() {
   return command.forward || command.strafe || command.rotate ? command : null;
 }
 
-const keyAxis = (positive, negative) => (heldKeys.has(positive) ? 1 : 0) - (heldKeys.has(negative) ? 1 : 0);
+const keyAxis = (positive, negative) =>
+  (bindings[positive] && heldKeys.has(bindings[positive]) ? 1 : 0)
+  - (bindings[negative] && heldKeys.has(bindings[negative]) ? 1 : 0);
 
 async function sendDrive() {
-  if (!armed || !connected) return;
-  const keys = {forward: keyAxis('w','s'), strafe: keyAxis('d','a'), rotate: keyAxis('q','e')};
+  if (!armed || !connected || mode !== 'teleop') return;
+  const keys = {forward: keyAxis('forward','back'), strafe: keyAxis('right','left'), rotate: keyAxis('turn_left','turn_right')};
   const keyboardMoving = keys.forward || keys.strafe || keys.rotate;
   const command = keyboardMoving ? keys : readPad() || IDLE;
   setSignal('#inputSignal', 'good', keyboardMoving ? 'Keyboard' : command === IDLE ? 'Ready' : 'Controller');
@@ -451,12 +559,43 @@ async function sendDrive() {
 }
 
 function renderKeys() {
-  const items = [null,['W','Forward'],null,['A','Left'],['S','Back'],['D','Right'],['Q','Turn L'],['Space','Stop'],['E','Turn R']];
-  replaceWith($('#keyGrid'), items.map(item => {
+  const layout = [null,'forward',null,'left','back','right','turn_left','stop','turn_right'];
+  replaceWith($('#keyGrid'), layout.map(action => {
     const key = element('kbd');
-    if (item) { key.dataset.key = item[0].toLowerCase(); key.append(element('b', null, item[0]), document.createTextNode(item[1])); }
+    if (!action) return key;
+    const bound = bindings[action];
+    if (!bound) {
+      key.classList.add('unbound');
+      key.append(element('b', null, '—'), document.createTextNode(ACTION_LABELS[action]));
+      return key;
+    }
+    key.dataset.key = bound;
+    key.append(element('b', null, keyLabel(bound)), document.createTextNode(ACTION_LABELS[action]));
     return key;
   }));
+  const legend = $('#keyLegend');
+  if (legend) {
+    const named = action => bindings[action] ? keyLabel(bindings[action]) : 'unassigned';
+    legend.textContent =
+      `${named('forward')}/${named('back')} drive, ${named('left')}/${named('right')} strafe, `
+      + `${named('turn_left')}/${named('turn_right')} turn, ${named('stop')} disables and stops. `
+      + 'Set these in your project’s dashboard.py. Controller: left stick drive and strafe, right stick turn.';
+  }
+}
+
+/* Only rebuild when the layout actually changed; the telemetry poll runs at
+   4 Hz and rebuilding the grid under the operator's fingers loses key state. */
+function applyBindings(next) {
+  const resolved = {...DEFAULT_BINDINGS, ...(next && typeof next === 'object' ? next : {})};
+  for (const action of Object.keys(DEFAULT_BINDINGS)) {
+    if (next && typeof next === 'object' && !(action in next)) delete resolved[action];
+  }
+  const signature = JSON.stringify(resolved);
+  if (signature === bindingSignature) return;
+  bindingSignature = signature;
+  bindings = resolved;
+  heldKeys.clear();
+  renderKeys();
 }
 function paintKeys() { $$('[data-key]').forEach(key => key.classList.toggle('active', heldKeys.has(key.dataset.key))); }
 
@@ -601,7 +740,7 @@ function renderSensors(data) {
 }
 
 async function refreshTelemetry() {
-  try { const data = await jsonFetch('/api/drive/telemetry'); renderCameras(data); renderImu(data.imu); renderSensors(data); }
+  try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); renderCameras(data); renderImu(data.imu); renderSensors(data); }
   catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; }
 }
 
@@ -622,16 +761,34 @@ async function loadControls() {
 async function sendControl(name,value) { if(!armed) return; try{await jsonFetch('/api/drive/control',{method:'POST',headers:apiHeaders,body:JSON.stringify({name,value:Number(value)})});}catch(_){setArmed(false);} }
 
 $('#armConfirm').addEventListener('change', updateEnableButton);
-$('#enableButton').addEventListener('click', () => setArmed(true));
+$$('.mode-switch button').forEach(button =>
+  button.addEventListener('click', () => setMode(button.dataset.mode)));
+$('#enableButton').addEventListener('click', async () => {
+  if (mode === 'autonomous' && !await startAutonomous()) return;
+  setArmed(true);
+});
 $('#disableButton').addEventListener('click', () => setArmed(false));
 $('#stopButton').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
 $('#speed').addEventListener('input', () => { $('#speedValue').textContent=`${$('#speed').value}%`; sendDrive(); });
+/* Match how the robot reports a key: a single character is compared without
+   case, a named key such as ArrowUp is compared as-is. */
+const eventKey = event => event.key.length === 1 ? event.key.toLowerCase() : event.key;
+
 addEventListener('keydown', event => {
   if (!armed || ['INPUT','BUTTON'].includes(document.activeElement.tagName)) return;
-  const key=event.key.toLowerCase(); if(event.key===' '){event.preventDefault();$('#armConfirm').checked=false;setArmed(false);return;}
-  if(!Object.values(bindings).includes(key)||event.repeat)return; event.preventDefault(); heldKeys.add(key); paintKeys(); sendDrive();
+  const key = eventKey(event);
+  // The stop key works in either mode; it is the keyboard's big red button.
+  if (bindings.stop && key === bindings.stop) {
+    event.preventDefault(); $('#armConfirm').checked = false; setArmed(false); return;
+  }
+  if (mode !== 'teleop' || !boundKeys().has(key) || event.repeat) return;
+  event.preventDefault(); heldKeys.add(key); paintKeys(); sendDrive();
 });
-addEventListener('keyup', event => { const key=event.key.toLowerCase(); if(!Object.values(bindings).includes(key))return; heldKeys.delete(key); paintKeys(); sendDrive(); });
+addEventListener('keyup', event => {
+  const key = eventKey(event);
+  if (!boundKeys().has(key)) return;
+  heldKeys.delete(key); paintKeys(); sendDrive();
+});
 addEventListener('blur',()=>setArmed(false)); addEventListener('pagehide',stopAll); document.addEventListener('visibilitychange',()=>{if(document.hidden)setArmed(false);});
 addEventListener('gamepaddisconnected',()=>{padIndex=null;setArmed(false);});
 
@@ -639,9 +796,11 @@ renderKeys();
 loadControls();
 refreshStatus();
 refreshTelemetry();
+refreshAutonomous();
 readPad();
 setInterval(refreshStatus, 500);
 setInterval(refreshTelemetry, 250);
+setInterval(refreshAutonomous, 500);
 setInterval(readPad, 120);
 setInterval(sendDrive, 80);
 setInterval(() => { $('#localClock').textContent = new Date().toLocaleTimeString([], {hour12:false}); }, 1000);

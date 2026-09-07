@@ -47,10 +47,13 @@ stepped down on the power module itself, which is why there is no separate
 regulator in this list.
 
 > [!WARNING]
-> The PCA9685 **V+ terminal is rated 3.3–6 V**, and the servos it feeds top out
-> around 8.4 V. The 12 V battery rail must never reach it. Neither the 12 V rail
-> nor the servo V+ rail may touch a Raspberry Pi header pin; the Pi is powered
-> only through its USB-C input.
+> **V+ feeds every servo directly.** The board will take up to 12 V there, but
+> hobby servos want 5–6 V and an Axon Mini MK2 tops out at 8.4 V, so give V+ the
+> stepped-down rail rather than the battery. The **V+ header pin is the same net
+> as the screw terminal**, so it already carries the servo rail — wiring it to a
+> Pi 5 V pin would put that rail straight into the Pi. Neither the 12 V rail nor
+> the servo V+ rail may touch a Raspberry Pi header pin; the Pi is powered only
+> through its USB-C input.
 
 ---
 

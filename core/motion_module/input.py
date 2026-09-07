@@ -17,6 +17,9 @@ def available_input_gpios(config: ModuleConfig) -> tuple[int, ...]:
         for motor in config.motors
         for gpio in (motor.forward_gpio, motor.reverse_gpio)
     }
+    # The servo board's OE pin is an output MotionModule already drives.
+    if config.servos.output_enable_gpio is not None:
+        used.add(config.servos.output_enable_gpio)
     unavailable = used | RESERVED_ID_GPIOS | I2C_GPIOS | UART_GPIOS
     return tuple(sorted(VALID_BCM_GPIOS - unavailable))
 

@@ -54,6 +54,10 @@ class ServoConfig:
     minimum_pulse_us: int
     maximum_pulse_us: int
     channels: tuple[ServoSlot, ...] = ()
+    # BCM pin wired to the board's OE pad, or None when OE is left alone.
+    # OE is active low: driving it high cuts all 16 outputs in hardware,
+    # whatever the PCA9685's own registers happen to hold.
+    output_enable_gpio: int | None = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +187,23 @@ def _validate(config: ModuleConfig) -> ModuleConfig:
             used[gpio] = f"motor {motor.channel}"
 
     servo = config.servos
+    if servo.output_enable_gpio is not None:
+        gpio = servo.output_enable_gpio
+        if gpio not in VALID_BCM_GPIOS:
+            raise ConfigurationError(
+                f"servos.output_enable_gpio GPIO{gpio} is not a Pi header GPIO"
+            )
+        if gpio in RESERVED_ID_GPIOS:
+            raise ConfigurationError(f"GPIO{gpio} is reserved for the Raspberry Pi ID EEPROM bus")
+        if gpio in I2C_GPIOS:
+            raise ConfigurationError(
+                f"GPIO{gpio} carries the PCA9685 I2C bus and cannot also drive OE"
+            )
+        if gpio in used:
+            raise ConfigurationError(
+                f"GPIO{gpio} is shared by the servo board's OE pin and {used[gpio]}"
+            )
+        used[gpio] = "the servo board's OE pin"
     if servo.i2c_bus < 0:
         raise ConfigurationError("servos.i2c_bus must be zero or greater")
     if not 40 <= servo.frequency_hz <= 100:
@@ -224,6 +245,14 @@ def _validate(config: ModuleConfig) -> ModuleConfig:
             )
         names[key] = f"servo {slot.name}"
     return config
+
+
+def _optional_gpio(value: object, label: str) -> int | None:
+    """Read a BCM pin that a hardware map may leave out entirely."""
+
+    if value is None:
+        return None
+    return _as_int(value, label)
 
 
 def _servo_slots(data: object, addresses: tuple[int, ...]) -> tuple[ServoSlot, ...]:
@@ -300,6 +329,9 @@ def _config_from_mapping(data: object, source: Path) -> ModuleConfig:
                     servo_data["maximum_pulse_us"], "servos.maximum_pulse_us"
                 ),
                 channels=_servo_slots(servo_data.get("channels"), addresses),
+                output_enable_gpio=_optional_gpio(
+                    servo_data.get("output_enable_gpio"), "servos.output_enable_gpio"
+                ),
             ),
         )
     except (AttributeError, KeyError, TypeError, ValueError) as error:
@@ -464,6 +496,7 @@ def hardware_source(config: ModuleConfig) -> str:
             "addresses": list(config.servos.addresses),
             "minimum_pulse_us": config.servos.minimum_pulse_us,
             "maximum_pulse_us": config.servos.maximum_pulse_us,
+            "output_enable_gpio": config.servos.output_enable_gpio,
             "channels": {
                 index: {"name": slot.name, "board": slot.board, "channel": slot.channel}
                 for index, slot in enumerate(config.servos.channels)

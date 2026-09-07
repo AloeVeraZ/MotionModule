@@ -50,7 +50,7 @@
   /* Text */
   --text: #15171c;
   --muted: #505762;
-  --faint: #747c87;
+  --faint: #666d78;   /* 5.2:1 on a white card, 4.7:1 on the page ground */
 
   /* Brand */
   --accent: #2563eb;
@@ -131,7 +131,7 @@
 
     --text: #f4f6f8;
     --muted: #a6adb8;
-    --faint: #7d8591;
+    --faint: #8a929e;
 
     --accent: #7aa2ff;
     --accent-hover: #91b2ff;
@@ -201,7 +201,7 @@
 
   --text: #f4f6f8;
   --muted: #a6adb8;
-  --faint: #7d8591;
+  --faint: #8a929e;
 
   --accent: #7aa2ff;
   --accent-hover: #91b2ff;
@@ -1474,9 +1474,9 @@ kbd:empty { border: 0; background: transparent; }
             </div>
           </div>
 
-          <div class="section-heading spaced"><div><p class="eyebrow">02 / SERVO CONTROLLER</p><h2>Four logic wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C. Each servo plugs into a separate three-pin output on that board.</p></div></div>
+          <div class="section-heading spaced"><div><p class="eyebrow">02 / SERVO CONTROLLER</p><h2>Five wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C and holds its output-enable pin. All five wires sit in one run on header pins 1–9, leaving pins 8 and 10 free for the serial console. Each servo plugs into a separate three-pin output on the board.</p></div></div>
           <article class="card"><div class="panel-head"><h2>PCA9685 servo bus</h2><span id="servoSummary">Loading…</span></div><div class="panel-body stack">
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>SDA · SCL · 3.3 V · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
+            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>3.3 V · SDA · SCL · OE · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
             <p class="notice danger" id="servoBusNotice" hidden></p>
             <div id="servoBoardGuide" class="stack"></div>
             <div class="grid equal"><div><h3 class="subheading">Pi → servo-board logic</h3><div id="logicConnections" class="connection-list"></div></div><div><h3 class="subheading">Power &amp; other board terminals</h3><div id="servoConnections" class="connection-list"></div></div></div>
@@ -1570,6 +1570,14 @@ kbd:empty { border: 0; background: transparent; }
                 is, then send one position.</p>
               <div class="panel-body stack">
                 <p class="notice warn" id="servoTestMissing" hidden>Checking for a servo board&hellip;</p>
+                <div class="test-row" id="servoOutputEnable" hidden>
+                  <span>
+                    <strong>Servo outputs</strong>
+                    <small id="servoOutputEnableDetail">Checking the OE pin&hellip;</small>
+                  </span>
+                  <span id="servoOutputEnableState"></span>
+                  <button class="button" id="servoOutputEnableToggle" type="button">Disable</button>
+                </div>
                 <div id="servoTestControls" class="stack">
                 <label class="check">
                   <input id="servoSafe" type="checkbox">
@@ -2571,6 +2579,7 @@ function renderServos(robot) {
   }
 
   syncServoPicker(boards, simulated);
+  syncOutputEnable(robot.servo_output_enable);
 
   const summary = $('#servoSummary');
   if (summary) {
@@ -3345,6 +3354,41 @@ function renderServoPicker(data) {
 /* Only offer a board the robot has actually heard from. A configured address
    that never answers cannot be commanded, so the picker stays closed rather
    than pretending. */
+/* OE cuts all 16 outputs at the board, not over I2C, so it keeps working when
+   the bus does not. The row hides itself entirely on a robot whose hardware.py
+   leaves OE unwired, rather than offering a control that cannot do anything. */
+function syncOutputEnable(state) {
+  const row = $('#servoOutputEnable');
+  if (!row) return;
+  const wired = Boolean(state?.wired);
+  row.hidden = !wired;
+  if (!wired) return;
+  const enabled = state.enabled !== false;
+  replaceWith($('#servoOutputEnableState'), [
+    ioStatus(enabled ? 'ok' : 'bad', enabled ? 'Enabled' : 'Disabled'),
+  ]);
+  $('#servoOutputEnableDetail').textContent = enabled
+    ? `OE held low on GPIO${state.gpio}. All 16 outputs can be driven.`
+    : `OE driven high on GPIO${state.gpio}. Every output is cut at the board.`;
+  const toggle = $('#servoOutputEnableToggle');
+  toggle.textContent = enabled ? 'Disable' : 'Enable';
+  toggle.classList.toggle('primary', !enabled);
+  toggle.dataset.next = enabled ? 'false' : 'true';
+}
+
+$('#servoOutputEnableToggle')?.addEventListener('click', async event => {
+  const enabled = event.currentTarget.dataset.next === 'true';
+  try {
+    await jsonFetch('/api/servos/output-enable', {
+      method: 'POST', headers: apiHeaders, body: JSON.stringify({ enabled }),
+    });
+    toast(enabled ? 'Servo outputs enabled.' : 'Servo outputs cut at the OE pin.');
+    refreshStatus();
+  } catch (error) {
+    toast(error.message, true);
+  }
+});
+
 function syncServoPicker(boards, simulated) {
   const select = $('#servoBoard');
   if (!select) return;

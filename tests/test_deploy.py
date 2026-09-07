@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from motion_module.deploy import deploy_archive, deploy_project_files
+from motion_module.deploy import _check_python, deploy_archive, deploy_project_files
 from motion_module.errors import MotionModuleError
 
 
@@ -201,6 +201,39 @@ class DeployTests(unittest.TestCase):
                     root / "backups",
                     "AnotherName",
                 )
+
+    def robot_project(self) -> Path:
+        """A minimal deployable folder: robot.py and nothing else."""
+
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        project = Path(directory.name)
+        (project / "robot.py").write_text(
+            "def create_drive(module):\n    return module\n", encoding="utf-8"
+        )
+        return project
+
+    def test_an_autonomous_file_without_an_entry_point_is_caught_at_deploy(self):
+        """A silent loss of autonomous mode is worse than a refused upload."""
+
+        project = self.robot_project()
+        autonomous = project / "autonomous.py"
+
+        autonomous.write_text("SPEED = 0.3\n", encoding="utf-8")
+        with self.assertRaisesRegex(MotionModuleError, "create_autonomous"):
+            _check_python(project, strict=True)
+
+        autonomous.write_text(
+            "def create_autonomous(module, drive):\n    return None\n", encoding="utf-8"
+        )
+        _check_python(project, strict=True)
+
+        # A short routine may be a bare function instead of a class.
+        autonomous.write_text("def run(module, stop):\n    pass\n", encoding="utf-8")
+        _check_python(project, strict=True)
+
+    def test_a_project_with_no_autonomous_file_still_deploys(self):
+        _check_python(self.robot_project(), strict=True)
 
 
 if __name__ == "__main__":

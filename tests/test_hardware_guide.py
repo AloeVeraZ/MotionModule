@@ -22,8 +22,14 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertIn("UART", pins[9]["role"])
         self.assertIsNone(pins[0]["bcm"])
         self.assertEqual(pins[31]["bcm"], 12)
-        self.assertTrue(pins[5]["configured"])
-        self.assertIn("Servo controller", pins[5]["role"])
+        # The servo board is one unbroken run: VCC, SDA, SCL, OE, GND.
+        self.assertEqual(
+            [pins[physical - 1]["category"] for physical in (1, 3, 5, 7, 9)],
+            ["servo", "servo", "servo", "servo", "ground"],
+        )
+        self.assertTrue(all(pins[physical - 1]["configured"] for physical in (1, 3, 5, 7, 9)))
+        self.assertIn("OE", pins[6]["role"])
+        self.assertIn("Servo controller", pins[8]["role"])
 
     def test_header_follows_custom_pins_and_only_configured_driver_grounds(self):
         motor = replace(self.config.motors[0], name="intake", forward_gpio=14)
@@ -40,16 +46,30 @@ class HardwareGuideTests(unittest.TestCase):
     def test_disabled_servos_keep_i2c_reserved_without_claiming_active_wiring(self):
         config = replace(self.config, servos=replace(self.config.servos, enabled=False))
         pins = header_rows(config)
-        for physical in (1, 3, 5, 6):
+        for physical in (1, 3, 5):
             self.assertFalse(pins[physical - 1]["configured"])
             self.assertIn("disabled", pins[physical - 1]["role"])
+        # With servos off, OE and the servo ground go back to being spare pins.
+        self.assertFalse(pins[6]["configured"])
+        self.assertNotIn("OE", pins[6]["role"])
+        self.assertFalse(pins[8]["configured"])
         guide = hardware_guide(config)
         self.assertFalse(guide["capacity"]["servo_enabled"])
         self.assertFalse(guide["wiring"]["servo_boards"][0]["enabled"])
 
     def test_servo_headers_are_separate_from_four_pi_logic_connections(self):
         guide = hardware_guide(self.config)
-        self.assertEqual(len(guide["wiring"]["logic_connections"]), 4)
+        # VCC, SDA, SCL, OE, GND - the whole board, in header order.
+        labels = [item["label"].split(" · ")[0] for item in guide["wiring"]["logic_connections"]]
+        self.assertEqual(labels, ["VCC", "SDA", "SCL", "OE", "GND"])
+        froms = [item["from"] for item in guide["wiring"]["logic_connections"]]
+        self.assertEqual([route.split("physical ")[1].split(" ")[0] for route in froms],
+                         ["1", "3", "5", "7", "9"])
+        # V+ is the one board pin that must never reach the Pi.
+        plus = next(item for item in guide["wiring"]["servo_connections"]
+                    if item["label"].startswith("V+ · header"))
+        self.assertEqual(plus["from"].split(" — ")[0], "Nothing")
+        self.assertIn("same copper", plus["purpose"])
         outputs = guide["wiring"]["servo_boards"][0]["outputs"]
         self.assertEqual([output["channel"] for output in outputs], list(range(16)))
         for output in outputs:
@@ -57,7 +77,8 @@ class HardwareGuideTests(unittest.TestCase):
             self.assertIn("V+", output["power"])
             self.assertIn("GND", output["ground"])
         labels = {row["label"] for row in guide["wiring"]["servo_connections"]}
-        self.assertIn("OE · output enable", labels)
+        # OE moved to the Pi wires; what is left here is the board's own terminals.
+        self.assertNotIn("OE · output enable", labels)
         self.assertIn("A0–A5 · address pads", labels)
 
     def test_custom_board_addresses_and_partial_names_render_all_physical_outputs(self):

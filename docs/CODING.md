@@ -22,7 +22,8 @@ the Pi runs.
 MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
-├── dashboard.py   # optional: full Driver Station cameras and sensor telemetry
+├── autonomous.py  # optional: the routine the robot runs by itself
+├── dashboard.py   # optional: Driver Station cameras, sensors, key layout
 ├── giga_sensor_bridge.ino # optional: reusable Arduino GIGA USB firmware
 └── helpers.py     # optional: any other Python files you want
 ```
@@ -192,6 +193,25 @@ Each configured PCA9685 has channels 0–15. Verify the exact servo's voltage,
 pulse range, mode, and mechanical clearance before commanding it. Use Debug's
 guarded Servo Pulse Test for first movement.
 
+The board's OE pin cuts all sixteen outputs at once, in hardware, so it still
+works when the I2C bus does not:
+
+```python
+module.set_servo_outputs_enabled(False)   # every output off at the board
+module.set_servo_outputs_enabled(True)
+module.servo_outputs_enabled              # True while the outputs are live
+```
+
+`hardware.py` says which pin that is (`servos.output_enable_gpio`, GPIO4 by
+default) or `None` if OE is left unconnected — in which case disabling raises
+rather than pretending. The board pulls OE low on its own, so the outputs are
+enabled whenever the Pi is not driving the pin. It is an enable line, not a
+power cutoff.
+
+Releasing servos and disabling them are separate on purpose: the Driver Station
+sends a stop every time you leave the page, and cutting OE there would leave the
+robot's servos dead after an ordinary navigation.
+
 ## Add mechanisms and sensors
 
 Put robot-specific code in additional `.py` files inside the same folder:
@@ -232,6 +252,75 @@ It then stops outputs, backs up an existing same-named folder, replaces it,
 switches `~/MotionModule/active`, and restarts. If the new project later fails
 while importing a dependency, open Debug's service log and correct the local
 folder before deploying again.
+
+## Autonomous
+
+`autonomous.py` is optional. Without it the Driver Station simply has no
+autonomous mode; with it, an **AUTONOMOUS** button appears beside
+**TELEOPERATED** and **RUN AUTO** starts the routine.
+
+```python
+# autonomous.py
+import time
+
+
+class MyAuto:
+    duration_seconds = 15.0     # None for no limit
+
+    def __init__(self, module, drive):
+        self.module, self.drive = module, drive
+
+    def run(self, stop):
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            if stop.is_set():
+                return
+            self.drive.drive(1, 0, 0, speed=0.3)
+            time.sleep(0.05)
+
+
+def create_autonomous(module, drive):
+    return MyAuto(module, drive)
+```
+
+A routine short enough not to need a class can be a bare
+`run(module, stop)` function instead.
+
+Three things are worth knowing:
+
+- **An autonomous step is a loop, not one call and a sleep.** The motor
+  watchdog stops the robot when commands stop arriving, so keep sending while
+  the step lasts.
+- **`stop` is a `threading.Event`.** Check `stop.is_set()` inside every wait and
+  return as soon as it is set. Pressing DISABLE, the stop key, STOP, leaving the
+  page, or losing the link all set it — and all stop every output immediately,
+  whether or not your code has noticed yet.
+- **The run is bounded.** `duration_seconds` (30 s by default) cuts off a
+  routine that never returns; the page reports it as cut short. Set it to `None`
+  to remove the limit, and then only DISABLE ends a routine that loops forever.
+
+While autonomous is running, manual drive commands are refused rather than
+queued, so the driver and the routine can never fight over the motors.
+
+## The Driver Station's keyboard
+
+The competition console's key layout belongs to the robot, so it comes from
+`dashboard.py`:
+
+```python
+def driver_bindings(self):
+    return {"turn_left": "z", "turn_right": "c", "stop": "Escape"}
+```
+
+Return only what you want to move; anything left out keeps its default — W/S
+drive, A/D strafe, Q/E turn, space disables and stops. A single character is
+matched without case; a named key such as `ArrowUp` or `Escape` is matched as
+the browser reports it. If you bind a key another action already owns, that
+other action is left unassigned rather than one key meaning two things.
+
+This has nothing to do with the **Drive** debug page, which each browser remaps
+for itself and stores locally. Drive is for checking that a robot moves;
+the Driver Station is for driving it.
 
 ## Manual testing
 

@@ -27,9 +27,10 @@ class MecanumDashboard(TelemetryDashboard):
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
-        # GPIO4 is unused by the sample motor map. MotionModule refuses a pin
-        # automatically if hardware.py already assigned or reserved it.
-        self.forward_limit = module.digital_input(4, pull="up")
+        # GPIO17 is unused by the sample motor map. MotionModule refuses a pin
+        # automatically if hardware.py already assigned or reserved it -
+        # GPIO4, for instance, drives the servo board's OE pin.
+        self.forward_limit = module.digital_input(17, pull="up")
         # The GIGA is found automatically by its official USB VID/PID. Flash
         # giga_sensor_bridge.ino once; pin modes below are then sent from this
         # file after every USB reconnect.
@@ -40,6 +41,27 @@ class MecanumDashboard(TelemetryDashboard):
             ),
             GigaPin("D22", "Intake beam", kind="digital", pull="up"),
         ])
+
+    def driver_bindings(self):
+        """Which keys the Driver Station listens for on this robot.
+
+        This is the competition console's layout and belongs to the robot, so
+        it lives here rather than in a browser. It has nothing to do with the
+        Drive debug page, which each browser remaps for itself.
+
+        Return only what you want to move. Anything left out keeps its default:
+        W/S drive, A/D strafe, Q/E turn, space disables and stops.
+        """
+
+        return {
+            "forward": "w",
+            "back": "s",
+            "left": "a",
+            "right": "d",
+            "turn_left": "q",
+            "turn_right": "e",
+            "stop": " ",
+        }
 
     def cameras(self):
         # The Driver Station lets the operator show either camera or both.
@@ -77,7 +99,7 @@ class MecanumDashboard(TelemetryDashboard):
                 "Forward limit",
                 self.forward_limit.value if self.forward_limit.connected else None,
                 kind="digital",
-                channel="GPIO4 · pin 7",
+                channel="GPIO17 · pin 11",
                 connected=self.forward_limit.connected,
                 detail="Normally closed limit switch using the Pi pull-up",
             ),

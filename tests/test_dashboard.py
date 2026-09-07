@@ -25,6 +25,7 @@ class FakeModule:
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
         self.stopped = False
         self._servos = MockServoController(self.config.servos)
+        self.servo_outputs_enabled = True
 
     def set_motors(self, outputs):
         for reference, value in outputs.items():
@@ -33,6 +34,9 @@ class FakeModule:
     def stop_all(self):
         self.stopped = True
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
+
+    def set_servo_outputs_enabled(self, enabled):
+        self.servo_outputs_enabled = bool(enabled)
 
     def refresh_servo_boards(self, *, interval=2.0):
         self._servos.probe()
@@ -262,7 +266,7 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(all(pin["detail"] for pin in data["header"]))
 
     def test_hardware_download_preserves_live_configuration_when_source_differs(self):
-        motor = replace(self.module.config.motors[0], name="custom_intake", forward_gpio=4)
+        motor = replace(self.module.config.motors[0], name="custom_intake", forward_gpio=17)
         self.module.config = replace(self.module.config, motors=(motor,))
         response = self.client.get("/api/hardware-file")
         self.assertEqual(response.status_code, 200)
@@ -517,6 +521,97 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(self.module.outputs[5], -0.15)
+
+    def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
+        status = self.client.get("/api/autonomous").get_json()
+        self.assertFalse(status["configured"])
+        self.assertEqual(status["state"], "idle")
+        refused = self.client.post("/api/autonomous/start", json={"confirmed": True},
+                                   headers=self.headers)
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("no autonomous.py", refused.get_json()["error"])
+
+    def test_autonomous_runs_blocks_manual_driving_and_is_ended_by_stop(self):
+        import threading
+        import time
+
+        released = threading.Event()
+
+        class Routine:
+            duration_seconds = 5
+
+            def run(self, stop):
+                released.set()
+                while not stop.is_set():
+                    time.sleep(0.01)
+
+        module = FakeModule()
+        app = create_app(module, MecanumDrive(module), FakeNetwork(),
+                         project_name="Mecanum", terminal_manager=FakeTerminal(),
+                         autonomous_routine=Routine())
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+
+        self.assertTrue(client.get("/api/autonomous").get_json()["configured"])
+        # Enabling is deliberate, the same as every other moving control.
+        unconfirmed = client.post("/api/autonomous/start", json={}, headers=headers)
+        self.assertEqual(unconfirmed.status_code, 400)
+        self.assertEqual(client.post("/api/autonomous/start",
+                                     json={"confirmed": True}).status_code, 403)
+
+        started = client.post("/api/autonomous/start", json={"confirmed": True}, headers=headers)
+        self.assertEqual(started.status_code, 200)
+        self.assertTrue(released.wait(2))
+        self.assertEqual(client.get("/api/autonomous").get_json()["state"], "running")
+
+        # The driver cannot fight the routine for the motors.
+        manual = client.post("/api/drive", json={"sequence": 5, "forward": 1},
+                             headers=headers)
+        self.assertEqual(manual.status_code, 409)
+        self.assertIn("autonomous", manual.get_json()["error"])
+
+        # STOP ends the routine, not just the outputs it was writing.
+        self.assertEqual(client.post("/api/stop").status_code, 200)
+        self.assertEqual(client.get("/api/autonomous").get_json()["state"], "stopped")
+        self.assertTrue(module.stopped)
+        self.assertEqual(client.post("/api/drive", json={"sequence": 6, "forward": 0},
+                                     headers=headers).status_code, 200)
+
+    def test_output_enable_endpoint_disables_and_re_enables_the_servo_outputs(self):
+        self.client.post("/api/servos/set", json={
+            "board": 0, "channel": 3, "profile": "generic_180_position",
+            "value": 40, "confirmed": True,
+        }, headers=self.headers)
+
+        off = self.client.post("/api/servos/output-enable", json={"enabled": False},
+                               headers=self.headers)
+        self.assertEqual(off.status_code, 200)
+        self.assertFalse(off.get_json()["enabled"])
+        # Cutting OE also clears what the page believed was being held.
+        self.assertEqual(self.client.get("/api/status").get_json()["robot"]["servo_commands"], {})
+
+        refused = self.client.post("/api/servos/set", json={
+            "board": 0, "channel": 3, "profile": "generic_180_position",
+            "value": 40, "confirmed": True,
+        }, headers=self.headers)
+        self.assertEqual(refused.status_code, 409)
+        self.assertIn("OE", refused.get_json()["error"])
+
+        on = self.client.post("/api/servos/output-enable", json={"enabled": True},
+                              headers=self.headers)
+        self.assertTrue(on.get_json()["enabled"])
+        allowed = self.client.post("/api/servos/set", json={
+            "board": 0, "channel": 3, "profile": "generic_180_position",
+            "value": 40, "confirmed": True,
+        }, headers=self.headers)
+        self.assertEqual(allowed.status_code, 200)
+
+    def test_output_enable_endpoint_needs_a_session_and_a_boolean(self):
+        self.assertEqual(
+            self.client.post("/api/servos/output-enable", json={"enabled": False}).status_code, 403)
+        self.assertEqual(
+            self.client.post("/api/servos/output-enable", json={"enabled": "off"},
+                             headers=self.headers).status_code, 400)
 
     def test_servo_test_and_release_are_guarded(self):
         response = self.client.post(

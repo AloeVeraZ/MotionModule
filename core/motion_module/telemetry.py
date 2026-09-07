@@ -17,6 +17,20 @@ from urllib.parse import urlsplit
 MAX_CAMERAS = 2
 MAX_SENSORS = 20
 MAX_USB_CONTROLLERS = 4
+
+# The Driver Station's keyboard layout. These seven actions are fixed because
+# drive() takes exactly three axes plus a stop; a project chooses which key
+# sits on each of them, not what the actions are.
+DRIVER_ACTIONS = ("forward", "back", "left", "right", "turn_left", "turn_right", "stop")
+DEFAULT_DRIVER_BINDINGS = {
+    "forward": "w",
+    "back": "s",
+    "left": "a",
+    "right": "d",
+    "turn_left": "q",
+    "turn_right": "e",
+    "stop": " ",
+}
 SENSOR_KINDS = {"analog", "digital", "text"}
 STATUSES = {"ok", "warning", "fault", "offline", "unknown"}
 
@@ -100,6 +114,17 @@ class TelemetryDashboard:
     def usb_controllers(self):
         return ()
 
+    def driver_bindings(self):
+        """Keys the Driver Station listens for, as {action: key}.
+
+        Return only the actions you want to move; anything you leave out keeps
+        its default (WASD to drive and strafe, Q/E to turn, space to stop).
+        This is the competition console's own layout and has nothing to do with
+        the Drive debug page, which each browser remaps for itself.
+        """
+
+        return {}
+
     def snapshot(self) -> dict[str, Any]:
         pi_inputs = self.pi_inputs()
         return {
@@ -107,6 +132,7 @@ class TelemetryDashboard:
             "imu": self.imu(),
             "pi_inputs": pi_inputs,
             "usb_controllers": self.usb_controllers(),
+            "driver_bindings": self.driver_bindings(),
             # Kept for projects and clients written for MotionModule 0.10.
             "sensors": pi_inputs,
         }
@@ -118,6 +144,7 @@ def empty_snapshot() -> dict[str, Any]:
         "imu": None,
         "pi_inputs": [],
         "usb_controllers": [],
+        "driver_bindings": dict(DEFAULT_DRIVER_BINDINGS),
         "sensors": [],
     }
 
@@ -289,6 +316,45 @@ def _usb_controller(value: Any, index: int) -> dict[str, Any] | None:
     }
 
 
+def _driver_bindings(value: Any) -> dict[str, str]:
+    """Fill in the defaults around whatever the project chose to change.
+
+    Two passes, because one key must never mean two things: what the project
+    asked for is placed first, then each remaining action takes its default if
+    that key is still free. An action whose default was claimed by someone
+    else is left out entirely rather than silently sharing a key - the Driver
+    Station shows it as unassigned, which is at least true.
+    """
+
+    chosen = _mapping(value) or {}
+    bindings: dict[str, str] = {}
+    taken: set[str] = set()
+    for action in DRIVER_ACTIONS:
+        if action not in chosen:
+            continue
+        key = _text(chosen.get(action), 20)
+        # A single character is compared case-insensitively; a named key such
+        # as "Space" or "ArrowUp" is passed through as the browser reports it.
+        # Anything else is not a key the browser will ever send.
+        if len(key) == 1:
+            key = key.casefold()
+        elif not key.isalpha():
+            continue
+        if key in taken:
+            continue
+        taken.add(key)
+        bindings[action] = key
+    for action in DRIVER_ACTIONS:
+        if action in bindings:
+            continue
+        key = DEFAULT_DRIVER_BINDINGS[action]
+        if key in taken:
+            continue
+        taken.add(key)
+        bindings[action] = key
+    return bindings
+
+
 def normalize_snapshot(value: Any) -> dict[str, Any]:
     """Return a bounded, JSON-safe Driver Station snapshot."""
 
@@ -324,6 +390,7 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
         "imu": _imu(item.get("imu")),
         "pi_inputs": sensors,
         "usb_controllers": controllers,
+        "driver_bindings": _driver_bindings(item.get("driver_bindings")),
         "sensors": sensors,
     }
 

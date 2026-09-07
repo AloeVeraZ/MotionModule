@@ -35,6 +35,7 @@ from .deploy import (
     activate_project,
     deploy_project_files,
 )
+from .autonomous import AutonomousRunner, load_autonomous
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
 from .hardware_guide import hardware_guide
@@ -230,6 +231,12 @@ def load_drive(module, project_path: Path | None = None):
     return drive
 
 
+def load_autonomous_routine(module, drive, project_path: Path | None = None):
+    """Auto-load an optional autonomous.py beside the active robot.py file."""
+
+    return load_autonomous(module, drive, project_path)
+
+
 def load_dashboard_telemetry(module, drive, project_path: Path | None = None):
     """Auto-load an optional dashboard.py beside the active robot.py file."""
 
@@ -262,6 +269,8 @@ def create_app(
     restart_callback=None,
     config_path: str | os.PathLike[str] | None = None,
     dashboard_telemetry=None,
+    autonomous_routine=None,
+    autonomous_error: str = "",
 ) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
@@ -291,6 +300,16 @@ def create_app(
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
         return bool(provided) and secrets.compare_digest(provided, dashboard_token)
+
+    # The routine's own thread must be able to stop the robot without waiting
+    # for a request, so it gets the same stop path the STOP button uses.
+    def halt_for_autonomous() -> None:
+        with command_lock:
+            stop_outputs()
+
+    autonomous = AutonomousRunner(
+        module, autonomous_routine, halt_for_autonomous, autonomous_error
+    )
 
     def discovered_sensor_controllers() -> list[dict]:
         """Rate-limit sysfs scans while still noticing hot-plugged boards."""
@@ -551,6 +570,11 @@ def create_app(
         nonlocal last_sequence
         if not authorized():
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        if autonomous.running:
+            return jsonify({
+                "ok": False,
+                "error": "The autonomous routine is driving. Disable it before taking manual control.",
+            }), 409
         body = request.get_json(silent=True) or {}
         try:
             sequence = int(body.get("sequence", -1))
@@ -699,6 +723,10 @@ def create_app(
 
     @app.post("/api/stop")
     def stop_command():
+        # Ends the routine and stops the outputs. Called outside command_lock:
+        # the runner reaches stop_outputs() through its own lock acquisition,
+        # and command_lock is not reentrant.
+        autonomous.stop()
         with command_lock:
             try:
                 stop_outputs()
@@ -744,6 +772,59 @@ def create_app(
             except (MotionModuleError, ValueError):
                 pass
 
+    @app.get("/api/autonomous")
+    def autonomous_status():
+        return jsonify({"ok": True, "project": project_name, **autonomous.status()})
+
+    @app.post("/api/autonomous/start")
+    def autonomous_start():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        body = request.get_json(silent=True) or {}
+        if body.get("confirmed") is not True:
+            return jsonify({
+                "ok": False,
+                "error": "Confirm the area is clear and the cutoff is in reach first",
+            }), 400
+        try:
+            autonomous.start()
+        except RuntimeError as error:
+            return jsonify({"ok": False, "error": str(error)}), 409
+        return jsonify({"ok": True, **autonomous.status()})
+
+    @app.post("/api/autonomous/stop")
+    def autonomous_stop():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        autonomous.stop()
+        return jsonify({"ok": True, **autonomous.status()})
+
+    @app.post("/api/servos/output-enable")
+    def servo_output_enable():
+        """Enable or disable all servo outputs at the board's OE pin."""
+
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body.get("enabled"), bool):
+            return jsonify({"ok": False, "error": "Send enabled: true or enabled: false"}), 400
+        enabled = body["enabled"]
+        try:
+            with command_lock:
+                if not enabled:
+                    # Cutting the outputs should also forget what the page
+                    # thinks is being held, or the two disagree.
+                    module.release_all_servos()
+                    with servo_lock:
+                        for timer in servo_timers.values():
+                            timer.cancel()
+                        servo_timers.clear()
+                        servo_commands.clear()
+                module.set_servo_outputs_enabled(enabled)
+        except MotionModuleError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        return jsonify({"ok": True, "enabled": module.servo_outputs_enabled})
+
     @app.post("/api/servos/set")
     def set_servo():
         if not authorized():
@@ -758,6 +839,11 @@ def create_app(
             profile_id = str(body.get("profile", "generic_180_position"))
             value = float(body.get("angle", 90) if legacy_angle else body.get("value"))
             profile, pulse_us = servo_profile_command(module.config.servos, profile_id, value)
+            if not module.servo_outputs_enabled:
+                return jsonify({
+                    "ok": False,
+                    "error": "Servo outputs are disabled at the board's OE pin. Enable them first.",
+                }), 409
             with command_lock:
                 servo = module.servo(channel=channel, board=board)
                 if legacy_angle:
@@ -1020,6 +1106,14 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
     workspace = project_path.parent.parent.parent if project_path else None
     drive = load_drive(module, project_path)
     dashboard_telemetry = load_dashboard_telemetry(module, drive, project_path)
+    # autonomous.py is optional, so a broken one loses the autonomous mode
+    # rather than the whole dashboard. The reason shows up on the page.
+    autonomous_routine, autonomous_error = None, ""
+    try:
+        autonomous_routine = load_autonomous_routine(module, drive, project_path)
+    except Exception as error:
+        autonomous_error = f"autonomous.py could not be loaded: {error}"
+        print(autonomous_error)
     app = create_app(
         module,
         drive,
@@ -1028,6 +1122,8 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         restart_callback=stop_event.set,
         config_path=resolve_config_path(project=project_path.parent if project_path else None),
         dashboard_telemetry=dashboard_telemetry,
+        autonomous_routine=autonomous_routine,
+        autonomous_error=autonomous_error,
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.

@@ -137,6 +137,23 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
             raise MotionModuleError(
                 "dashboard.py must define create_dashboard(module, drive)"
             )
+    # autonomous.py is optional too, but a file that is present and has no
+    # entry point silently loses the robot its autonomous mode. Say so now,
+    # while the person who wrote it is still looking at the deploy result.
+    autonomous = project / "autonomous.py"
+    if autonomous.is_file():
+        try:
+            with tokenize.open(autonomous) as source_file:
+                autonomous_tree = ast.parse(source_file.read(), filename=str(autonomous))
+        except (OSError, SyntaxError, UnicodeError) as error:
+            raise MotionModuleError(f"Could not validate autonomous.py: {error}") from error
+        if not any(
+            isinstance(node, ast.FunctionDef) and node.name in {"create_autonomous", "run"}
+            for node in autonomous_tree.body
+        ):
+            raise MotionModuleError(
+                "autonomous.py must define create_autonomous(module, drive) or run(module, stop)"
+            )
     # hardware.py is optional: a folder without one runs on the pin map that
     # ships with MotionModule. A folder that has one must be valid.
     if (project / PROJECT_CONFIG_NAME).is_file():

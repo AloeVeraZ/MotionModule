@@ -83,18 +83,58 @@ boot, a 10 kΩ pull-down from that input to signal ground holds it low.
 ## PCA9685 servo controller
 
 The servo board is a separate I2C device and shares no motor GPIO. Its 16
-servo outputs live **on the PCA9685 board**, not on 16 Pi pins. Only four
-Pi connections are needed: SDA, SCL, 3.3 V logic power and logic ground.
-Two additional supply connections deliver the servo power.
+servo outputs live **on the PCA9685 board**, not on 16 Pi pins. Five Pi wires
+run to it, and they sit in one unbroken run down the top of the left column —
+pins 1, 3, 5, 7, 9 — so the whole board is a single bundle. Pins 8 and 10 are
+left free for the serial console.
 
-| PCA9685 connection | Raspberry Pi / supply connection |
-| --- | --- |
-| SDA | physical pin 3 / GPIO2 |
-| SCL | physical pin 5 / GPIO3 |
-| VCC (logic) | physical pin 1 / 3.3 V |
-| GND | physical pin 6 / ground |
-| V+ screw terminal | separate regulated servo supply positive |
-| V+ screw terminal GND | servo supply negative and common logic ground |
+| PCA9685 connection | Raspberry Pi / supply connection | What it is for |
+| --- | --- | --- |
+| VCC (logic) | physical pin 1 / 3.3 V | Powers the chip only, about 10 mA |
+| SDA | physical pin 3 / GPIO2 | Commands, and the answer that proves the board is present |
+| SCL | physical pin 5 / GPIO3 | Clocks that data |
+| OE | physical pin 7 / GPIO4 | Enables and disables all 16 outputs |
+| GND | physical pin 9 / ground | Reference for SDA, SCL and OE |
+| V+ screw terminal | separate regulated servo supply positive | The only supply that moves servos |
+| V+ screw terminal GND | servo supply negative and common logic ground | Returns servo current to its own supply |
+| **V+ header pin** | **nothing** | Same copper as the screw terminal — see below |
+
+### OE, the output enable pin
+
+OE is active low. MotionModule holds it low so the outputs are enabled, and
+drives it high to cut all sixteen at once. Because OE is a wire and not an I2C
+register, that cut still works if the bus has stopped answering.
+
+The board pulls OE low by itself, so the outputs are enabled any time the Pi is
+not driving that pin — including through boot, before Linux claims GPIO4. That
+is safe, because the PCA9685 powers up with every channel off, but it does mean
+**OE is an enable line, not a power cutoff.** Keep the physical cutoff.
+
+Set `servos.output_enable_gpio` in `hardware.py` to move it, or to `None` if you
+leave OE unconnected. From robot code:
+
+```python
+module.set_servo_outputs_enabled(False)   # cut all 16 outputs at the board
+module.set_servo_outputs_enabled(True)    # allow them again
+module.servo_outputs_enabled              # what the pin is doing right now
+```
+
+### Do not wire the V+ header pin to the Pi
+
+The V+ header pin and the two-screw power terminal are the same net on this
+board — Adafruit's own guide says you can "inject power from the 2-pin terminal
+block", meaning the pin already carries whatever the terminal is fed. It exists
+to pass that rail to a second board.
+
+So if the servo rail is on the terminal and you also run the V+ header pin to a
+Pi 5 V pin, you have connected the servo supply directly to the Pi's 5 V rail.
+With a 12 V rail on that terminal, 12 V lands on the Pi. Leave it disconnected.
+
+Adafruit rates the board itself for up to 12 V on V+ ("you should provide
+5-6VDC if you are using servos … if you have to, you can go higher to 12VDC"),
+but that voltage reaches the middle contact of all sixteen outputs, so every
+servo plugged in sees it. Hobby servos want 5–6 V and an Axon Mini MK2 tops out
+at 8.4 V. Feed V+ the stepped-down rail, not the battery.
 
 ### The 16 servo output headers
 

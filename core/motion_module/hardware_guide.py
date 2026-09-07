@@ -7,7 +7,7 @@ This describes configured wiring, never an inventory of detected motors/servos.
 
 from __future__ import annotations
 
-from .pinout import motor_rows, servo_rows
+from .pinout import PHYSICAL_BY_BCM, motor_rows, servo_rows
 
 
 # CAD for the controller stack and the power module lives in the repository.
@@ -96,25 +96,32 @@ def hardware_guide(config) -> dict:
     motors = motor_rows(config)
     slots = {(row["board"], row["channel"]): row["name"] for row in servo_rows(config)}
     servo = config.servos
+    oe_gpio = servo.output_enable_gpio
+    oe_physical = PHYSICAL_BY_BCM.get(oe_gpio) if oe_gpio is not None else None
     logic_connections = [
         {"label": "VCC · logic power", "from": "Pi physical 1 / 3.3 V", "to": "PCA9685 VCC",
          "purpose": "Powers only the PCA9685 chip, about 10 mA. It does not power a single servo."},
-        {"label": "GND · shared reference", "from": "Pi physical 6 / GND", "to": "PCA9685 GND",
-         "purpose": "The one ground wire the Pi needs. It gives SDA and SCL something to measure against, and ties the Pi to the same reference as the servo supply."},
         {"label": "SDA · data", "from": "Pi physical 3 / GPIO2", "to": "PCA9685 SDA",
-         "purpose": "Carries commands for all 16 outputs. Fixed by the Pi's hardware I2C; it cannot be moved to another pin."},
+         "purpose": "Carries commands for all 16 outputs, and is how the dashboard knows whether the board is there at all: an answer on this bus is what turns the servo status green. Fixed by the Pi's hardware I2C; it cannot be moved."},
         {"label": "SCL · clock", "from": "Pi physical 5 / GPIO3", "to": "PCA9685 SCL",
          "purpose": "Times that data. Also fixed by the Pi's hardware I2C, and shared by every board on the bus."},
     ]
+    if oe_physical is not None:
+        logic_connections.append(
+            {"label": "OE · output enable", "from": f"Pi physical {oe_physical} / GPIO{oe_gpio}", "to": "PCA9685 OE",
+             "purpose": "Enables and disables all 16 outputs at once. Active low: MotionModule holds it low to enable, and drives it high to cut every output in hardware, which still works if the I2C bus has stopped answering. The board pulls OE low by itself, so the outputs are enabled whenever the Pi is not driving this pin - it is an enable line, not the power cutoff."}
+        )
+    logic_connections.append(
+        {"label": "GND · shared reference", "from": "Pi physical 9 / GND", "to": "PCA9685 GND",
+         "purpose": "The one ground wire the Pi needs, and it closes the run: pins 1, 3, 5, 7 and 9 are five in a row down the left column, so this is a single bundle. It gives SDA, SCL and OE something to measure against. Pins 8 and 10 stay free for the serial console."}
+    )
     servo_connections = [
         {"label": "V+ · screw terminal", "from": "Servo regulator positive", "to": "PCA9685 V+ terminal",
-         "purpose": "The only supply that moves servos, feeding the middle contact of all 16 outputs. This terminal is rated 3.3-6 V and the servos on it top out near 8.4 V, so it takes the stepped-down rail, never the 12 V battery."},
+         "purpose": "The only supply that moves servos, feeding the middle contact of all 16 outputs. The board itself will take up to 12 V here, but every servo plugged into it sees this voltage directly, and hobby servos want 5-6 V while an Axon Mini MK2 tops out at 8.4 V. Give it the stepped-down rail, not the 12 V battery."},
         {"label": "GND · screw terminal", "from": "Servo regulator negative", "to": "PCA9685 power-terminal GND",
          "purpose": "Returns servo current to its own supply. Join it to the common ground point, never through the Pi's ground wire."},
-        {"label": "V+ · header pin", "from": "Nothing", "to": "PCA9685 V+ header pin",
-         "purpose": "Leave this one alone. It is the same electrical net as the screw terminal, offered for chaining. Connecting it to a Pi 5 V pin would push servo current through the Pi."},
-        {"label": "OE · output enable", "from": "Nothing", "to": "PCA9685 OE",
-         "purpose": "Active low, and the board holds it low by itself, so MotionModule assigns no GPIO to it. Leave it unconnected; do not treat it as a power cutoff."},
+        {"label": "V+ · header pin", "from": "Nothing — already fed by the screw terminal", "to": "PCA9685 V+ header pin",
+         "purpose": "This is the one pin on the board that must not go to the Pi. It is the same copper as the screw terminal, so the servo rail is already sitting on it; the pin exists to pass that rail on to another board. Wiring it to a Pi 5 V pin would connect the servo supply - 12 V in this build - straight to the Pi's 5 V rail."},
         {"label": "A0–A5 · address pads", "from": "Solder pads on the board", "to": "Its I2C address",
          "purpose": "All open gives 0x40, which is what hardware.py expects. Only close pads if you add a second board that needs a different address."},
         {"label": "Side headers · chaining", "from": "This board's SDA / SCL / VCC / GND", "to": "A second board with a unique address",

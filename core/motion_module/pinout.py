@@ -58,8 +58,8 @@ HEADER_FUNCTIONS = {
 }
 
 GROUND_ROLES = {
-    6: "Servo controller logic ground",
-    9: "Available signal ground",
+    6: "Available signal ground",
+    9: "Servo controller logic ground",
     14: "Driver 4 signal ground",
     20: "Available signal ground",
     25: "Driver 3 signal ground",
@@ -115,19 +115,32 @@ def header_rows(config) -> list[dict]:
         3: "I2C data to PCA9685 SDA. All configured servo boards share this wire. Reserved for I2C even with servos disabled.",
         4: "Pi 5 V power rail. Not used by the reference harness; never connect the motor battery or servo V+ here.",
         5: "I2C clock to PCA9685 SCL. All configured servo boards share this wire. Reserved for I2C even with servos disabled.",
-        6: "Connect to PCA9685 logic GND. The servo supply negative joins common ground separately; its load current must not return through the Pi.",
+        9: "Connect to PCA9685 GND. This completes the five-wire bundle on pins 1-9 and gives SDA and SCL a reference. The servo supply negative joins common ground separately; its load current must not return through the Pi.",
         8: "GPIO14 is the UART TX signal. The default harness leaves it disconnected for serial access; no sensor is configured here.",
         10: "GPIO15 is the UART RX signal. The default harness leaves it disconnected for serial access; no sensor is configured here.",
         17: "Unused 3.3 V logic supply. Not a motor or servo power source.",
         27: "GPIO0 / ID_SD is the Raspberry Pi HAT identification EEPROM data pin. MotionModule rejects motor assignments here.",
         28: "GPIO1 / ID_SC is the Raspberry Pi HAT identification EEPROM clock pin. MotionModule rejects motor assignments here.",
     }
-    configured_pins = {1, 3, 5, 6} if enabled else set()
+    configured_pins = {1, 3, 5, 9} if enabled else set()
+    oe_gpio = config.servos.output_enable_gpio if enabled else None
+    if oe_gpio is not None:
+        oe_physical = PHYSICAL_BY_BCM.get(oe_gpio)
+        if oe_physical is not None:
+            roles[oe_physical] = (f"PCA9685 OE (output enable){servo_state}", "servo")
+            details[oe_physical] = (
+                f"GPIO{oe_gpio} drives the servo board's OE pad. OE is active low: MotionModule "
+                "holds it low to enable all 16 outputs and drives it high to cut them, which works "
+                "even if the I2C bus stops answering. The board pulls OE low on its own, so the "
+                "outputs are enabled whenever the Pi is not driving this pin."
+            )
+            configured_pins.add(oe_physical)
     for physical, function in HEADER_FUNCTIONS.items():
         if function == "GND":
             roles[physical] = ("Available signal ground — not connected in reference harness", "ground")
             details.setdefault(physical, "Pi signal ground, currently unused. High-current motor and servo returns go to the power distribution ground.")
-    roles[6] = (f"Servo controller logic ground{servo_state}", "ground")
+    if enabled:
+        roles[9] = (f"Servo controller logic ground{servo_state}", "ground")
     for driver in active_drivers:
         physical = DRIVER_GROUNDS[driver]
         roles[physical] = (f"Driver {driver} signal ground", "ground")

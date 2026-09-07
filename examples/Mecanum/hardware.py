@@ -51,6 +51,12 @@ HARDWARE = {
         "i2c_bus": 1,
         "frequency_hz": 50,
         "addresses": [0x40],
+        # OE (output enable) on the servo board, wired to physical pin 7.
+        # Active low: MotionModule holds it low to enable the outputs and
+        # drives it high to cut all 16 of them at once, without needing the
+        # I2C bus to still be working. Set this to None if you leave OE
+        # unconnected; the board pulls it low on its own.
+        "output_enable_gpio": 4,
         "minimum_pulse_us": 500,
         "maximum_pulse_us": 2500,
         "channels": {

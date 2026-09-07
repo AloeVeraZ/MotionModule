@@ -47,6 +47,13 @@ class MotionModule:
             self._servos = MockServoController(self.config.servos)
         else:
             self._servos = PCA9685Controller(self.config.servos)
+        # OE is a plain Pi output, so MotionModule owns it rather than the I2C
+        # class: cutting the outputs has to keep working when the bus does not.
+        self._oe_gpio = self.config.servos.output_enable_gpio
+        self._servo_outputs_enabled = True
+        if self._oe_gpio is not None:
+            self.gpio.claim_output(self._oe_gpio)
+            self._write_output_enable(True)
         self._watchdog_thread = threading.Thread(
             target=self._watchdog_loop, name="motionmodule-watchdog", daemon=True
         )
@@ -89,6 +96,40 @@ class MotionModule:
             raise ValueError("Digital input pull must be 'none', 'up', or 'down'")
         self.gpio.claim_input(gpio, pull)
         return DigitalInput(self.gpio, gpio, pull)
+
+    @property
+    def servo_outputs_enabled(self) -> bool:
+        """Whether the servo board's outputs are currently enabled at OE."""
+
+        return self._servo_outputs_enabled
+
+    def set_servo_outputs_enabled(self, enabled: bool) -> None:
+        """Enable or disable all 16 servo outputs at the board's OE pin.
+
+        OE is active low and cuts the outputs in hardware, so it works even if
+        the I2C bus has stopped answering. It is an enable line, not a power
+        cutoff: the servo rail stays live, and a board with OE unconnected
+        pulls it low and stays enabled.
+        """
+
+        enabled = bool(enabled)
+        with self._lock:
+            if self._closed:
+                return
+            if self._oe_gpio is None:
+                if not enabled:
+                    raise ConfigurationError(
+                        "No servos.output_enable_gpio is set in hardware.py, so the servo "
+                        "board's OE pin is not wired to the Pi and cannot disable the outputs"
+                    )
+                return
+            self._write_output_enable(enabled)
+
+    def _write_output_enable(self, enabled: bool) -> None:
+        """OE low enables the outputs; OE high disables them."""
+
+        self.gpio.write(self._oe_gpio, not enabled)
+        self._servo_outputs_enabled = enabled
 
     def _resolve_motor(self, reference: int | str) -> int:
         try:
@@ -170,7 +211,11 @@ class MotionModule:
         """Stop driving every servo output.
 
         A released servo stops holding its position, so a loaded mechanism can
-        fall. ``stop_all`` deliberately does not do this; the dashboard STOP
+        fall. This deliberately leaves the OE line alone: the dashboard sends a
+        stop on every page hide, and cutting the outputs there would leave them
+        disabled after an ordinary navigation. Use
+        ``set_servo_outputs_enabled(False)`` when you mean to cut them.
+        ``stop_all`` deliberately does not release servos; the dashboard STOP
         button does, so that what the page shows matches what the wires carry.
         """
 
@@ -222,6 +267,11 @@ class MotionModule:
                     f"{board}:{channel}": {"pulse_us": pulse_us}
                     for (board, channel), pulse_us in getattr(self._servos, "pulses", {}).items()
                 },
+                "servo_output_enable": {
+                    "gpio": self._oe_gpio,
+                    "wired": self._oe_gpio is not None,
+                    "enabled": self._servo_outputs_enabled,
+                },
                 "servo_boards": [
                     {
                         "index": index,
@@ -241,6 +291,11 @@ class MotionModule:
             self._closed = True
             self._watchdog_armed = False
             self._apply_all_zero()
+            if self._oe_gpio is not None:
+                try:
+                    self._write_output_enable(False)
+                except MotionModuleError:
+                    pass
             self._servos.close()
             self.gpio.close()
         self._stop_event.set()

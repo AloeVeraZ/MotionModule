@@ -99,16 +99,35 @@ HARDWARE = {
     # ------------------------------------------------------------------
     # Sixteen servo outputs on one PCA9685 board.
     #
-    # The board talks to the Pi over I2C, not over motor GPIO:
-    #     SDA -> pin 3 / GPIO2      VCC (logic) -> pin 1 / 3.3 V
-    #     SCL -> pin 5 / GPIO3      GND         -> pin 6
-    #     V+  -> its own regulated 5-6 V servo supply, never a Pi pin.
+    # Five wires run from the Pi to the board, and they sit in one unbroken
+    # run down the top of the header's left column, so it is a single bundle:
+    #
+    #     pin 1 / 3.3 V    -> VCC   logic power for the chip only (~10 mA)
+    #     pin 3 / GPIO2    -> SDA   commands for all 16 outputs
+    #     pin 5 / GPIO3    -> SCL   the clock those commands ride on
+    #     pin 7 / GPIO4    -> OE    output enable, active low (see below)
+    #     pin 9 / GND      -> GND   the reference SDA and SCL are measured against
+    #
+    # Pins 8 and 10 are the serial console and are deliberately left alone.
+    #
+    # V+ NEVER TOUCHES THE PI. The V+ header pin and the two-screw power
+    # terminal are the same copper on this board, so the servo supply is
+    # already present on that pin. Wiring it to a Pi 5 V pin would push the
+    # whole servo rail - 12 V, in this build - straight into the Pi.
+    # Feed V+ from its own regulated supply and join the negatives at the
+    # common ground point instead.
     #
     # "channels" names each physical output on the board. `board` is the
     # index into "addresses" below. Each dictionary key is the 0-15 number
     # printed on the board unless an explicit "channel" value overrides it.
     # The default names match those printed numbers, so `servo_0` is the
     # channel labelled 0 on the board itself.
+    #
+    # OE is how MotionModule enables and disables the outputs. The board pulls
+    # OE low by itself, so the outputs are enabled whenever the Pi is not
+    # driving that pin - including through boot. That is safe because the
+    # PCA9685 powers up with every channel off, but it does mean OE is an
+    # enable line, not a substitute for the physical power cutoff.
     #
     # To add a second board: solder its A0 pad for address 0x41, chain
     # SDA/SCL/VCC/GND, set "addresses": [0x40, 0x41], and add channel entries
@@ -119,6 +138,12 @@ HARDWARE = {
         "i2c_bus": 1,
         "frequency_hz": 50,
         "addresses": [0x40],
+        # OE (output enable) on the servo board, wired to physical pin 7.
+        # Active low: MotionModule holds it low to enable the outputs and
+        # drives it high to cut all 16 of them at once, without needing the
+        # I2C bus to still be working. Set this to None if you leave OE
+        # unconnected; the board pulls it low on its own.
+        "output_enable_gpio": 4,
         "minimum_pulse_us": 500,
         "maximum_pulse_us": 2500,
         "channels": {

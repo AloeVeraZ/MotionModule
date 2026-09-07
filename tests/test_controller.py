@@ -6,6 +6,7 @@ from unittest.mock import patch
 from motion_module.config import default_config
 from motion_module.controller import MotionModule
 from motion_module.gpio import MockGPIO
+from motion_module.errors import ConfigurationError
 from motion_module.servo import MockServoController
 
 
@@ -73,12 +74,77 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(self.servos.angles[(0, 15)], 45)
 
     def test_unused_pi_gpio_can_be_claimed_as_a_digital_sensor_input(self):
-        sensor = self.module.digital_input(4, pull="up")
+        sensor = self.module.digital_input(17, pull="up")
         self.assertIs(sensor.value, True)
-        self.gpio.values[4] = 0
+        self.gpio.values[17] = 0
         self.assertIs(sensor.value, False)
         with self.assertRaisesRegex(ValueError, "used or reserved"):
             self.module.digital_input(26)
+        # GPIO4 drives the servo board's OE pin, so it is not free either.
+        with self.assertRaisesRegex(ValueError, "used or reserved"):
+            self.module.digital_input(4)
+
+    def test_output_enable_pin_is_held_low_so_the_servo_outputs_start_enabled(self):
+        """OE is active low, and the board pulls it low anyway."""
+
+        oe = self.module.config.servos.output_enable_gpio
+        self.assertEqual(oe, 4)
+        self.assertIn(oe, self.gpio.outputs)
+        self.assertEqual(self.gpio.values[oe], 0.0)
+        self.assertTrue(self.module.servo_outputs_enabled)
+
+    def test_disabling_the_outputs_drives_oe_high_and_blocks_nothing_else(self):
+        self.module.set_servo_outputs_enabled(False)
+        self.assertEqual(self.gpio.values[4], 1.0)
+        self.assertFalse(self.module.servo_outputs_enabled)
+        # Motors are on their own pins and are unaffected by the servo OE line.
+        self.module.motor(1).set(0.5)
+        self.assertEqual(self.module.motor_values[1], 0.5)
+        self.module.set_servo_outputs_enabled(True)
+        self.assertEqual(self.gpio.values[4], 0.0)
+        self.assertTrue(self.module.servo_outputs_enabled)
+
+    def test_releasing_every_servo_leaves_the_output_enable_pin_alone(self):
+        """The dashboard stops outputs on every page hide.
+
+        Cutting OE there would leave the servos disabled after an ordinary
+        navigation, so releasing and disabling stay separate actions.
+        """
+
+        self.module.servo("servo_0").set_angle(90)
+        self.assertIn((0, 0), self.servos.angles)
+        self.module.release_all_servos()
+        self.assertNotIn((0, 0), self.servos.angles)
+        self.assertEqual(self.gpio.values[4], 0.0)
+        self.assertTrue(self.module.servo_outputs_enabled)
+
+    def test_closing_the_module_cuts_the_outputs_before_it_talks_to_the_board(self):
+        """Shutting down asserts OE first, so the outputs stop before the
+        per-channel I2C writes rather than after them. The pin is freed a
+        moment later and the board's own pull-down takes over."""
+
+        module = MotionModule(config=self.module.config, gpio=MockGPIO())
+        gpio = module.gpio
+        module.close()
+        writes = [index for index, (action, gpio_number, value)
+                  in enumerate(gpio.events) if action == "write" and gpio_number == 4 and value == 1.0]
+        closes = [index for index, (action, _, _) in enumerate(gpio.events) if action == "close"]
+        self.assertTrue(writes, "OE was never driven high on close")
+        self.assertLess(writes[-1], closes[0])
+
+    def test_a_map_that_leaves_oe_unwired_cannot_pretend_to_disable_outputs(self):
+        config = replace(
+            self.module.config,
+            servos=replace(self.module.config.servos, output_enable_gpio=None),
+        )
+        module = MotionModule(config=config, gpio=MockGPIO())
+        try:
+            self.assertTrue(module.servo_outputs_enabled)
+            module.set_servo_outputs_enabled(True)   # already enabled, no-op
+            with self.assertRaisesRegex(ConfigurationError, "output_enable_gpio"):
+                module.set_servo_outputs_enabled(False)
+        finally:
+            module.close()
 
     def test_invalid_named_command_cannot_partially_move_motors(self):
         with self.assertRaisesRegex(ValueError, "No motor is named"):
