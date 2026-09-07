@@ -26,8 +26,10 @@ MyRobot/
 ```
 
 Only `robot.py` is required. A folder without `hardware.py` runs on the
-installed hardware map, whose names (`motor_1`…`motor_8`, `servo_1`…`servo_16`)
-are listed in **Debug → Wiring**.
+installed hardware map, whose names describe the hardware position
+(`driver_1a`…`driver_4b` for the eight motor outputs, `servo_0`…`servo_15`
+for the servo channels). They are listed in **Debug → Wiring**, and the
+dashboard shows whatever names the running hardware map defines.
 
 Add `hardware.py` when this robot needs its own names or wiring. Download the
 current one from Debug or Code, rename the outputs you use, and keep it next to
@@ -85,11 +87,11 @@ be able to import the project before it can serve the dashboard.
 Address a motor by its name, or by its channel number from 1 to 8:
 
 ```python
-motor = module.motor("motor_5")   # module.motor(5) also works
+motor = module.motor("driver_3a") # module.motor(5) also works
 motor.set(0.25)                   # -1.0 to +1.0
 motor.stop()
 
-module.set_motors({"motor_1": 0.4, "motor_2": 0.4, "motor_3": -0.4, "motor_4": -0.4})
+module.set_motors({"driver_1a": 0.4, "driver_1b": 0.4, "driver_2a": -0.4, "driver_2b": -0.4})
 module.stop_all()
 ```
 
@@ -104,7 +106,7 @@ that deadline.
 ## Servo API
 
 ```python
-arm = module.servo("servo_1")     # module.servo(channel=0, board=0) also works
+arm = module.servo("servo_0")     # module.servo(channel=0, board=0) also works
 arm.set_angle(90)
 arm.set_pulse_us(1500)
 arm.release()
@@ -121,7 +123,7 @@ Put robot-specific code in additional `.py` files inside the same folder:
 ```python
 # mechanisms.py
 class Intake:
-    def __init__(self, module, name="motor_5"):
+    def __init__(self, module, name="driver_3a"):
         self.motor = module.motor(name)
 
     def run(self, power=0.35):
@@ -165,6 +167,12 @@ stop key, STOP, leaving the page, or losing communications produces a stop, and
 a lost connection also disarms the box so you have to re-arm on purpose. The
 hardware watchdog is the final backstop.
 
+While armed, the page sends a command on every tick, including zeros. Letting go
+of a key therefore reaches `drive()` as `0, 0, 0` on the next frame rather than
+waiting for the watchdog, so a tap is a tap. Your `drive()` is called at roughly
+12 Hz whether or not anything is moving; keep it cheap and free of blocking
+calls.
+
 A drive object may also declare extra buttons and sliders for that page:
 
 ```python
@@ -173,7 +181,7 @@ def controls(self):
 
 def control(self, name, value):
     if name == "intake":
-        self.module.motor("motor_5").set(value)
+        self.module.motor("driver_3a").set(value)
 ```
 
 Keep a physical power cutoff in reach. First verify every raw output using

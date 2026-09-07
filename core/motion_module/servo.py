@@ -31,24 +31,62 @@ class PCA9685Controller:
         self._bus = bus
         self.available: set[int] = set()
         self.errors: dict[int, str] = {}
+        # A board that answered the probe but rejected a real command: the chip
+        # is on the bus, something about the wiring or the write is not.
+        self.faults: dict[int, str] = {}
         self.angles: dict[tuple[int, int], float] = {}
         self.pulses: dict[tuple[int, int], float] = {}
         if not config.enabled:
             return
-        try:
-            if self._bus is None:
-                from smbus2 import SMBus
+        self._open_bus()
+        self.probe()
 
-                self._bus = SMBus(config.i2c_bus)
+    def _open_bus(self) -> bool:
+        """Open the I2C bus, recording why if it cannot be opened."""
+
+        if self._bus is not None:
+            return True
+        try:
+            from smbus2 import SMBus
+
+            self._bus = SMBus(self.config.i2c_bus)
         except (ImportError, OSError) as error:
-            self.errors = {address: str(error) for address in config.addresses}
+            self.errors = {address: str(error) for address in self.config.addresses}
+            return False
+        return True
+
+    def probe(self) -> None:
+        """Re-check which boards are answering right now.
+
+        Detection at startup alone is not enough: a servo board unplugged after
+        boot would keep reporting itself connected, and one plugged in later
+        would never appear. This is cheap - one register read per address - so
+        the dashboard can call it while it polls.
+        """
+
+        if not self.config.enabled or not self._open_bus():
             return
-        for address in config.addresses:
-            try:
-                self._initialize(address)
+        with self._lock:
+            for address in self.config.addresses:
+                try:
+                    self._bus.read_byte_data(address, MODE1)
+                except OSError as error:
+                    self.available.discard(address)
+                    self.errors[address] = str(error)
+                    self.faults.pop(address, None)
+                    continue
+                if address in self.available:
+                    self.errors.pop(address, None)
+                    continue
+                try:
+                    self._initialize(address)
+                except OSError as error:
+                    self.errors[address] = str(error)
+                    self.faults.pop(address, None)
+                    continue
                 self.available.add(address)
-            except OSError as error:
-                self.errors[address] = str(error)
+                self.errors.pop(address, None)
+                self.faults.pop(address, None)
 
     def _initialize(self, address: int) -> None:
         self._bus.write_byte_data(address, MODE1, 0x00)
@@ -79,7 +117,14 @@ class PCA9685Controller:
         register = LED0_ON_L + 4 * channel
         off_high = ((off >> 8) & 0x0F) | (0x10 if full_off else 0)
         payload = [on & 0xFF, (on >> 8) & 0x0F, off & 0xFF, off_high]
-        self._bus.write_i2c_block_data(address, register, payload)
+        try:
+            self._bus.write_i2c_block_data(address, register, payload)
+        except OSError as error:
+            # Answering the probe but refusing a write is its own state: the
+            # dashboard shows it as a warning rather than as "not connected".
+            self.faults[address] = str(error)
+            raise
+        self.faults.pop(address, None)
 
     def set_angle(self, board: int, channel: int, angle: float) -> None:
         if not 0 <= channel <= 15:
@@ -142,10 +187,14 @@ class PCA9685Controller:
 class MockServoController:
     is_hardware = False
 
+    def probe(self) -> None:
+        """Simulated boards are always present, so there is nothing to re-check."""
+
     def __init__(self, config: ServoConfig) -> None:
         self.config = config
         self.available = set(config.addresses) if config.enabled else set()
         self.errors: dict[int, str] = {}
+        self.faults: dict[int, str] = {}
         self.angles: dict[tuple[int, int], float] = {}
         self.pulses: dict[tuple[int, int], float] = {}
 
@@ -194,7 +243,7 @@ class Servo:
         self._controller = controller
         self.board = board
         self.channel = channel
-        self.name = name or f"servo_{board * 16 + channel + 1}"
+        self.name = name or f"servo_{board * 16 + channel}"
 
     def __repr__(self) -> str:
         return f"<Servo {self.name} (board {self.board}, channel {self.channel})>"

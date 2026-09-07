@@ -35,8 +35,8 @@ class Element {
         this.className = [...names].join(' ');
         return enabled;
       },
-      add: name => this.classList.toggle(name, true),
-      remove: name => this.classList.toggle(name, false),
+      add: (...names) => names.forEach(name => this.classList.toggle(name, true)),
+      remove: (...names) => names.forEach(name => this.classList.toggle(name, false)),
     };
   }
   matches(selector) {
@@ -107,12 +107,16 @@ function browser(now = 1700000000000) {
     (spec.parent === null ? document : nodes[spec.parent]).append(nodes[index]);
     nodes[index].ownerDocument = document;
   });
+  document.documentElement = document.querySelector('html');
+  document.body = document.querySelector('body');
   document.activeElement = document.querySelector('body');
   document.createElement = tag => new Element({tag, attrs: {}, text: ''});
+  document.createTextNode = text => new Element({tag: '#text', attrs: {}, text: String(text)});
   const window = new Element();
   const requests = [];
   const failures = new Map();
   const intervals = new Map();
+  const currentStatus = statusData();
   let timerId = 0;
   const context = vm.createContext({
     document, window, console, URLSearchParams, AbortController,
@@ -132,7 +136,7 @@ function browser(now = 1700000000000) {
       const failure = failures.get(url);
       if (failure instanceof Error) throw failure;
       if (failure) return {ok: false, status: failure.status, json: async () => ({error: failure.message})};
-      const data = url === '/api/status' ? statusData() : {ok: true};
+      const data = url === '/api/status' ? currentStatus : {ok: true};
       return {ok: true, status: 200, json: async () => data};
     },
   });
@@ -142,7 +146,6 @@ function browser(now = 1700000000000) {
   const settle = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
   async function arm() {
     await context.dashboard.refreshStatus();
-    await $('[data-tab="drive"]').fire('click');
     $('#driveEnable').checked = true;
     await $('#driveEnable').fire('change');
     document.activeElement = $('body');
@@ -151,7 +154,12 @@ function browser(now = 1700000000000) {
     await window.fire('keydown', {key: 'w', ...extra});
     await settle();
   }
-  return {$, context, document, window, requests, failures, intervals, driveRequests, settle, arm, forward};
+  async function releaseForward(extra = {}) {
+    await window.fire('keyup', {key: 'w', ...extra});
+    await settle();
+  }
+  function setRobotStatus(patch) { Object.assign(currentStatus.robot, patch); }
+  return {$, context, document, window, requests, failures, intervals, driveRequests, settle, arm, forward, releaseForward, setRobotStatus};
 }
 
 async function run(scenario) {
@@ -160,10 +168,37 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'tab-disarm') {
-    await app.$('[data-tab="terminal"]').fire('click');
+  if (scenario === 'key-release-stop') {
+    await app.releaseForward();
+    const last = app.driveRequests().at(-1).payload;
+    assert.deepEqual(
+      {forward: last.forward, strafe: last.strafe, rotate: last.rotate},
+      {forward: 0, strafe: 0, rotate: 0},
+      'Releasing W must send an immediate zero command instead of waiting for the watchdog',
+    );
+  } else if (scenario === 'servo-offline') {
+    app.setRobotStatus({
+      hardware: true,
+      servo_boards: [{index: 0, address: '0x40', available: false, error: 'Remote I/O error', fault: null}],
+    });
+    await app.context.dashboard.refreshStatus();
+    assert(app.$('#servoStat').classList.contains('alert-bad'), 'A missing physical servo board must be red');
+    assert.match(app.$('#servoNote').textContent, /not answering/i);
+    assert.equal(app.$('#servoBusNotice').hidden, false);
+    assert(app.$('#servoBusNotice').classList.contains('danger'));
+  } else if (scenario === 'servo-command-fault') {
+    app.setRobotStatus({
+      hardware: true,
+      servo_boards: [{index: 0, address: '0x40', available: true, error: null, fault: 'Remote I/O error'}],
+    });
+    await app.context.dashboard.refreshStatus();
+    assert(app.$('#servoStat').classList.contains('alert-warn'), 'A board rejecting commands must be yellow');
+    assert.match(app.$('#servoNote').textContent, /refusing commands/i);
+    assert(app.$('#servoSummary').querySelector('.warn'));
+  } else if (scenario === 'tab-disarm') {
+    app.document.hidden = true;
+    await app.document.fire('visibilitychange');
     await app.settle();
-    assert.equal(app.$('[data-panel="drive"]').hidden, true);
     assert.equal(app.$('#driveEnable').checked, false, 'Leaving Drive must disarm its checkbox');
     assert(app.requests.some(item => item.url === '/api/stop'), 'Leaving Drive must request a stop');
     const count = app.driveRequests().length;

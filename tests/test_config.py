@@ -95,27 +95,55 @@ class DefaultConfigTests(unittest.TestCase):
         header = header_rows(config)
         self.assertEqual(len(header), 40)
         self.assertEqual(header[26]["category"], "reserved")
-        self.assertEqual(header[39]["role"], "motor_3 · Driver 2A IN1")
+        self.assertEqual(header[39]["role"], "driver_2a · Driver 2A IN1")
 
-    def test_default_names_follow_the_motor_and_servo_channel_numbers(self):
+    def test_default_names_describe_the_driver_output_and_servo_channel(self):
+        """Out of the box a name says where the wire goes, with no lookup."""
+
         config = load_config()
         self.assertEqual(
             {motor.channel: motor.name for motor in config.motors},
-            {channel: f"motor_{channel}" for channel in range(1, 9)},
+            {channel: f"driver_{(channel + 1) // 2}{'ab'[(channel - 1) % 2]}"
+             for channel in range(1, 9)},
         )
         self.assertEqual(
-            config.servo_names, tuple(f"servo_{number}" for number in range(1, 17))
+            config.servo_names, tuple(f"servo_{number}" for number in range(16))
         )
 
     def test_names_resolve_to_channels_in_both_directions(self):
         config = load_config()
-        self.assertEqual(config.motor_channel("motor_5"), 5)
-        self.assertEqual(config.motor_channel("MOTOR_5"), 5)
+        self.assertEqual(config.motor_channel("driver_3a"), 5)
+        self.assertEqual(config.motor_channel("DRIVER_3A"), 5)
         self.assertEqual(config.motor_channel(5), 5)
-        self.assertEqual(config.servo_slot("servo_3").channel, 2)
-        self.assertEqual(config.servo_slot(2).name, "servo_3")
+        self.assertEqual(config.servo_slot("servo_2").channel, 2)
+        self.assertEqual(config.servo_slot(2).name, "servo_2")
         with self.assertRaisesRegex(ConfigurationError, "No motor is named"):
             config.motor_channel("left_front")
+
+    def test_automatic_servo_names_also_start_at_zero(self):
+        hardware = '''
+HARDWARE = {
+    "module": {"pwm_hz": 1000, "deadtime_ms": 5, "watchdog_ms": 500},
+    "motors": {
+        1: {"name": "driver_1a", "forward_gpio": 4, "reverse_gpio": 17},
+    },
+    "servos": {
+        "enabled": True,
+        "i2c_bus": 1,
+        "frequency_hz": 50,
+        "addresses": [0x40],
+        "minimum_pulse_us": 500,
+        "maximum_pulse_us": 2500,
+    },
+}
+'''
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            (project / "hardware.py").write_text(hardware, encoding="utf-8")
+            config = load_project_config(project)
+        self.assertEqual(config.servo_names, tuple(f"servo_{number}" for number in range(16)))
+        self.assertEqual(config.servo_slot(0).name, "servo_0")
+        self.assertEqual(config.servo_slot(15).name, "servo_15")
 
     def test_duplicate_names_are_rejected(self):
         hardware = '''
@@ -195,7 +223,7 @@ HARDWARE = {
 
     def test_duplicate_channel_keys_cannot_silently_replace_a_motor(self):
         source = DEFAULT_HARDWARE_PATH.read_text(encoding="utf-8").replace(
-            '2: {"name": "motor_2"', '1: {"name": "motor_2"'
+            '2: {"name": "driver_1b"', '1: {"name": "driver_1b"'
         )
         output = Path(os.environ["MOTIONMODULE_CONFIG_DIR"]) / "hardware.py"
         output.write_text(source, encoding="utf-8")
@@ -205,7 +233,7 @@ HARDWARE = {
     def test_non_integer_channel_keys_are_rejected(self):
         for bad in ("True", "1.5"):
             source = DEFAULT_HARDWARE_PATH.read_text(encoding="utf-8").replace(
-                '1: {"name": "motor_1"', f'{bad}: {{"name": "motor_1"'
+                '1: {"name": "driver_1a"', f'{bad}: {{"name": "driver_1a"'
             )
             output = Path(os.environ["MOTIONMODULE_CONFIG_DIR"]) / "hardware.py"
             output.write_text(source, encoding="utf-8")

@@ -120,12 +120,32 @@ def dashboard_checks(module) -> list[dict]:
         checks.append({"id": "servos", "level": "info", "title": "Servo boards", "detail": "Servo support is disabled in the active hardware configuration."})
     else:
         for board in snapshot.get("servo_boards", []):
+            # Three outcomes, not two: answering, answering but refusing writes,
+            # and silent. The middle one is what a half-connected board looks
+            # like, and it is the one that is hardest to guess from a wire.
+            if not board.get("available"):
+                level = "warn"
+                detail = (
+                    "Not connected. Nothing answered at this address, so no servo on this "
+                    "board can move. Check SDA on pin 3, SCL on pin 5, VCC on pin 1 and GND "
+                    f"on pin 6. I2C reported: {board.get('error') or 'board not detected'}"
+                )
+            elif board.get("fault"):
+                level = "warn"
+                detail = (
+                    "Answering on I2C but the last command was rejected: "
+                    f"{board['fault']}. Usually a loose SDA or SCL wire, or the board "
+                    "browning out when a servo pulls current."
+                )
+            else:
+                level = "pass"
+                detail = "Responding on the I2C bus."
             checks.append(
                 {
                     "id": f"servo-{board['index']}",
-                    "level": "pass" if board.get("available") else "warn",
+                    "level": level,
                     "title": f"PCA9685 board {board['index']} · {board['address']}",
-                    "detail": "Responding on the I2C bus." if board.get("available") else f"No response: {board.get('error') or 'board not detected'}",
+                    "detail": detail,
                 }
             )
     return checks

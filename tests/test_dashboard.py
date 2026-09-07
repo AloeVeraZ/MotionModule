@@ -34,6 +34,9 @@ class FakeModule:
         self.stopped = True
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
 
+    def refresh_servo_boards(self, *, interval=2.0):
+        self._servos.probe()
+
     def release_all_servos(self):
         for board, channel in sorted({*self._servos.angles, *self._servos.pulses}):
             self._servos.release(board, channel)
@@ -170,6 +173,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Stops outputs, reloads the active robot project", debug)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
+        self.assertNotIn(b'id="bomLink"', debug)
+        self.assertNotIn(b'id="pinoutLink"', debug)
+        self.assertIn(b'.part-status.pending { background: var(--red-soft); color: var(--red); }', debug)
         self.assertIn(b"activePage === 'diagnostics' ? 'Debug'", debug)
         code = self.client.get("/code").data
         self.assertIn(b"Driver Station", code)
@@ -229,8 +235,10 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(len(data["header"]), 40)
         by_motor = {item["motor"]: item for item in data["motors"]}
+        bench_by_motor = {item["motor"]: item for item in data["bench_motors"]}
         self.assertEqual((by_motor[1]["driver"], by_motor[1]["output"]), (1, "A"))
         self.assertEqual((by_motor[3]["driver"], by_motor[3]["output"]), (2, "A"))
+        self.assertEqual(bench_by_motor[1]["name"], "front_left")
         self.assertEqual(data["header"][39]["role"], "front_right · Driver 2A IN1")
 
     def test_embedded_guide_is_available_locally_and_uses_active_names(self):

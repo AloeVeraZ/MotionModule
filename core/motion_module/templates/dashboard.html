@@ -545,6 +545,13 @@ nav a.active .nav-icon { color: var(--accent-text); }
 .stat-label span { font-size: 17px; font-weight: 400; color: var(--faint); opacity: .7; }
 .stat-value { margin-top: 8px; font-size: 25px; font-weight: 650; letter-spacing: -.02em; }
 .stat-note { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+/* A stat can carry a verdict. Used for the servo bus, where "0 / 1" alone
+   does not say loudly enough that nothing is plugged in. */
+.stat.alert-bad { border-color: var(--red-line); }
+.stat.alert-bad .stat-value, .stat.alert-bad .stat-note { color: var(--red); }
+.stat.alert-warn { border-color: var(--amber-line); }
+.stat.alert-warn .stat-value, .stat.alert-warn .stat-note { color: var(--amber); }
+.stat.alert-ok .stat-value { color: var(--green); }
 
 /* ---------------------------------------------------------------- buttons */
 
@@ -750,7 +757,9 @@ output { color: var(--text); font-weight: 700; }
 .pin.power .pin-number { background: var(--power); color: var(--chip-ink); }
 .pin.reserved .pin-number { background: var(--reserved); color: var(--chip-ink); }
 
-/* Reported hardware state: green when the board answers, red when it does not. */
+/* Reported hardware state. Green means the board answered the last I2C probe,
+   red means it did not, amber means it answered but refused a command. Only a
+   device that can talk back ever shows green. */
 .io-status {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 9px;
@@ -762,7 +771,8 @@ output { color: var(--text); font-weight: 700; }
 .io-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .io-status.ok { border-color: var(--green-line); background: var(--green-soft); color: var(--green); }
 .io-status.bad { border-color: var(--red-line); background: var(--red-soft); color: var(--red); }
-.io-status.sim { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber); }
+.io-status.sim,
+.io-status.warn { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber); }
 
 .pin-inspector { border-color: var(--accent-line); background: var(--accent-soft); }
 .pin-inspector h2 { margin: 6px 0; font-size: 18px; }
@@ -806,7 +816,14 @@ output { color: var(--text); font-weight: 700; }
 .servo-board-head .io-status { border-color: var(--board-line); background: rgba(255, 255, 255, .06); color: var(--board-muted); }
 .servo-board-head .io-status.ok { border-color: #2f6d58; background: rgba(69, 207, 154, .16); color: #74e2b8; }
 .servo-board-head .io-status.bad { border-color: #7a3a42; background: rgba(255, 129, 137, .16); color: #ff9ba2; }
-.servo-board-head .io-status.sim { border-color: #6b5628; background: rgba(240, 192, 99, .16); color: #f3d083; }
+.servo-board-head .io-status.sim,
+.servo-board-head .io-status.warn { border-color: #6b5628; background: rgba(240, 192, 99, .16); color: #f3d083; }
+
+/* A board that is not answering is still worth reading as a wiring diagram,
+   so its outputs stay legible and clickable - just clearly not live. */
+.servo-board.offline { box-shadow: inset 0 0 0 1px var(--red-line); }
+.servo-board.offline .servo-outputs { opacity: .55; }
+.servo-board.offline .servo-port { border-style: dashed; }
 .servo-outputs { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 5px; }
 .servo-port {
   display: grid; gap: 7px; place-items: center;
@@ -873,7 +890,7 @@ output { color: var(--text); font-weight: 700; }
   font-size: 9px;
 }
 .part-status.needed { background: var(--amber-soft); color: var(--amber); }
-.part-status.pending { background: var(--blue-soft); color: var(--motor); }
+.part-status.pending { background: var(--red-soft); color: var(--red); }
 .part-status.optional { background: var(--surface-2); color: var(--faint); }
 .parts-note { padding: 14px 20px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; line-height: 1.7; }
 .group-flag {
@@ -1271,7 +1288,7 @@ kbd:empty { border: 0; background: transparent; }
       <section class="view" data-view="overview">
         <div class="hero">
           <div>
-            <p class="eyebrow">CONTROL CENTER <span class="eyebrow-divider">/</span> <span id="robotName">MotionModule</span></p>
+            <p class="eyebrow">CONTROL CENTER <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
             <h1>Your robot, at a glance.</h1>
             <p>A clear view of your outputs, connections, and controller health.</p>
           </div>
@@ -1291,7 +1308,7 @@ kbd:empty { border: 0; background: transparent; }
             <div class="stat-value" id="activeMotors">0 / 8</div>
             <div class="stat-note">Watchdog stops stale commands</div>
           </article>
-          <article class="card stat">
+          <article class="card stat" id="servoStat">
             <div class="stat-label">Servo boards <span aria-hidden="true">▤</span></div>
             <div class="stat-value" id="servoBoards">&mdash;</div>
             <div class="stat-note" id="servoNote">Checking I&sup2;C</div>
@@ -1405,10 +1422,6 @@ kbd:empty { border: 0; background: transparent; }
             <h1>Know your robot.</h1>
             <p>Every part, every connection, and the tools to make it work.</p>
           </div>
-          <div class="button-row">
-            <a class="button" id="bomLink" href="#parts">Parts list</a>
-            <a class="button primary" id="pinoutLink" href="#wiring">Wiring guide <span aria-hidden="true">→</span></a>
-          </div>
         </div>
 
         <div class="tabs" role="tablist">
@@ -1450,7 +1463,7 @@ kbd:empty { border: 0; background: transparent; }
                   <h2>Four dual H-bridge drivers</h2>
                   <span>Configured &middot; physical connection unverified</span>
                 </div>
-                <p class="lead">Each board controls two motors. IN1 and IN2 control direction and power. Driver numbers follow the existing harness, so motor 1 connects to driver 2.</p>
+                <p class="lead">Each board controls two motors. IN1 and IN2 control direction and power. Driver 1 holds motor channels 1 and 2, driver 2 holds 3 and 4, and so on, with each driver&rsquo;s four signal pins and its ground sitting together on the header.</p>
                 <div class="panel-body">
                   <div class="driver-grid" id="driverGrid"></div>
                 </div>
@@ -1462,6 +1475,7 @@ kbd:empty { border: 0; background: transparent; }
           <div class="section-heading spaced"><div><p class="eyebrow">02 / SERVO CONTROLLER</p><h2>Four logic wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C. Each servo plugs into a separate three-pin output on that board.</p></div></div>
           <article class="card"><div class="panel-head"><h2>PCA9685 servo bus</h2><span id="servoSummary">Loading…</span></div><div class="panel-body stack">
             <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>SDA · SCL · 3.3 V · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
+            <p class="notice danger" id="servoBusNotice" hidden></p>
             <div id="servoBoardGuide" class="stack"></div>
             <div class="grid equal"><div><h3 class="subheading">Pi → servo-board logic</h3><div id="logicConnections" class="connection-list"></div></div><div><h3 class="subheading">Power &amp; other board terminals</h3><div id="servoConnections" class="connection-list"></div></div></div>
             <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors are not implemented.</div>
@@ -1921,7 +1935,7 @@ def controls(self):
 
 def control(self, name, value):
     if name == "intake":
-        self.module.motor("motor_5").set(value)</pre>
+        self.module.motor("driver_3a").set(value)</pre>
                 </div>
                 <p class="muted small">Both input methods call the same
                   <code>drive()</code>, so code written for the keyboard works
@@ -2022,8 +2036,8 @@ def control(self, name, value):
                     <code>MyRobot/hardware.py</code>
                     <p>A copy of the pin file, with your own names. Leave it out
                       and the robot uses the names that ship with MotionModule
-                      (<code>motor_1</code>&hellip;<code>motor_8</code>,
-                      <code>servo_1</code>&hellip;<code>servo_16</code>).</p>
+                      (<code>driver_1a</code>&hellip;<code>driver_4b</code>,
+                      <code>servo_0</code>&hellip;<code>servo_15</code>).</p>
                   </div>
                   <div class="format-file">
                     <span class="tag">Optional</span>
@@ -2055,10 +2069,10 @@ def control(self, name, value):
         left = (forward + rotate) * speed
         right = (forward - rotate) * speed
         self.module.set_motors({
-            "motor_1": left,
-            "motor_2": left,
-            "motor_3": right,
-            "motor_4": right,
+            "driver_1a": left,
+            "driver_1b": left,
+            "driver_2a": right,
+            "driver_2b": right,
         })
         return {"left": left, "right": right}
 
@@ -2072,7 +2086,7 @@ def create_drive(module):
                   <p class="muted small" style="margin-top:12px">Save that as
                     <code>robot.py</code> inside a folder, choose the folder on
                     the left, and press Deploy and run. Names such as
-                    <code>motor_1</code> come from <code>hardware.py</code>; see
+                    <code>driver_1a</code> come from <code>hardware.py</code>; see
                     them all in <a href="/hardware">Debug &rarr; Wiring</a>.</p>
                 </div>
               </article>
@@ -2433,9 +2447,19 @@ function servoName(key) {
   return configData?.servos.outputs?.find(item => `${item.board}:${item.channel}` === key)?.name || `Servo ${key}`;
 }
 
+/* One place decides what a servo board's state is, so the overview tile, the
+   wiring diagram and the test panel can never disagree about it. */
+function servoBoardState(board, simulated) {
+  if (simulated) return { state: 'sim', label: 'Simulated' };
+  if (!board.available) return { state: 'bad', label: 'Not connected' };
+  if (board.fault) return { state: 'warn', label: 'Not taking commands' };
+  return { state: 'ok', label: 'Connected' };
+}
+
 function renderServos(robot) {
   const boards = robot.servo_boards || [];
   const available = boards.filter(board => board.available).length;
+  const faulted = boards.filter(board => board.available && board.fault).length;
 
   let commands = robot.servo_commands || {};
   if (!Object.keys(commands).length) {
@@ -2451,19 +2475,30 @@ function renderServos(robot) {
   const active = Object.entries(commands);
 
   const simulated = !robot.hardware;
+  const missing = boards.length - available;
   $('#servoBoards').textContent = `${available} / ${boards.length}`;
   $('#servoNote').textContent = !boards.length
     ? 'No boards configured'
     : simulated ? 'Simulated board responses'
-    : available === boards.length ? 'Detected over I²C'
-    : `${boards.length - available} not responding`;
+    : missing ? `${missing} not answering on I²C — check SDA, SCL, 3.3 V and GND`
+    : faulted ? `${faulted} answering but refusing commands`
+    : 'Detected over I²C';
+
+  /* The tile carries the verdict as colour too: "0 / 1" on its own is easy to
+     read past when the board simply is not plugged in. */
+  const stat = $('#servoStat');
+  if (stat) {
+    const verdict = !boards.length || (!simulated && missing) ? 'alert-bad'
+      : simulated || faulted ? 'alert-warn' : 'alert-ok';
+    stat.classList.remove('alert-bad', 'alert-warn', 'alert-ok');
+    stat.classList.add(verdict);
+  }
   $('#overviewServoSummary').textContent = `${available}/${boards.length} ${simulated ? 'simulated' : 'responding'} · ${active.length} active`;
 
-  const rows = boards.map(board => healthRow(
-    `Board ${board.index} · ${board.address}`,
-    board.available ? (simulated ? 'Simulated' : 'Connected') : 'Not connected',
-    board.available,
-  ));
+  const rows = boards.map(board => {
+    const { state, label } = servoBoardState(board, simulated);
+    return healthRow(`Board ${board.index} · ${board.address}`, label, state === 'ok');
+  });
   active.forEach(([key, command]) => {
     rows.push(healthRow(servoName(key), `${command.value}${command.unit}`, true));
   });
@@ -2477,10 +2512,9 @@ function renderServos(robot) {
     const cells = [];
     boards.forEach(board => {
       cells.push(element('b', null, `Board ${board.index} · ${board.address}`));
+      const { state, label } = servoBoardState(board, simulated);
       const cell = element('span');
-      cell.append(simulated
-        ? ioStatus('sim', 'Simulated')
-        : board.available ? ioStatus('ok', 'Connected') : ioStatus('bad', 'Not connected'));
+      cell.append(ioStatus(state, label));
       cells.push(cell);
     });
     if (!boards.length) {
@@ -2491,22 +2525,49 @@ function renderServos(robot) {
     replaceWith(detection, cells);
   }
   boards.forEach(board => {
+    const { state, label } = servoBoardState(board, simulated);
     const cell = document.querySelector(`.servo-board-state[data-board="${board.index}"]`);
-    if (!cell) return;
-    replaceWith(cell, [simulated
-      ? ioStatus('sim', 'Simulated')
-      : board.available ? ioStatus('ok', 'Connected') : ioStatus('bad', 'Not connected')]);
+    if (cell) replaceWith(cell, [ioStatus(state, label)]);
+    cell?.closest('.servo-board')?.classList.toggle('offline', state === 'bad');
   });
+
+  /* Say out loud what a red board means, rather than leaving a lone red pill
+     to be interpreted. The reported I2C error is the useful part. */
+  const busNotice = $('#servoBusNotice');
+  if (busNotice) {
+    const offline = boards.filter(board => !simulated && !board.available);
+    const refusing = boards.filter(board => !simulated && board.available && board.fault);
+    busNotice.className = offline.length || !boards.length ? 'notice danger' : 'notice warn';
+    if (!boards.length) {
+      busNotice.hidden = false;
+      busNotice.textContent = 'No servo board is configured in hardware.py, so the servo outputs are disabled.';
+    } else if (offline.length) {
+      busNotice.hidden = false;
+      replaceWith(busNotice, [
+        element('strong', null, offline.length === boards.length
+          ? 'No servo board is answering.' : `${offline.length} servo board(s) not answering.`),
+        document.createTextNode(` Nothing is being sent to the outputs below. Check SDA on pin 3, SCL on pin 5, VCC on pin 1 (3.3 V) and GND on pin 6, then confirm the board's address pads match ${offline.map(board => board.address).join(', ')}. The diagram stays visible so you can wire against it.`),
+        ...(offline[0].error ? [element('span', 'muted small', ` I²C reported: ${offline[0].error}`)] : []),
+      ]);
+    } else if (refusing.length) {
+      busNotice.hidden = false;
+      busNotice.textContent = `A servo board answers on I²C but rejected the last command: ${refusing[0].fault}. That usually means a loose SDA or SCL wire, or a board browning out when the servo draws current.`;
+    } else {
+      busNotice.hidden = true;
+    }
+  }
 
   syncServoPicker(boards, simulated);
 
   const summary = $('#servoSummary');
   if (summary) {
-    const state = simulated ? 'sim' : available === boards.length && boards.length ? 'ok' : 'bad';
+    const state = !boards.length ? 'bad'
+      : simulated ? 'sim' : missing ? 'bad' : faulted ? 'warn' : 'ok';
     const label = !boards.length ? 'No board configured'
       : simulated ? `${available}/${boards.length} simulated`
-      : available === boards.length ? `${available}/${boards.length} connected`
-      : `${boards.length - available}/${boards.length} not connected`;
+      : missing ? `${missing}/${boards.length} not connected`
+      : faulted ? `${faulted}/${boards.length} refusing commands`
+      : `${available}/${boards.length} connected`;
     replaceWith(summary, [ioStatus(state, label)]);
   }
 }
@@ -2791,15 +2852,20 @@ function disarmDrive(reason) {
   setDriveSignals();
 }
 
+/* Silence is not a stop. Letting go of a key used to send nothing at all, so
+   the robot kept its last command until the watchdog expired — a tap became
+   most of a second of driving. While armed we send on every tick, zeros
+   included, so releasing a key lands as a zero on the next frame. */
+const IDLE_COMMAND = { forward: 0, strafe: 0, rotate: 0 };
+
 async function sendDrive() {
   if (!driveEnabled()) return;
   const pad = readPad();
   const keys = { forward: axis('forward', 'back'), strafe: axis('right', 'left'), rotate: axis('turnLeft', 'turnRight') };
   const usingKeys = keys.forward || keys.strafe || keys.rotate;
-  const command = usingKeys ? keys : pad;
+  const command = usingKeys ? keys : pad || IDLE_COMMAND;
   lastInputKind = usingKeys ? 'keys' : pad ? 'pad' : 'none';
   setDriveSignals();
-  if (!command) return;
   try {
     const response = await fetch('/api/drive', {
       method: 'POST',
@@ -2849,6 +2915,7 @@ addEventListener('keydown', event => {
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   event.preventDefault();
   if (event.key === bindings.stop) { disarmDrive(); return; }
+  if (event.repeat) return;   // the drive loop already carries the held key
   heldKeys.add(event.key);
   paintKeys();
   sendDrive();
@@ -3049,9 +3116,9 @@ function renderNameTables(data) {
   });
   replaceWith($('#servoNameRows'), servoRows);
 
-  const firstMotor = data.motors[0]?.name || 'motor_1';
-  const secondMotor = data.motors[1]?.name || 'motor_2';
-  const firstServo = data.servos.outputs?.[0]?.name || 'servo_1';
+  const firstMotor = data.motors[0]?.name || 'driver_1a';
+  const secondMotor = data.motors[1]?.name || 'driver_1b';
+  const firstServo = data.servos.outputs?.[0]?.name || 'servo_0';
   $('#namesSnippet').textContent = [
     '# Inside your robot object: module is the controller passed to create_drive.',
     '# Output names below come from the active hardware.py.',
@@ -3103,14 +3170,19 @@ function syncServoPicker(boards, simulated) {
     if (reachable.some(board => String(board.index) === current)) select.value = current;
     renderServoChannels();
   }
+  /* Nothing answered, so there is nothing to pick from. Hide the picker rather
+     than offering a dead control, and say why. Detection is re-checked while
+     the page polls, so plugging the board in brings this back on its own. */
   const missing = !reachable.length;
+  const panel = $('#servoTestControls');
+  if (panel) panel.hidden = missing;
   $$('#servoTestControls input, #servoTestControls select, #servoTestControls button')
     .forEach(control => { control.disabled = missing; });
   const notice = $('#servoTestMissing');
   if (notice) {
     notice.hidden = !missing;
     notice.textContent = boards.length
-      ? 'No servo board is responding on I²C. Check the SDA, SCL, 3.3 V and ground wires, then reload.'
+      ? 'No servo board is answering on I²C, so there is nothing to test. Check the SDA, SCL, 3.3 V and ground wires — this panel comes back by itself once the board responds.'
       : 'No servo board is configured in hardware.py.';
   }
 }
@@ -3120,7 +3192,7 @@ function renderServoChannels() {
   const outputs = (configData?.servos.outputs || []).filter(slot => slot.board === board);
   const channels = outputs.length
     ? outputs
-    : (configData?.servos.channels || []).map(channel => ({ channel, name: `servo_${channel + 1}` }));
+    : (configData?.servos.channels || []).map(channel => ({ channel, name: `servo_${channel}` }));
   replaceWith($('#servoChannel'), channels.map(slot => {
     const option = element('option', null, `${slot.name} · channel ${slot.channel}`);
     option.value = slot.channel;
@@ -3128,15 +3200,22 @@ function renderServoChannels() {
   }));
 }
 
+/* Bench controls use the live module, so their names and pins come from the
+   same active hardware.py as the outputs they command. */
 function renderMotorTests(motors) {
   const rows = [...motors]
     .sort((a, b) => a.driver - b.driver || a.output.localeCompare(b.output))
     .map(motor => {
       const row = element('div', 'test-row');
       const label = element('span');
+      const detail = [
+        motor.name,
+        `pins ${motor.in1_physical}/${motor.in2_physical}`,
+        `GPIO${motor.in1_bcm}/${motor.in2_bcm}`,
+      ].filter(Boolean).join(' · ');
       label.append(
         element('strong', null, `Driver ${motor.driver}${motor.output}`),
-        element('small', null, `${motor.name} · pins ${motor.in1_physical}/${motor.in2_physical} · GPIO${motor.in1_bcm}/${motor.in2_bcm}`),
+        element('small', null, detail),
       );
       const reverse = element('button', 'button hold', 'Hold −');
       const forward = element('button', 'button hold primary', 'Hold +');

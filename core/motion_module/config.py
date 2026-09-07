@@ -110,7 +110,7 @@ class ModuleConfig:
         for slot in self.servos.channels:
             if slot.board == index and slot.channel == reference:
                 return slot
-        return ServoSlot(name=f"servo_{index * SERVO_CHANNELS_PER_BOARD + reference + 1}",
+        return ServoSlot(name=f"servo_{index * SERVO_CHANNELS_PER_BOARD + reference}",
                          board=index, channel=reference)
 
     @property
@@ -232,7 +232,7 @@ def _servo_slots(data: object, addresses: tuple[int, ...]) -> tuple[ServoSlot, .
     if data is None:
         return tuple(
             ServoSlot(
-                name=f"servo_{board * SERVO_CHANNELS_PER_BOARD + channel + 1}",
+                name=f"servo_{board * SERVO_CHANNELS_PER_BOARD + channel}",
                 board=board,
                 channel=channel,
             )
@@ -250,7 +250,7 @@ def _servo_slots(data: object, addresses: tuple[int, ...]) -> tuple[ServoSlot, .
             values.get("channel", _channel_key(key, "servo channel key")),
             f"servos.channels.{key}.channel",
         )
-        position = board * SERVO_CHANNELS_PER_BOARD + channel + 1
+        position = board * SERVO_CHANNELS_PER_BOARD + channel
         slots.append(
             ServoSlot(
                 name=_as_name(

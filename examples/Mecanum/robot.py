@@ -115,11 +115,11 @@ def create_drive(module):
 # ---------------------------------------------------------------------------
 # Other things you can do with `module`, using the names from hardware.py:
 #
-#     intake = module.motor("intake")     # motor_5 renamed in hardware.py
+#     intake = module.motor("intake")     # driver_3a renamed in hardware.py
 #     intake.set(0.35)                    # -1.0 (reverse) to 1.0 (forward)
 #     intake.stop()
 #
-#     claw = module.servo("claw")         # servo_1 renamed in hardware.py
+#     claw = module.servo("claw")         # servo_0 renamed in hardware.py
 #     claw.set_angle(90)                  # 0-180 degrees
 #     claw.release()                      # stop holding a position
 #

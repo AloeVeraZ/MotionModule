@@ -3,7 +3,8 @@
 This is a copy of the hardware.py that ships with MotionModule, with the four
 drive motors renamed. Everything else is unchanged. Keep this file with the
 sample robot.py because its drive code uses these wheel names. A robot that
-uses the built-in names (motor_1 ... motor_8, servo_1 ... servo_16) can omit it.
+uses the built-in names (driver_1a ... driver_4b, servo_0 ... servo_15) can
+omit it.
 
 Rename a motor here and use that same name in robot.py. If a wheel spins the
 wrong way, flip only that motor's `inverted` value — never the drive math.
@@ -37,10 +38,10 @@ HARDWARE = {
         2: {"name": "rear_left", "forward_gpio": 13, "reverse_gpio": 6, "inverted": False},
         3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": False},
         4: {"name": "rear_right", "forward_gpio": 16, "reverse_gpio": 12, "inverted": False},
-        5: {"name": "motor_5", "forward_gpio": 11, "reverse_gpio": 9, "inverted": False},
-        6: {"name": "motor_6", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},
-        7: {"name": "motor_7", "forward_gpio": 22, "reverse_gpio": 27, "inverted": False},
-        8: {"name": "motor_8", "forward_gpio": 24, "reverse_gpio": 23, "inverted": False},
+        5: {"name": "driver_3a", "forward_gpio": 11, "reverse_gpio": 9, "inverted": False},
+        6: {"name": "driver_3b", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},
+        7: {"name": "driver_4a", "forward_gpio": 22, "reverse_gpio": 27, "inverted": False},
+        8: {"name": "driver_4b", "forward_gpio": 24, "reverse_gpio": 23, "inverted": False},
     },
 
     # One PCA9685 board on I2C: SDA pin 3, SCL pin 5, VCC pin 1, GND pin 6.
@@ -53,22 +54,22 @@ HARDWARE = {
         "minimum_pulse_us": 500,
         "maximum_pulse_us": 2500,
         "channels": {
-            0: {"name": "servo_1", "board": 0},
-            1: {"name": "servo_2", "board": 0},
-            2: {"name": "servo_3", "board": 0},
-            3: {"name": "servo_4", "board": 0},
-            4: {"name": "servo_5", "board": 0},
-            5: {"name": "servo_6", "board": 0},
-            6: {"name": "servo_7", "board": 0},
-            7: {"name": "servo_8", "board": 0},
-            8: {"name": "servo_9", "board": 0},
-            9: {"name": "servo_10", "board": 0},
-            10: {"name": "servo_11", "board": 0},
-            11: {"name": "servo_12", "board": 0},
-            12: {"name": "servo_13", "board": 0},
-            13: {"name": "servo_14", "board": 0},
-            14: {"name": "servo_15", "board": 0},
-            15: {"name": "servo_16", "board": 0},
+            0: {"name": "servo_0", "board": 0},
+            1: {"name": "servo_1", "board": 0},
+            2: {"name": "servo_2", "board": 0},
+            3: {"name": "servo_3", "board": 0},
+            4: {"name": "servo_4", "board": 0},
+            5: {"name": "servo_5", "board": 0},
+            6: {"name": "servo_6", "board": 0},
+            7: {"name": "servo_7", "board": 0},
+            8: {"name": "servo_8", "board": 0},
+            9: {"name": "servo_9", "board": 0},
+            10: {"name": "servo_10", "board": 0},
+            11: {"name": "servo_11", "board": 0},
+            12: {"name": "servo_12", "board": 0},
+            13: {"name": "servo_13", "board": 0},
+            14: {"name": "servo_14", "board": 0},
+            15: {"name": "servo_15", "board": 0},
         },
     },
 }

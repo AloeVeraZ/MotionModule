@@ -57,7 +57,7 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         template = ROOT / "core" / "motion_module" / "templates" / "dashboard.html"
         rendered = Environment().from_string(template.read_text(encoding="utf-8")).render(
             dashboard_token="ui-test-token",
-            active_page="code",
+            active_page="drive",
             active_tab="",
             project_name="TestRobot",
         )
@@ -81,8 +81,17 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_leaving_drive_tab_disarms_and_stops_keyboard_commands(self):
+    def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
+
+    def test_releasing_a_drive_key_immediately_sends_zero(self):
+        self.run_behavior("key-release-stop")
+
+    def test_a_disconnected_servo_board_is_red_and_explained(self):
+        self.run_behavior("servo-offline")
+
+    def test_a_servo_board_rejecting_commands_is_yellow(self):
+        self.run_behavior("servo-command-fault")
 
     def test_stop_disarms_and_key_repeat_cannot_restart_motors(self):
         self.run_behavior("stop-disarm")

@@ -253,13 +253,10 @@ def create_app(
     network_state = {"busy": False, "last_error": ""}
     deployment_lock = threading.Lock()
     workspace = Path(workspace_directory).resolve() if workspace_directory else None
-    # The bench test belongs to the Pi, not to the deployed project: it reads
-    # the installed hardware map so pushed code cannot relabel or extend it.
-    try:
-        bench_config = load_config(project="")
-    except MotionModuleError:
-        bench_config = module.config
-    bench_channels = {item.channel for item in bench_config.motors}
+    # The bench test drives the live module, so its labels and allowed channels
+    # must come from that same active hardware.py. Otherwise the page can name
+    # one set of pins while the module drives another.
+    bench_channels = {item.channel for item in module.config.motors}
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
     last_sequence = -1
@@ -291,6 +288,10 @@ def create_app(
     def status():
         system = system_snapshot()
         system["active_project"] = project_name
+        # Re-check the servo bus before reporting it, so a board unplugged
+        # after boot turns red instead of staying green forever. The call
+        # rate limits itself.
+        module.refresh_servo_boards()
         robot = module.snapshot()
         with servo_lock:
             robot["servo_commands"] = {
@@ -316,7 +317,7 @@ def create_app(
                     "watchdog_ms": module.config.watchdog_ms,
                 },
                 "motors": motor_rows(module.config),
-                "bench_motors": motor_rows(bench_config),
+                "bench_motors": motor_rows(module.config),
                 "header": header_rows(module.config),
                 "hardware_file": {
                     "source": (
@@ -380,6 +381,7 @@ def create_app(
 
     @app.get("/api/diagnostics")
     def diagnostics():
+        module.refresh_servo_boards()
         return jsonify({"ok": True, "checks": dashboard_checks(module)})
 
     @app.get("/api/usb")

@@ -140,8 +140,8 @@ remain supported for compatibility.
 Use the names directly in your robot code:
 
 ```python
-module.motor("motor_1").set(0.25)
-module.servo("servo_1").set_angle(90)
+module.motor("driver_1a").set(0.25)
+module.servo("servo_0").set_angle(90)
 module.stop_all()
 ```
 
@@ -224,8 +224,8 @@ this file during startup.
 This is a complete two-sided drive example:
 
 ```python
-LEFT = ("motor_1", "motor_2")
-RIGHT = ("motor_3", "motor_4")
+LEFT = ("driver_1a", "driver_1b")
+RIGHT = ("driver_2a", "driver_2b")
 
 
 def clamp(value):
@@ -266,7 +266,7 @@ dictionary must contain JSON-compatible data.
 Use a name from the active `hardware.py`, or a motor channel from 1–8:
 
 ```python
-intake = module.motor("motor_5")  # or module.motor(5)
+intake = module.motor("driver_3a")  # or module.motor(5)
 intake.set(0.30)
 intake.stop()
 ```
@@ -274,7 +274,7 @@ intake.stop()
 Update a drivetrain together, by name or by channel:
 
 ```python
-module.set_motors({"motor_1": 0.4, "motor_2": 0.4, "motor_3": 0.4, "motor_4": 0.4})
+module.set_motors({"driver_1a": 0.4, "driver_1b": 0.4, "driver_2a": 0.4, "driver_2b": 0.4})
 ```
 
 Values are clamped to `-1.0` through `1.0`. MotionModule applies the project
@@ -288,7 +288,7 @@ Use a servo name, or an explicit board/channel pair. PCA9685 boards count
 from 0, and each has channels 0–15:
 
 ```python
-claw = module.servo("servo_1")  # or module.servo(channel=0, board=0)
+claw = module.servo("servo_0")  # or module.servo(channel=0, board=0)
 claw.set_angle(30)
 claw.set_angle(110)
 claw.release()

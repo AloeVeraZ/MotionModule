@@ -28,16 +28,21 @@ Each GODIYMODULES board controls two motors and has four signal inputs. Connect
 each motor only to its own output pair. The names `IN1`/`IN2` below mean the two
 direction inputs for that motor; match them to the board's A/B input labels.
 
-| Driver | Output | Motor channel | Default use | IN1 | IN2 | Pi ground |
+| Driver | Output | Motor channel | Default code name | IN1 | IN2 | Pi ground |
 | ---: | :---: | ---: | --- | --- | --- | --- |
-| 1 | A | 1 | Front left | physical 37 / GPIO26 | physical 35 / GPIO19 | physical 39 |
-| 1 | B | 2 | Rear left | physical 33 / GPIO13 | physical 31 / GPIO6 | physical 39 |
-| 2 | A | 3 | Front right | physical 40 / GPIO21 | physical 38 / GPIO20 | physical 34 |
-| 2 | B | 4 | Rear right | physical 36 / GPIO16 | physical 32 / GPIO12 | physical 34 |
-| 3 | A | 5 | Extra motor A | physical 23 / GPIO11 | physical 21 / GPIO9 | physical 25 |
-| 3 | B | 6 | Extra motor B | physical 26 / GPIO7 | physical 24 / GPIO8 | physical 25 |
-| 4 | A | 7 | Extra motor C | physical 15 / GPIO22 | physical 13 / GPIO27 | physical 14 |
-| 4 | B | 8 | Extra motor D | physical 18 / GPIO24 | physical 16 / GPIO23 | physical 14 |
+| 1 | A | 1 | `driver_1a` | physical 37 / GPIO26 | physical 35 / GPIO19 | physical 39 |
+| 1 | B | 2 | `driver_1b` | physical 33 / GPIO13 | physical 31 / GPIO6 | physical 39 |
+| 2 | A | 3 | `driver_2a` | physical 40 / GPIO21 | physical 38 / GPIO20 | physical 34 |
+| 2 | B | 4 | `driver_2b` | physical 36 / GPIO16 | physical 32 / GPIO12 | physical 34 |
+| 3 | A | 5 | `driver_3a` | physical 23 / GPIO11 | physical 21 / GPIO9 | physical 25 |
+| 3 | B | 6 | `driver_3b` | physical 26 / GPIO7 | physical 24 / GPIO8 | physical 25 |
+| 4 | A | 7 | `driver_4a` | physical 15 / GPIO22 | physical 13 / GPIO27 | physical 14 |
+| 4 | B | 8 | `driver_4b` | physical 18 / GPIO24 | physical 16 / GPIO23 | physical 14 |
+
+The default name is the driver position, so no lookup is needed to find the
+wire. Rename any of them in `hardware.py` and the dashboard follows: the
+Mecanum sample renames channels 1-4 to `front_left`, `rear_left`,
+`front_right` and `rear_right`.
 
 **Each driver is one short bundle of wires.** Its four signal pins and its
 ground sit in a single run of header positions, so you wire a driver without
@@ -103,20 +108,21 @@ assuming wire colors or board orientation:
 | V+ | That servo's power wire | Shared regulated servo supply, not Pi logic power |
 | GND | That servo's ground wire | Returns power to the servo supply |
 
-The first board has these default code names. Channel numbers start at **0**,
-while the friendly names start at **1**; rename them in `hardware.py` to match
-your mechanisms. A configured name does not prove a servo is plugged in.
+The first board has these default code names. They match the channel numbers
+printed on the board, so `servo_5` is the output labelled 5. Rename them in
+`hardware.py` to match your mechanisms. A configured name does not prove a
+servo is plugged in.
 
 | Board output | Default code name | Board output | Default code name |
 | ---: | --- | ---: | --- |
-| 0 | `servo_1` | 8 | `servo_9` |
-| 1 | `servo_2` | 9 | `servo_10` |
-| 2 | `servo_3` | 10 | `servo_11` |
-| 3 | `servo_4` | 11 | `servo_12` |
-| 4 | `servo_5` | 12 | `servo_13` |
-| 5 | `servo_6` | 13 | `servo_14` |
-| 6 | `servo_7` | 14 | `servo_15` |
-| 7 | `servo_8` | 15 | `servo_16` |
+| 0 | `servo_0` | 8 | `servo_8` |
+| 1 | `servo_1` | 9 | `servo_9` |
+| 2 | `servo_2` | 10 | `servo_10` |
+| 3 | `servo_3` | 11 | `servo_11` |
+| 4 | `servo_4` | 12 | `servo_12` |
+| 5 | `servo_5` | 13 | `servo_13` |
+| 6 | `servo_6` | 14 | `servo_14` |
+| 7 | `servo_7` | 15 | `servo_15` |
 
 ### Other connectors and pads
 

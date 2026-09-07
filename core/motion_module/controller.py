@@ -33,6 +33,7 @@ class MotionModule:
         self._watchdog_tripped = False
         self._watchdog_armed = False
         self._last_feed = time.monotonic()
+        self._last_servo_probe = time.monotonic()
         self._stop_event = threading.Event()
         self._motors = {
             item.channel: HBridgeMotor(self.gpio, item, self.config.pwm_hz)
@@ -110,6 +111,30 @@ class MotionModule:
             self._watchdog_armed = any(value != 0 for value in self.motor_values.values())
             self._watchdog_tripped = False
 
+    def refresh_servo_boards(self, *, interval: float = 2.0) -> None:
+        """Ask the servo boards whether they are still there.
+
+        Boards are detected once at startup, which cannot tell the difference
+        between a board that was never connected and one whose I2C wire fell
+        off ten minutes ago. Re-probing keeps the dashboard honest in both
+        directions. Rate limited so a fast status poll cannot flood the bus.
+        """
+
+        probe = getattr(self._servos, "probe", None)
+        if not callable(probe):
+            return
+        with self._lock:
+            if self._closed:
+                return
+            now = time.monotonic()
+            if now - self._last_servo_probe < interval:
+                return
+            self._last_servo_probe = now
+        try:
+            probe()
+        except OSError:
+            pass
+
     def feed_watchdog(self) -> None:
         with self._lock:
             self._last_feed = time.monotonic()
@@ -185,6 +210,7 @@ class MotionModule:
                         "address": f"0x{address:02x}",
                         "available": address in self._servos.available,
                         "error": self._servos.errors.get(address),
+                        "fault": getattr(self._servos, "faults", {}).get(address),
                     }
                     for index, address in enumerate(self.config.servos.addresses)
                 ],

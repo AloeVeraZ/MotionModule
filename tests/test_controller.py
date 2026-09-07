@@ -61,25 +61,25 @@ class ControllerTests(unittest.TestCase):
         self.assertIsNone(servo.angle)
 
     def test_named_outputs_operate_the_expected_motor_and_servo(self):
-        motor = self.module.motor("motor_5")
+        motor = self.module.motor("driver_3a")
         motor.set(0.3)
-        self.assertEqual(motor.name, "motor_5")
+        self.assertEqual(motor.name, "driver_3a")
         self.assertEqual(motor.channel, 5)
         self.assertEqual(self.gpio.values[11], 0.3)
         self.assertEqual(self.gpio.values[9], 0)
-        servo = self.module.servo("servo_16")
+        servo = self.module.servo("servo_15")
         servo.set_angle(45)
         self.assertEqual((servo.board, servo.channel), (0, 15))
         self.assertEqual(self.servos.angles[(0, 15)], 45)
 
     def test_invalid_named_command_cannot_partially_move_motors(self):
         with self.assertRaisesRegex(ValueError, "No motor is named"):
-            self.module.set_motors({"motor_5": 0.3, "missing": 0.3})
+            self.module.set_motors({"driver_3a": 0.3, "missing": 0.3})
         self.assertEqual(set(self.module.motor_values.values()), {0})
 
     def test_name_and_number_cannot_command_the_same_motor_twice(self):
         with self.assertRaisesRegex(ValueError, "specified more than once"):
-            self.module.set_motors({"motor_5": 0.3, 5: -0.3})
+            self.module.set_motors({"driver_3a": 0.3, 5: -0.3})
         self.assertEqual(set(self.module.motor_values.values()), {0})
 
     def test_servo_reference_errors_are_clear_before_writing_outputs(self):
