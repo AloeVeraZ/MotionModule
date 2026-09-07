@@ -9,6 +9,7 @@ import time
 from .config import ModuleConfig, load_config
 from .errors import ConfigurationError, MotionModuleError
 from .gpio import MockGPIO, create_gpio_backend
+from .input import DigitalInput, available_input_gpios
 from .motor import HBridgeMotor, Motor
 from .servo import MockServoController, PCA9685Controller, Servo
 
@@ -71,6 +72,23 @@ class MotionModule:
         if not 0 <= slot.channel <= 15:
             raise ValueError("Servo channel must be from 0 through 15")
         return Servo(self._servos, slot.board, slot.channel, slot.name)
+
+    def digital_input(self, gpio: int, *, pull: str = "none") -> DigitalInput:
+        """Claim an unused Raspberry Pi BCM GPIO as a digital sensor input."""
+
+        if isinstance(gpio, bool) or not isinstance(gpio, int):
+            raise ValueError("Digital input GPIO must be a BCM pin number")
+        if gpio not in available_input_gpios(self.config):
+            available = ", ".join(f"GPIO{pin}" for pin in available_input_gpios(self.config))
+            raise ValueError(
+                f"GPIO{gpio} is used or reserved by the active hardware map. "
+                f"Available inputs: {available or 'none'}"
+            )
+        pull = str(pull).strip().casefold()
+        if pull not in {"none", "up", "down"}:
+            raise ValueError("Digital input pull must be 'none', 'up', or 'down'")
+        self.gpio.claim_input(gpio, pull)
+        return DigitalInput(self.gpio, gpio, pull)
 
     def _resolve_motor(self, reference: int | str) -> int:
         try:

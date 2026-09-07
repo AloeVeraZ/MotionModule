@@ -8,8 +8,9 @@ browser → nginx :80 → versioned dashboard :8080
                            ├── browser project deployment
 active robot folder ───────┤
                            ├── GPIO PWM → four dual H-bridges → eight motors
+                           ├── unused Pi GPIO → digital sensor inputs
                            ├── I2C → PCA9685 board(s) → servos
-                           ├── sysfs → read-only USB inventory
+                           ├── sysfs + USB CDC → GIGA sensor bridge
                            └── time-limited PTY Bash terminal
 ```
 
@@ -33,7 +34,8 @@ fused power system and physical cutoff.
 │   ├── Mecanum/
 │   │   ├── robot.py
 │   │   ├── hardware.py
-│   │   └── dashboard.py
+│   │   ├── dashboard.py
+│   │   └── giga_sensor_bridge.ino
 │   └── AnotherRobot/
 └── backups/
 
@@ -47,7 +49,8 @@ Installing a tag, branch, or commit builds and tests a new release before the
 the runtime links, not the student folders.
 
 The service follows `~/MotionModule/active/robot.py` and auto-loads an optional
-sibling `dashboard.py` for camera, IMU, and sensor telemetry. GPIO and servo
+sibling `dashboard.py` for the separate full Driver Station's camera, IMU, Pi
+input, and USB-controller telemetry. GPIO and servo
 configuration is resolved in one order: the active project's data-only
 `hardware.py`, then the installed `~/.config/motionmodule/hardware.py`, then the
 copy shipped inside the runtime. Installs predating that file keep their TOML
@@ -59,7 +62,7 @@ The Code page sends a browser-selected directory as multipart files to the
 local dashboard. The backend:
 
 1. requires the unguessable per-page dashboard token;
-2. accepts a single safe root folder and Python/text documentation only;
+2. accepts a single safe root folder with Python, Arduino sketches, and text documentation only;
 3. enforces count, individual-file, and total-size limits;
 4. rejects path traversal, links, binary data, caches, and build output;
 5. compiles every `.py`, verifies `create_drive(module)`, verifies
@@ -93,7 +96,10 @@ current boot; the next boot tries saved client Wi-Fi again.
 
 PCA9685 boards acknowledge on I2C. USB devices expose descriptors in Linux
 sysfs, so the dashboard can list identity, topology, driver binding, device
-node, and permission status without probing or writing to the device.
+node, and permission status. The Arduino GIGA R1 WiFi is matched by its
+official USB VID/PID. When the reusable bridge sketch is installed,
+MotionModule sends pin modes over CDC serial and reads the configured values.
+USB discovery alone cannot identify which physical sensor is wired to a pin.
 
 The reference GPIO H-bridges and PWM servo signal have no return channel.
 MotionModule can validate their configured pins and safely pulse an output, but

@@ -145,7 +145,7 @@ sudo nginx -t
 ### A deployment is rejected
 
 The selected folder must contain a top-level `robot.py` and may contain only
-`.py`, `.md`, and `.txt` files. A `hardware.py` is optional, but when present it
+`.py`, `.ino`, `.md`, and `.txt` files. A `hardware.py` is optional, but when present it
 must hold literal data only. Read the exact Driver Station message: syntax and
 hardware-map failures are rejected before anything is replaced.
 

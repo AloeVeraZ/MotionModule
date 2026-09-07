@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#080b10">
+<title>MotionModule Driver Station</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #080b10;
+  --panel: #10151d;
+  --panel-2: #151b24;
+  --panel-3: #1b2330;
+  --line: #26303d;
+  --line-soft: #1c2530;
+  --text: #f5f7fa;
+  --muted: #9aa5b4;
+  --faint: #707c8d;
+  --blue: #78a4ff;
+  --blue-soft: #172541;
+  --green: #3de0a1;
+  --green-soft: #102d24;
+  --amber: #f7c75f;
+  --amber-soft: #322814;
+  --red: #ff6572;
+  --red-soft: #35171d;
+  --radius: 14px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body {
+  margin: 0; min-width: 320px; min-height: 100vh;
+  color: var(--text); background: var(--bg); font: 14px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+button, input { color: inherit; font: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+.station-header {
+  position: sticky; top: 0; z-index: 30;
+  min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 10px 18px; border-bottom: 1px solid var(--line); background: rgba(8,11,16,.94);
+  backdrop-filter: blur(14px);
+}
+.station-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.station-mark {
+  width: 37px; height: 37px; display: grid; place-items: center;
+  border-radius: 10px; background: var(--blue); color: #08101e; font-weight: 900;
+}
+.station-brand strong { display: block; font-size: 13px; letter-spacing: .02em; }
+.station-brand small { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }
+.header-center { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.project-chip, .clock-chip, .link-button {
+  min-height: 35px; display: flex; align-items: center; gap: 8px; padding: 0 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--muted);
+  font-size: 11px; text-decoration: none; white-space: nowrap;
+}
+.project-chip strong { max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.link-button:hover { border-color: var(--faint); color: var(--text); }
+.clock-chip { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+.signal-strip {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+  padding: 10px 16px 0;
+}
+.signal {
+  min-width: 0; display: grid; grid-template-columns: 8px minmax(0,1fr); column-gap: 9px;
+  align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.signal i { grid-row: span 2; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.signal.good i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.signal.warn i { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
+.signal.bad i { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.signal small { color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.signal strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+
+.station-grid {
+  display: grid; grid-template-columns: 250px minmax(420px, 1fr) 310px; gap: 12px;
+  align-items: start; padding: 12px 16px 20px;
+}
+.column { min-width: 0; display: grid; gap: 12px; }
+.panel { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.panel-head {
+  min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 11px 13px; border-bottom: 1px solid var(--line-soft);
+}
+.panel-head h2 { margin: 0; font-size: 12px; letter-spacing: .01em; }
+.panel-head span { color: var(--faint); font-size: 9px; }
+.panel-body { padding: 13px; }
+.stack { display: grid; gap: 11px; }
+.eyebrow { color: var(--faint); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+
+.mode-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.mode-name { padding: 10px 11px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--panel-2); }
+.mode-name strong { display: block; margin-top: 3px; font-size: 12px; }
+.robot-state {
+  padding: 14px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-2); text-align: center;
+}
+.robot-state strong { display: block; color: var(--red); font: 800 22px/1 var(--mono); letter-spacing: .05em; }
+.robot-state small { display: block; margin-top: 7px; color: var(--faint); font-size: 9px; }
+.robot-state.armed { border-color: #26684f; background: var(--green-soft); }
+.robot-state.armed strong { color: var(--green); }
+.safety-check { display: flex; gap: 9px; align-items: flex-start; color: var(--muted); font-size: 10px; line-height: 1.55; }
+.safety-check input { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 1px; accent-color: var(--green); }
+.command-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.command {
+  min-height: 42px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2);
+  font-size: 10px; font-weight: 850; letter-spacing: .06em;
+}
+.command.enable { border-color: #26684f; background: var(--green-soft); color: var(--green); }
+.command.enable:disabled { opacity: .38; cursor: not-allowed; }
+.command.disable { border-color: #71323b; background: var(--red-soft); color: var(--red); }
+.stop-command {
+  min-height: 48px; border: 1px solid #8a3642; border-radius: 9px; background: #511d25; color: #ffe6e8;
+  font-size: 11px; font-weight: 900; letter-spacing: .06em;
+}
+.range-label { display: grid; gap: 7px; color: var(--muted); font-size: 10px; }
+.range-label span { display: flex; justify-content: space-between; }
+.range-label output { color: var(--text); font: 700 10px var(--mono); }
+input[type="range"] { width: 100%; accent-color: var(--blue); }
+
+.key-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+kbd {
+  min-height: 39px; display: grid; place-content: center; padding: 4px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--muted);
+  font: 600 8px/1.25 var(--font); text-align: center;
+}
+kbd b { color: var(--text); font-size: 11px; }
+kbd.active { border-color: var(--blue); background: var(--blue-soft); color: var(--blue); }
+kbd:empty { border-color: transparent; background: transparent; }
+.controller-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.axis { display: grid; grid-template-columns: 48px 1fr 34px; gap: 7px; align-items: center; color: var(--muted); font-size: 9px; }
+.axis-track { height: 4px; overflow: hidden; border-radius: 99px; background: var(--panel-3); }
+.axis-track i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--blue); }
+.axis output { text-align: right; font: 700 9px var(--mono); }
+
+.camera-controls { display: inline-flex; gap: 3px; padding: 3px; border-radius: 9px; background: var(--panel-2); }
+.camera-controls button { padding: 6px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 9px; font-weight: 700; }
+.camera-controls button.active { background: var(--panel-3); color: var(--text); }
+.camera-stage { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px; padding: 2px; background: #030507; }
+.camera-stage.single { grid-template-columns: minmax(0, 680px); justify-content: center; }
+.camera-frame { position: relative; min-width: 0; aspect-ratio: 1 / 1; overflow: hidden; background: #090d13; }
+.camera-frame img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.camera-empty { position: absolute; inset: 0; display: grid; place-content: center; gap: 7px; padding: 24px; text-align: center; }
+.camera-empty i { width: 40px; height: 40px; display: grid; place-items: center; margin: auto; border: 1px solid #313a47; border-radius: 50%; color: var(--faint); font-style: normal; }
+.camera-empty strong { font-size: 11px; }
+.camera-empty span { max-width: 32ch; color: var(--faint); font-size: 9px; line-height: 1.55; }
+.camera-meta {
+  position: absolute; left: 9px; right: 9px; bottom: 9px; display: flex; justify-content: space-between; gap: 8px;
+  padding: 7px 8px; border: 1px solid rgba(255,255,255,.11); border-radius: 8px; background: rgba(5,8,12,.76);
+  backdrop-filter: blur(8px); font-size: 9px;
+}
+.camera-meta span { color: var(--faint); }
+
+.control-list { display: grid; }
+.control-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.control-row:last-child { border-bottom: 0; }
+.control-copy strong { display: block; font-size: 10px; }
+.control-copy small { display: block; margin-top: 2px; color: var(--faint); font-size: 8px; }
+.mini-button { min-width: 72px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); font-size: 9px; }
+.mini-button.primary { border-color: #355c9f; background: var(--blue-soft); color: var(--blue); }
+.empty-copy { color: var(--faint); font-size: 9px; line-height: 1.6; }
+
+.imu-body { display: grid; justify-items: center; gap: 13px; }
+.heading-dial {
+  --yaw: 0deg; position: relative; width: min(190px, 100%); aspect-ratio: 1; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: radial-gradient(circle, var(--panel) 0 54%, transparent 55%), conic-gradient(from -2deg, var(--blue) 0 4deg, var(--panel-3) 4deg 360deg);
+}
+.heading-dial::before { content: ""; position: absolute; left: 50%; top: 11%; width: 2px; height: 39%; background: var(--blue); transform-origin: 50% 100%; transform: translateX(-50%) rotate(var(--yaw)); }
+.heading-dial::after { content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--text); }
+.heading-readout { position: relative; z-index: 2; min-width: 76px; padding: 7px 9px; border-radius: 10px; background: var(--panel); text-align: center; }
+.heading-readout strong { display: block; font: 750 24px/1.05 var(--mono); }
+.heading-readout small { color: var(--faint); font-size: 8px; letter-spacing: .12em; }
+.imu-grid { width: 100%; display: grid; grid-template-columns: repeat(3,1fr); gap: 5px; }
+.imu-value { padding: 8px 4px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--panel-2); text-align: center; }
+.imu-value small { display: block; color: var(--faint); font-size: 7px; letter-spacing: .1em; }
+.imu-value strong { display: block; margin-top: 3px; font: 700 9px var(--mono); }
+.imu-detail { color: var(--faint); font-size: 8px; line-height: 1.55; text-align: center; }
+
+.sensor-list { max-height: 492px; overflow: auto; scrollbar-color: var(--panel-3) transparent; }
+.sensor-row { display: grid; grid-template-columns: 7px minmax(0,1fr) auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.sensor-row:last-child { border-bottom: 0; }
+.sensor-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.sensor-row.ok .sensor-dot { background: var(--green); }
+.sensor-row.warning .sensor-dot { background: var(--amber); }
+.sensor-row.fault .sensor-dot, .sensor-row.offline .sensor-dot { background: var(--red); }
+.sensor-copy { min-width: 0; }
+.sensor-copy strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.sensor-copy small { display: block; margin-top: 2px; color: var(--faint); font-size: 8px; }
+.sensor-reading { font: 700 10px var(--mono); white-space: nowrap; }
+.sensor-reading small { margin-left: 3px; color: var(--faint); font: 500 8px var(--font); }
+.sensor-bar { grid-column: 2 / 4; height: 3px; overflow: hidden; border-radius: 99px; background: var(--panel-3); }
+.sensor-bar i { display: block; height: 100%; background: var(--blue); }
+.pin-note { margin: 0 0 9px; color: var(--faint); font-size: 8px; line-height: 1.55; }
+.pin-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.pin-chip { padding: 4px 6px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--panel-2); color: var(--muted); font: 700 8px var(--mono); }
+.controller-list { display: grid; gap: 8px; }
+.controller-card { padding: 10px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--panel-2); }
+.controller-card.live { border-color: #285942; }
+.controller-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.controller-head strong { display: block; font-size: 10px; }
+.controller-head small { display: block; margin-top: 2px; color: var(--faint); font: 500 8px var(--mono); }
+.bridge-badge { flex: 0 0 auto; padding: 4px 6px; border-radius: 99px; background: var(--amber-soft); color: var(--amber); font-size: 7px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.bridge-badge.live { background: var(--green-soft); color: var(--green); }
+.bridge-badge.offline { background: var(--red-soft); color: var(--red); }
+.controller-detail { margin: 8px 0 0; color: var(--faint); font-size: 8px; line-height: 1.5; }
+.controller-capabilities { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.controller-capabilities span { padding: 3px 5px; border-radius: 5px; background: var(--panel-3); color: var(--muted); font: 650 7px var(--mono); }
+.controller-pins { margin-top: 7px; border-top: 1px solid var(--line-soft); }
+
+.connection-banner { display: none; margin: 0 16px; padding: 10px 12px; border: 1px solid #71323b; border-radius: 9px; background: var(--red-soft); color: #ffd9dd; font-size: 10px; }
+.connection-banner.visible { display: block; }
+
+@media (max-width: 1050px) {
+  .station-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .center-column { grid-column: 1 / -1; grid-row: 1; }
+  .left-column { grid-column: 1; grid-row: 2; }
+  .right-column { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .station-header { align-items: flex-start; flex-wrap: wrap; }
+  .header-center { width: 100%; justify-content: space-between; }
+  .clock-chip { display: none; }
+  .signal-strip { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .station-grid { grid-template-columns: minmax(0,1fr); }
+  .station-grid > .column { grid-column: 1; grid-row: auto; }
+  .center-column { grid-row: 1 !important; }
+  .camera-stage { grid-template-columns: minmax(0,1fr); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="station-header">
+  <div class="station-brand">
+    <div class="station-mark" aria-hidden="true">MI</div>
+    <div><strong>MotionModule Driver Station</strong><small>Competition console</small></div>
+  </div>
+  <div class="header-center">
+    <div class="project-chip"><span>ROBOT</span><strong>{{ project_name }}</strong></div>
+    <div class="clock-chip" id="localClock">--:--:--</div>
+  </div>
+  <a class="link-button" href="/drive">Exit to MotionModule&nbsp; ↗</a>
+</header>
+
+<div class="signal-strip" aria-label="Robot status">
+  <div class="signal" id="commsSignal"><i></i><small>Communications</small><strong>Connecting</strong></div>
+  <div class="signal" id="codeSignal"><i></i><small>Robot code</small><strong>Checking</strong></div>
+  <div class="signal" id="inputSignal"><i></i><small>Driver input</small><strong>None</strong></div>
+  <div class="signal" id="outputSignal"><i></i><small>Outputs</small><strong>Unknown</strong></div>
+</div>
+<div class="connection-banner" id="connectionBanner"><strong>Robot connection lost.</strong> Controls are disabled until telemetry returns and the operator deliberately enables again.</div>
+
+<main class="station-grid">
+  <aside class="column left-column">
+    <section class="panel">
+      <div class="panel-head"><h2>Robot control</h2><span id="watchdogLabel">WATCHDOG</span></div>
+      <div class="panel-body stack">
+        <div class="mode-row">
+          <div class="mode-name"><span class="eyebrow">Mode</span><strong>Teleoperated</strong></div>
+          <span class="eyebrow">Operator</span>
+        </div>
+        <div class="robot-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
+        <label class="safety-check"><input id="armConfirm" type="checkbox"><span>The area is clear and the physical cutoff is within reach.</span></label>
+        <div class="command-pair">
+          <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
+          <button class="command disable" id="disableButton" type="button">DISABLE</button>
+        </div>
+        <label class="range-label"><span>Maximum drive output <output id="speedValue">40%</output></span><input id="speed" type="range" min="10" max="100" step="5" value="40"></label>
+        <button class="stop-command" id="stopButton" type="button">■ &nbsp; STOP ALL OUTPUTS</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Driver input</h2><span id="controllerSummary">Keyboard</span></div>
+      <div class="panel-body stack">
+        <div class="controller-name" id="controllerName">No game controller detected</div>
+        <div id="axisList" class="stack"></div>
+        <div class="key-grid" id="keyGrid"></div>
+        <p class="empty-copy">W/S drive, A/D strafe, Q/E turn. Space disables and stops. Controller: left stick drive/strafe, right stick turn.</p>
+      </div>
+    </section>
+  </aside>
+
+  <div class="column center-column">
+    <section class="panel">
+      <div class="panel-head"><h2>Driver cameras</h2><div class="camera-controls" id="cameraControls" role="group" aria-label="Camera layout"></div></div>
+      <div class="camera-stage single" id="cameraStage">
+        <div class="camera-frame"><div class="camera-empty"><i>◎</i><strong>Waiting for dashboard.py</strong><span>One or two square camera feeds appear here.</span></div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Mechanism controls</h2><span id="controlSummary">Checking project</span></div>
+      <div class="panel-body control-list" id="controlList"><p class="empty-copy">Project controls will appear here.</p></div>
+    </section>
+  </div>
+
+  <aside class="column right-column">
+    <section class="panel">
+      <div class="panel-head"><h2>Gyroscope / IMU</h2><span id="imuStatus">Not configured</span></div>
+      <div class="panel-body imu-body">
+        <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
+        <div class="imu-grid">
+          <div class="imu-value"><small>PITCH</small><strong id="imuPitch">—</strong></div>
+          <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
+          <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
+        </div>
+        <p class="imu-detail" id="imuDetail">Declare the installed IMU in dashboard.py.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Raspberry Pi inputs</h2><span id="piSensorSummary">0 / 20</span></div>
+      <div class="panel-body">
+        <p class="pin-note" id="piInputNote">Unused BCM pins are detected from the active motor map. Pi header inputs are digital.</p>
+        <div class="pin-strip" id="piAvailablePins"></div>
+        <div class="sensor-list" id="piSensorList"><p class="empty-copy">No Raspberry Pi inputs declared.</p></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>USB sensor controllers</h2><span id="usbControllerSummary">Scanning</span></div>
+      <div class="panel-body controller-list" id="usbControllerList"><p class="empty-copy">Plug in a supported USB controller such as an Arduino GIGA R1 WiFi.</p></div>
+    </section>
+  </aside>
+</main>
+
+<script>
+'use strict';
+const dashboardToken = {{ dashboard_token | tojson }};
+const apiHeaders = {'Content-Type': 'application/json', 'X-MotionModule-Token': dashboardToken};
+const $ = selector => document.querySelector(selector);
+const $$ = selector => document.querySelectorAll(selector);
+const element = (tag, className, text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+};
+const replaceWith = (container, nodes) => container.replaceChildren(...nodes);
+let sequence = Date.now() * 1000;
+let connected = false;
+let armed = false;
+let heldKeys = new Set();
+let padIndex = null;
+let cameraMode = 'both';
+let cameraSignature = '';
+const bindings = {forward: 'w', back: 's', left: 'a', right: 'd', turnLeft: 'q', turnRight: 'e'};
+const IDLE = {forward: 0, strafe: 0, rotate: 0};
+
+async function jsonFetch(url, options = {}) {
+  const response = await fetch(url, {cache: 'no-store', ...options});
+  const data = await response.json().catch(() => ({error: `HTTP ${response.status}`}));
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+}
+
+function setSignal(id, state, text) {
+  const signal = $(id);
+  signal.className = `signal ${state || ''}`;
+  signal.querySelector('strong').textContent = text;
+}
+
+function updateEnableButton() {
+  $('#enableButton').disabled = !connected || !$('#armConfirm').checked || armed;
+}
+
+function setArmed(value) {
+  armed = Boolean(value && connected);
+  const state = $('#robotState');
+  state.classList.toggle('armed', armed);
+  state.querySelector('strong').textContent = armed ? 'ENABLED' : 'DISABLED';
+  state.querySelector('small').textContent = armed ? 'Driver commands are live' : 'Driver commands are blocked';
+  setSignal('#inputSignal', armed ? 'good' : '', armed ? 'Ready' : 'Blocked');
+  updateEnableButton();
+  if (!armed) stopAll();
+}
+
+async function stopAll() {
+  heldKeys.clear();
+  paintKeys();
+  try { await fetch('/api/stop', {method: 'POST', keepalive: true}); } catch (_) {}
+}
+
+function activePad() {
+  if (typeof navigator.getGamepads !== 'function') return null;
+  const pads = [...navigator.getGamepads()].filter(Boolean);
+  if (!pads.length) { padIndex = null; return null; }
+  const pad = pads.find(item => item.index === padIndex) || pads[0];
+  padIndex = pad.index;
+  return pad;
+}
+
+function axisBar(label, value) {
+  const row = element('div', 'axis');
+  const track = element('div', 'axis-track');
+  const fill = element('i');
+  fill.style.width = `${Math.abs(value) * 100}%`;
+  track.append(fill);
+  row.append(element('span', null, label), track, element('output', null, value.toFixed(2)));
+  return row;
+}
+
+function readPad() {
+  const pad = activePad();
+  if (!pad) {
+    $('#controllerName').textContent = 'No game controller detected';
+    $('#controllerSummary').textContent = 'Keyboard';
+    replaceWith($('#axisList'), []);
+    return null;
+  }
+  const deadzone = value => Math.abs(value) < .12 ? 0 : value;
+  const axes = pad.axes || [];
+  const command = {forward: -deadzone(axes[1] || 0), strafe: deadzone(axes[0] || 0), rotate: -deadzone(axes[2] || 0)};
+  const raw = (pad.id || 'Game controller').split('(')[0].trim() || 'Game controller';
+  $('#controllerName').textContent = raw;
+  $('#controllerSummary').textContent = pad.mapping === 'standard' ? 'Standard gamepad' : 'Raw gamepad';
+  replaceWith($('#axisList'), [axisBar('Forward', command.forward), axisBar('Strafe', command.strafe), axisBar('Turn', command.rotate)]);
+  return command.forward || command.strafe || command.rotate ? command : null;
+}
+
+const keyAxis = (positive, negative) => (heldKeys.has(positive) ? 1 : 0) - (heldKeys.has(negative) ? 1 : 0);
+
+async function sendDrive() {
+  if (!armed || !connected) return;
+  const keys = {forward: keyAxis('w','s'), strafe: keyAxis('d','a'), rotate: keyAxis('q','e')};
+  const keyboardMoving = keys.forward || keys.strafe || keys.rotate;
+  const command = keyboardMoving ? keys : readPad() || IDLE;
+  setSignal('#inputSignal', 'good', keyboardMoving ? 'Keyboard' : command === IDLE ? 'Ready' : 'Controller');
+  try {
+    const response = await fetch('/api/drive', {
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify({sequence: ++sequence, ...command, speed: Number($('#speed').value) / 100}),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || 'Drive command refused');
+    }
+  } catch (_) {
+    connected = false;
+    setArmed(false);
+    markDisconnected();
+  }
+}
+
+function renderKeys() {
+  const items = [null,['W','Forward'],null,['A','Left'],['S','Back'],['D','Right'],['Q','Turn L'],['Space','Stop'],['E','Turn R']];
+  replaceWith($('#keyGrid'), items.map(item => {
+    const key = element('kbd');
+    if (item) { key.dataset.key = item[0].toLowerCase(); key.append(element('b', null, item[0]), document.createTextNode(item[1])); }
+    return key;
+  }));
+}
+function paintKeys() { $$('[data-key]').forEach(key => key.classList.toggle('active', heldKeys.has(key.dataset.key))); }
+
+function markDisconnected() {
+  connected = false;
+  $('#connectionBanner').classList.add('visible');
+  setSignal('#commsSignal', 'bad', 'Disconnected');
+  setSignal('#codeSignal', 'bad', 'Unknown');
+  setSignal('#outputSignal', 'bad', 'Unknown');
+  updateEnableButton();
+}
+
+async function refreshStatus() {
+  try {
+    const data = await jsonFetch('/api/status');
+    const robot = data.robot || {};
+    const system = data.system || {};
+    connected = true;
+    $('#connectionBanner').classList.remove('visible');
+    $('#watchdogLabel').textContent = `${robot.watchdog_ms || '—'} MS WATCHDOG`;
+    setSignal('#commsSignal', 'good', robot.hardware ? 'Robot connected' : 'Simulation');
+    setSignal('#codeSignal', system.active_project && system.active_project !== 'No project' ? 'good' : 'warn', system.active_project || 'No project');
+    const outputsActive = Object.values(robot.motors || {}).some(value => Math.abs(value) > .001) || Object.keys(robot.servo_outputs || {}).length;
+    setSignal('#outputSignal', outputsActive ? 'warn' : 'good', outputsActive ? 'Active' : 'Idle');
+    updateEnableButton();
+  } catch (_) {
+    if (armed) setArmed(false);
+    markDisconnected();
+  }
+}
+
+function cameraPlaceholder(title, detail) {
+  const empty = element('div', 'camera-empty');
+  empty.append(element('i', null, '◎'), element('strong', null, title), element('span', null, detail));
+  return empty;
+}
+
+function applyCameraMode() {
+  const stage = $('#cameraStage');
+  const frames = [...stage.querySelectorAll('[data-camera-id]')];
+  const both = cameraMode === 'both' && frames.length > 1;
+  stage.className = `camera-stage ${both ? 'dual' : 'single'}`;
+  frames.forEach(frame => { frame.hidden = !both && frame.dataset.cameraId !== cameraMode; });
+  $$('#cameraControls button').forEach(button => button.classList.toggle('active', button.dataset.mode === cameraMode));
+}
+
+function renderCameras(data) {
+  const cameras = Array.isArray(data.cameras) ? data.cameras.slice(0,2) : [];
+  const signature = JSON.stringify(cameras);
+  if (signature === cameraSignature) return;
+  cameraSignature = signature;
+  if (!cameras.length) {
+    const frame = element('div', 'camera-frame');
+    frame.append(cameraPlaceholder('No camera configured', data.configured ? 'Return CameraFeed entries from dashboard.py.' : 'Add optional dashboard.py beside robot.py.'));
+    replaceWith($('#cameraStage'), [frame]); replaceWith($('#cameraControls'), []); $('#cameraStage').className = 'camera-stage single'; return;
+  }
+  replaceWith($('#cameraStage'), cameras.map(camera => {
+    const frame = element('div', 'camera-frame'); frame.dataset.cameraId = camera.id; frame.setAttribute('data-camera-id', camera.id);
+    const empty = cameraPlaceholder(`${camera.name} offline`, camera.detail || 'Check the camera URL and connection.');
+    if (camera.connected && camera.url) {
+      const image = element('img'); image.src = camera.url; image.alt = `${camera.name} live view`; empty.hidden = true;
+      image.addEventListener('error', () => { image.hidden = true; empty.hidden = false; });
+      image.addEventListener('load', () => { empty.hidden = true; }); frame.append(image);
+    }
+    frame.append(empty);
+    const meta = element('div', 'camera-meta'); meta.append(element('strong', null, camera.name), element('span', null, camera.connected && camera.url ? 'LIVE' : 'OFFLINE')); frame.append(meta);
+    return frame;
+  }));
+  const choices = cameras.length > 1 ? [{id:'both', name:'Both'}, ...cameras.map(camera => ({id:camera.id,name:camera.name}))] : cameras.map(camera => ({id:camera.id,name:camera.name}));
+  if (!choices.some(choice => choice.id === cameraMode)) cameraMode = cameras.length > 1 ? 'both' : cameras[0].id;
+  replaceWith($('#cameraControls'), choices.map(choice => {
+    const button = element('button', null, choice.name); button.type = 'button'; button.dataset.mode = choice.id;
+    button.addEventListener('click', () => {cameraMode = choice.id; applyCameraMode();}); return button;
+  }));
+  applyCameraMode();
+}
+
+const numberText = (value, suffix='°') => Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : '—';
+function renderImu(imu) {
+  const available = Boolean(imu && imu.connected);
+  $('#imuStatus').textContent = !imu ? 'Not configured' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
+  const yaw = Number.isFinite(imu?.yaw) ? ((Number(imu.yaw)%360)+360)%360 : null;
+  $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
+  $('#headingDial').style['--yaw'] = `${yaw || 0}deg`; $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in dashboard.py.';
+}
+
+function sensorText(sensor) {
+  if (!sensor.connected || sensor.value == null) return '—';
+  if (sensor.kind === 'digital') return sensor.value ? 'ON' : 'OFF';
+  return sensor.kind === 'analog' && Number.isFinite(sensor.value) ? Number(sensor.value).toFixed(2) : String(sensor.value);
+}
+function sensorRows(sensors) {
+  const items = Array.isArray(sensors) ? sensors.slice(0,20) : [];
+  return items.map(sensor => {
+    const row = element('div', `sensor-row ${sensor.status || 'unknown'}`); if (sensor.detail) row.title = sensor.detail;
+    const copy = element('div','sensor-copy'); copy.append(element('strong',null,sensor.name), element('small',null,[sensor.kind,sensor.channel].filter(Boolean).join(' · ')));
+    const reading = element('div','sensor-reading',sensorText(sensor)); if (sensor.unit && sensor.value != null) reading.append(element('small',null,sensor.unit));
+    row.append(element('i','sensor-dot'),copy,reading);
+    if (sensor.kind === 'analog' && Number.isFinite(sensor.value) && Number.isFinite(sensor.minimum) && Number.isFinite(sensor.maximum)) {
+      const percent = Math.max(0,Math.min(100,(sensor.value-sensor.minimum)/(sensor.maximum-sensor.minimum)*100)); const bar=element('div','sensor-bar'); const fill=element('i'); fill.style.width=`${percent}%`; bar.append(fill); row.append(bar);
+    }
+    return row;
+  });
+}
+function renderSensors(data) {
+  const piInputs = Array.isArray(data.pi_inputs) ? data.pi_inputs.slice(0,20) : Array.isArray(data.sensors) ? data.sensors.slice(0,20) : [];
+  $('#piSensorSummary').textContent = `${piInputs.length} / 20`;
+  const piRows = sensorRows(piInputs);
+  replaceWith($('#piSensorList'), piRows.length ? piRows : [element('p','empty-copy','No Raspberry Pi digital inputs declared in dashboard.py.')]);
+  const available = Array.isArray(data.pi_gpio?.available) ? data.pi_gpio.available : [];
+  replaceWith($('#piAvailablePins'), available.map(pin => element('span','pin-chip',`GPIO${pin.bcm} · P${pin.physical}`)));
+  $('#piInputNote').textContent = available.length
+    ? `${available.length} unused BCM pins are available. Pi header inputs are digital; use an ADC or USB controller for analog sensors.`
+    : 'No unused Raspberry Pi GPIO remains in the active motor map.';
+
+  const controllers = Array.isArray(data.usb_controllers) ? data.usb_controllers : [];
+  const connectedControllers = controllers.filter(controller => controller.connected).length;
+  $('#usbControllerSummary').textContent = connectedControllers ? `${connectedControllers} connected` : 'None connected';
+  if (!controllers.length) {
+    replaceWith($('#usbControllerList'), [element('p','empty-copy','No supported USB sensor controller detected. Arduino GIGA R1 WiFi is supported over USB-C.')]);
+    return;
+  }
+  replaceWith($('#usbControllerList'), controllers.map(controller => {
+    const streaming = controller.bridge === 'streaming';
+    const card = element('article', `controller-card ${streaming ? 'live' : ''}`);
+    const head = element('div','controller-head');
+    const identity = element('div');
+    identity.append(element('strong',null,controller.name), element('small',null,controller.port || controller.serial || `${controller.vendor_id}:${controller.product_id}`));
+    const badgeState = !controller.connected ? 'offline' : streaming ? 'live' : '';
+    const badge = element('span',`bridge-badge ${badgeState}`,!controller.connected ? 'Offline' : streaming ? 'Streaming' : 'Detected');
+    head.append(identity,badge); card.append(head);
+    const capabilities = element('div','controller-capabilities');
+    if (controller.digital_pins?.length) capabilities.append(element('span',null,`${controller.digital_pins[0]}–${controller.digital_pins.at(-1)} digital`));
+    if (controller.analog_pins?.length) capabilities.append(element('span',null,`${controller.analog_pins[0]}–${controller.analog_pins.at(-1)} analog`));
+    if (controller.adc_bits) capabilities.append(element('span',null,`${controller.adc_bits}-bit ADC`));
+    if (capabilities.childElementCount) card.append(capabilities);
+    card.append(element('p','controller-detail',controller.detail || 'Board detected. Waiting for configured sensor data.'));
+    const rows = sensorRows(controller.pins);
+    if (rows.length) { const pins = element('div','controller-pins'); pins.append(...rows); card.append(pins); }
+    return card;
+  }));
+}
+
+async function refreshTelemetry() {
+  try { const data = await jsonFetch('/api/drive/telemetry'); renderCameras(data); renderImu(data.imu); renderSensors(data); }
+  catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; }
+}
+
+async function loadControls() {
+  try {
+    const data = await jsonFetch('/api/drive/controls'); const controls = data.controls || []; $('#controlSummary').textContent = controls.length ? `${controls.length} from ${data.project}` : 'None declared';
+    if (!controls.length) { replaceWith($('#controlList'), [element('p','empty-copy','No project controls declared. Driving remains available.')]); return; }
+    replaceWith($('#controlList'), controls.map(control => {
+      const row=element('div','control-row'); const copy=element('div','control-copy'); copy.append(element('strong',null,control.label),element('small',null,control.detail||control.name)); row.append(copy);
+      if (control.kind === 'slider') { const slider=element('input'); slider.type='range'; slider.min=control.minimum; slider.max=control.maximum; slider.step=control.step; slider.value=0; slider.addEventListener('input',()=>sendControl(control.name,slider.value)); row.append(slider); }
+      else { const button=element('button','mini-button primary',control.kind==='hold'?'Hold':control.kind==='toggle'?'Toggle':'Run'); button.type='button'; let on=false;
+        if(control.kind==='hold'){button.addEventListener('pointerdown',()=>sendControl(control.name,1)); ['pointerup','pointerleave','pointercancel'].forEach(type=>button.addEventListener(type,()=>sendControl(control.name,0)));}
+        else button.addEventListener('click',()=>{on=control.kind==='toggle'?!on:true;sendControl(control.name,on?1:0);}); row.append(button); }
+      return row;
+    }));
+  } catch (error) { replaceWith($('#controlList'), [element('p','empty-copy',error.message)]); }
+}
+async function sendControl(name,value) { if(!armed) return; try{await jsonFetch('/api/drive/control',{method:'POST',headers:apiHeaders,body:JSON.stringify({name,value:Number(value)})});}catch(_){setArmed(false);} }
+
+$('#armConfirm').addEventListener('change', updateEnableButton);
+$('#enableButton').addEventListener('click', () => setArmed(true));
+$('#disableButton').addEventListener('click', () => setArmed(false));
+$('#stopButton').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
+$('#speed').addEventListener('input', () => { $('#speedValue').textContent=`${$('#speed').value}%`; sendDrive(); });
+addEventListener('keydown', event => {
+  if (!armed || ['INPUT','BUTTON'].includes(document.activeElement.tagName)) return;
+  const key=event.key.toLowerCase(); if(event.key===' '){event.preventDefault();$('#armConfirm').checked=false;setArmed(false);return;}
+  if(!Object.values(bindings).includes(key)||event.repeat)return; event.preventDefault(); heldKeys.add(key); paintKeys(); sendDrive();
+});
+addEventListener('keyup', event => { const key=event.key.toLowerCase(); if(!Object.values(bindings).includes(key))return; heldKeys.delete(key); paintKeys(); sendDrive(); });
+addEventListener('blur',()=>setArmed(false)); addEventListener('pagehide',stopAll); document.addEventListener('visibilitychange',()=>{if(document.hidden)setArmed(false);});
+addEventListener('gamepaddisconnected',()=>{padIndex=null;setArmed(false);});
+
+renderKeys();
+loadControls();
+refreshStatus();
+refreshTelemetry();
+readPad();
+setInterval(refreshStatus, 500);
+setInterval(refreshTelemetry, 250);
+setInterval(readPad, 120);
+setInterval(sendDrive, 80);
+setInterval(() => { $('#localClock').textContent = new Date().toLocaleTimeString([], {hour12:false}); }, 1000);
+</script>
+</body>
+</html>

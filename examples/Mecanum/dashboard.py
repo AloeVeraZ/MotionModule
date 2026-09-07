@@ -2,9 +2,10 @@
 
 MotionModule finds this file automatically because it sits beside robot.py.
 Delete it and driving still works; edit it when the robot gains cameras, an
-IMU, analog inputs, or digital inputs.
+IMU, Raspberry Pi digital inputs, or a USB sensor controller.
 """
 
+from motion_module.sensor_bridge import GigaPin, GigaR1Bridge
 from motion_module.telemetry import (
     CameraFeed,
     IMUReading,
@@ -26,6 +27,19 @@ class MecanumDashboard(TelemetryDashboard):
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
+        # GPIO4 is unused by the sample motor map. MotionModule refuses a pin
+        # automatically if hardware.py already assigned or reserved it.
+        self.forward_limit = module.digital_input(4, pull="up")
+        # The GIGA is found automatically by its official USB VID/PID. Flash
+        # giga_sensor_bridge.ino once; pin modes below are then sent from this
+        # file after every USB reconnect.
+        self.giga = GigaR1Bridge([
+            GigaPin(
+                "A0", "Arm potentiometer", kind="analog", unit="raw",
+                minimum=0, maximum=4095,
+            ),
+            GigaPin("D22", "Intake beam", kind="digital", pull="up"),
+        ])
 
     def cameras(self):
         # The Driver Station lets the operator show either camera or both.
@@ -55,39 +69,25 @@ class MecanumDashboard(TelemetryDashboard):
             detail="Connect a gyro/IMU and replace this placeholder read.",
         )
 
-    def sensors(self):
-        # Up to 20 analog, digital, or text readings can be returned here.
-        # These placeholders document typical inputs without pretending that
-        # unconnected hardware is live.
+    def pi_inputs(self):
+        # Raspberry Pi header GPIO has digital input only. Use a USB controller
+        # such as the GIGA (below) or an external ADC for analog sensors.
         return [
             SensorReading(
-                "Front range",
-                None,
-                kind="analog",
-                unit="mm",
-                channel="ADC 0",
-                connected=False,
-                minimum=0,
-                maximum=2000,
-                detail="Example distance or analog range sensor",
-            ),
-            SensorReading(
-                "Intake beam",
-                None,
-                kind="digital",
-                channel="DIO 0",
-                connected=False,
-                detail="Example beam-break input",
-            ),
-            SensorReading(
                 "Forward limit",
-                None,
+                self.forward_limit.value if self.forward_limit.connected else None,
                 kind="digital",
-                channel="DIO 1",
-                connected=False,
-                detail="Example limit-switch input",
+                channel="GPIO4 · pin 7",
+                connected=self.forward_limit.connected,
+                detail="Normally closed limit switch using the Pi pull-up",
             ),
         ]
+
+    def usb_controllers(self):
+        return [self.giga.snapshot()]
+
+    def close(self):
+        self.giga.close()
 
 
 def create_dashboard(module, drive):

@@ -24,6 +24,8 @@ class MockGPIO:
 
     def __init__(self) -> None:
         self.claimed: set[int] = set()
+        self.outputs: set[int] = set()
+        self.inputs: set[int] = set()
         self.values: dict[int, float] = {}
         self.events: list[tuple[str, int, float]] = []
         self.closed = False
@@ -32,28 +34,42 @@ class MockGPIO:
         if gpio in self.claimed:
             raise HardwareUnavailable(f"GPIO{gpio} has already been claimed")
         self.claimed.add(gpio)
+        self.outputs.add(gpio)
         self.values[gpio] = 0.0
         self.events.append(("claim", gpio, 0.0))
 
+    def claim_input(self, gpio: int, pull: str = "none") -> None:
+        if gpio in self.claimed:
+            raise HardwareUnavailable(f"GPIO{gpio} has already been claimed")
+        self.claimed.add(gpio)
+        self.inputs.add(gpio)
+        self.values[gpio] = 1.0 if pull == "up" else 0.0
+        self.events.append((f"claim_input_{pull}", gpio, self.values[gpio]))
+
+    def read(self, gpio: int) -> bool:
+        if gpio not in self.inputs or self.closed:
+            raise HardwareUnavailable(f"GPIO{gpio} is not available as an input")
+        return bool(self.values[gpio])
+
     def write(self, gpio: int, value: bool) -> None:
-        self._require(gpio)
+        self._require_output(gpio)
         self.values[gpio] = 1.0 if value else 0.0
         self.events.append(("write", gpio, self.values[gpio]))
 
     def pwm(self, gpio: int, frequency: int, duty_percent: float) -> None:
-        self._require(gpio)
+        self._require_output(gpio)
         duty = max(0.0, min(100.0, float(duty_percent)))
         self.values[gpio] = duty / 100.0
         self.events.append(("pwm", gpio, duty))
 
-    def _require(self, gpio: int) -> None:
-        if gpio not in self.claimed or self.closed:
-            raise HardwareUnavailable(f"GPIO{gpio} is not available")
+    def _require_output(self, gpio: int) -> None:
+        if gpio not in self.outputs or self.closed:
+            raise HardwareUnavailable(f"GPIO{gpio} is not available as an output")
 
     def close(self) -> None:
         if self.closed:
             return
-        for gpio in sorted(self.claimed):
+        for gpio in sorted(self.outputs):
             self.values[gpio] = 0.0
             self.events.append(("close", gpio, 0.0))
         self.closed = True
@@ -75,6 +91,8 @@ class LgpioBackend:
                 "lgpio is unavailable; install python3-lgpio and verify /dev/gpiochip0 permissions"
             ) from error
         self.claimed: set[int] = set()
+        self.outputs: set[int] = set()
+        self.inputs: set[int] = set()
         self.closed = False
 
     def claim_output(self, gpio: int) -> None:
@@ -83,6 +101,28 @@ class LgpioBackend:
         except (OSError, RuntimeError) as error:
             raise HardwareUnavailable(f"Could not claim GPIO{gpio}: {error}") from error
         self.claimed.add(gpio)
+        self.outputs.add(gpio)
+
+    def claim_input(self, gpio: int, pull: str = "none") -> None:
+        flags = {
+            "none": getattr(self._lgpio, "SET_PULL_NONE", 0),
+            "up": getattr(self._lgpio, "SET_PULL_UP", 0),
+            "down": getattr(self._lgpio, "SET_PULL_DOWN", 0),
+        }[pull]
+        try:
+            self._lgpio.gpio_claim_input(self._handle, gpio, flags)
+        except (OSError, RuntimeError) as error:
+            raise HardwareUnavailable(f"Could not claim GPIO{gpio} as an input: {error}") from error
+        self.claimed.add(gpio)
+        self.inputs.add(gpio)
+
+    def read(self, gpio: int) -> bool:
+        if gpio not in self.inputs or self.closed:
+            raise HardwareUnavailable(f"GPIO{gpio} is not available as an input")
+        try:
+            return bool(self._lgpio.gpio_read(self._handle, gpio))
+        except (OSError, RuntimeError) as error:
+            raise HardwareUnavailable(f"Could not read GPIO{gpio}: {error}") from error
 
     def write(self, gpio: int, value: bool) -> None:
         try:
@@ -102,8 +142,9 @@ class LgpioBackend:
             return
         for gpio in sorted(self.claimed):
             try:
-                self._lgpio.tx_pwm(self._handle, gpio, 1000, 0)
-                self._lgpio.gpio_write(self._handle, gpio, 0)
+                if gpio in self.outputs:
+                    self._lgpio.tx_pwm(self._handle, gpio, 1000, 0)
+                    self._lgpio.gpio_write(self._handle, gpio, 0)
                 self._lgpio.gpio_free(self._handle, gpio)
             except (OSError, RuntimeError):
                 pass
@@ -123,4 +164,3 @@ def create_gpio_backend():
     if platform.system() != "Linux":
         raise HardwareUnavailable("Raspberry Pi GPIO control requires Linux")
     return LgpioBackend()
-

@@ -25,7 +25,7 @@ MAX_MEMBERS = 2_000
 MAX_BROWSER_BYTES = 8 * 1024 * 1024
 MAX_BROWSER_FILE_BYTES = 2 * 1024 * 1024
 MAX_BROWSER_FILES = 250
-ALLOWED_BROWSER_SUFFIXES = {".py", ".md", ".txt"}
+ALLOWED_BROWSER_SUFFIXES = {".py", ".md", ".txt", ".ino"}
 EXCLUDED_PARTS = {
     ".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv",
     "__pycache__", "build", "dist", "node_modules",
@@ -247,7 +247,7 @@ def deploy_project_files(
         suffix = Path(relative[-1]).suffix.casefold()
         if suffix not in ALLOWED_BROWSER_SUFFIXES:
             raise MotionModuleError(
-                f"{PurePosixPath(*relative)} is not Python or project documentation; remove it before upload"
+                f"{PurePosixPath(*relative)} is not Python, an Arduino sketch, or project documentation; remove it before upload"
             )
         if not isinstance(content, bytes):
             raise MotionModuleError("Uploaded project data is invalid")

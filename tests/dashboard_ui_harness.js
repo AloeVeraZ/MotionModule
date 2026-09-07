@@ -80,6 +80,7 @@ class Element {
   }
   focus() { this.ownerDocument.activeElement = this; }
   setPointerCapture() {}
+  get childElementCount() { return this.children.length; }
 }
 
 function statusData() {
@@ -105,10 +106,17 @@ function telemetryData() {
       {id: 'camera-2', name: 'Rear', url: '/camera/rear', connected: true, detail: 'Rearward'},
     ],
     imu: {name: 'Pigeon', connected: true, calibrated: true, yaw: 91, pitch: 2, roll: -3, rate: 4},
-    sensors: [
-      {name: 'Range', value: 250, kind: 'analog', unit: 'mm', channel: 'ADC 0', connected: true, status: 'ok', minimum: 0, maximum: 1000},
-      {name: 'Beam', value: true, kind: 'digital', unit: '', channel: 'DIO 0', connected: true, status: 'ok', minimum: null, maximum: null},
+    pi_gpio: {digital_only: true, available: [{bcm: 4, physical: 7}, {bcm: 5, physical: 29}]},
+    pi_inputs: [
+      {name: 'Limit', value: true, kind: 'digital', unit: '', channel: 'GPIO4', connected: true, status: 'ok', minimum: null, maximum: null},
     ],
+    sensors: [],
+    usb_controllers: [{
+      id: 'giga:test', name: 'Arduino GIGA R1 WiFi', board_id: 'arduino_giga_r1_wifi', connected: true,
+      serial: 'TESTGIGA', port: '/dev/ttyACM0', bridge: 'streaming', digital_pins: ['D0','D75'],
+      analog_pins: ['A0','A7'], adc_bits: 12, detail: 'MotionModule sensor bridge is streaming',
+      pins: [{name: 'Range', value: 250, kind: 'analog', unit: 'raw', channel: 'A0', connected: true, status: 'ok', minimum: 0, maximum: 4095}],
+    }],
   };
 }
 
@@ -138,7 +146,7 @@ function browser(now = 1700000000000) {
     document, window, console, URLSearchParams, AbortController,
     Date: class extends Date { static now() { return now; } },
     performance: {now: () => now},
-    location: {hash: '', pathname: '/code', reload() {}},
+    location: {hash: '', pathname: fixture.kind === 'station' ? '/driver-station' : '/code', reload() {}},
     history: {replaceState() {}},
     navigator: {clipboard: {writeText: async () => {}}},
     localStorage: {getItem: () => null, setItem() {}},
@@ -158,14 +166,23 @@ function browser(now = 1700000000000) {
       return {ok: true, status: 200, json: async () => data};
     },
   });
-  vm.runInContext(fixture.script + '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll};', context);
+  const exports = fixture.kind === 'station'
+    ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll};'
+    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll};';
+  vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
   const driveRequests = () => requests.filter(item => item.url === '/api/drive');
   const settle = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
   async function arm() {
     await context.dashboard.refreshStatus();
-    $('#driveEnable').checked = true;
-    await $('#driveEnable').fire('change');
+    if (fixture.kind === 'station') {
+      $('#armConfirm').checked = true;
+      await $('#armConfirm').fire('change');
+      await $('#enableButton').fire('click');
+    } else {
+      $('#driveEnable').checked = true;
+      await $('#driveEnable').fire('change');
+    }
     document.activeElement = $('body');
   }
   async function forward(extra = {}) {
@@ -260,16 +277,19 @@ async function run(scenario) {
     const next = reloaded.driveRequests().at(-1).payload.sequence;
     assert(Number.isSafeInteger(next), 'Sequence must retain integer precision');
     assert(next > previous, 'A reloaded page must not restart its sequence below the server watermark');
-  } else if (scenario === 'telemetry-layout') {
+  } else if (scenario === 'station-telemetry-layout') {
     await app.context.dashboard.refreshTelemetry();
     await app.settle();
     const stage = app.$('#cameraStage');
     assert.equal(stage.querySelectorAll('[data-camera-id]').length, 2, 'Both declared cameras must render');
     assert(stage.classList.contains('dual'), 'Two cameras default to a split view');
-    assert.equal(app.$('#cameraModes').querySelectorAll('button').length, 3, 'Operator can choose both or either camera');
-    assert.equal(app.$('#sensorList').querySelectorAll('.sensor-row').length, 2, 'Analog and digital inputs share the sensor tray');
+    assert.equal(app.$('#cameraControls').querySelectorAll('button').length, 3, 'Operator can choose both or either camera');
+    assert.equal(app.$('#piSensorList').querySelectorAll('.sensor-row').length, 1, 'Pi digital inputs have their own tray');
+    assert.equal(app.$('#usbControllerList').querySelectorAll('.controller-card').length, 1, 'The GIGA has its own controller card');
+    assert.equal(app.$('#usbControllerList').querySelectorAll('.sensor-row').length, 1, 'GIGA analog inputs render under the board');
+    assert.match(app.$('#usbControllerSummary').textContent, /1 connected/);
     assert.match(app.$('#imuYaw').textContent, /91\.0/, 'IMU heading must be visible');
-    await app.$('#cameraModes').querySelectorAll('button')[2].fire('click');
+    await app.$('#cameraControls').querySelectorAll('button')[2].fire('click');
     assert(stage.classList.contains('single'), 'Choosing one camera expands it to a single square view');
     assert.equal(stage.querySelectorAll('[data-camera-id]').filter(frame => !frame.hidden).length, 1);
   } else {

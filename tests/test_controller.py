@@ -72,6 +72,14 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual((servo.board, servo.channel), (0, 15))
         self.assertEqual(self.servos.angles[(0, 15)], 45)
 
+    def test_unused_pi_gpio_can_be_claimed_as_a_digital_sensor_input(self):
+        sensor = self.module.digital_input(4, pull="up")
+        self.assertIs(sensor.value, True)
+        self.gpio.values[4] = 0
+        self.assertIs(sensor.value, False)
+        with self.assertRaisesRegex(ValueError, "used or reserved"):
+            self.module.digital_input(26)
+
     def test_invalid_named_command_cannot_partially_move_motors(self):
         with self.assertRaisesRegex(ValueError, "No motor is named"):
             self.module.set_motors({"driver_3a": 0.3, "missing": 0.3})

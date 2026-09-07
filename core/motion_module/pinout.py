@@ -167,7 +167,7 @@ def header_rows(config) -> list[dict]:
                 "bcm": bcm_by_physical.get(physical),
                 "configured": physical in configured_pins,
                 "connection": role,
-                "detail": details.get(physical, "Not used by the active motor map. No sensor support is implemented; this label does not configure a device."),
+                "detail": details.get(physical, "Not used by the active motor map. It can be claimed as a digital sensor with module.digital_input() when it is not otherwise reserved."),
             }
         )
     return rows

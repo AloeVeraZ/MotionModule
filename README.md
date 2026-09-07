@@ -97,8 +97,10 @@ Three pages, each split into tabs:
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
   (Wi-Fi, hostname, hotspot).
-- **Drive** — the driver station: arm keyboard or game-controller control,
-  remap the keys, and use any extra buttons and sliders your robot code declares.
+- **Drive** — a compact drivetrain debugging tool: arm keyboard or
+  game-controller control, remap keys, and test project-declared controls.
+  **Open full Driver Station** launches the separate operator console with
+  cameras, IMU, Pi inputs, and USB sensor controllers.
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
 
@@ -158,6 +160,8 @@ Every project is self-contained, and only the first file is required:
 MyRobot/
 ├── robot.py          # required browser-control entry point
 ├── hardware.py       # optional: your own names, pins, and inversions
+├── dashboard.py      # optional: full Driver Station cameras and sensors
+├── sensor_bridge.ino # optional: firmware for a USB sensor controller
 ├── drivetrain.py     # optional Python modules
 ├── mechanisms.py
 └── README.md         # optional project notes
@@ -222,10 +226,13 @@ hardware or start a permanent loop at import time, because the dashboard loads
 this file during startup.
 
 An optional sibling `dashboard.py` can define
-`create_dashboard(module, drive)` to supply two camera feeds, one gyro/IMU, and
-up to 20 analog, digital, or text sensor readings to the Drive page. It is
-discovered automatically and is not required for robot control. The complete
-contract and a copyable example are in [docs/CODING.md](docs/CODING.md#optional-driver-station-telemetry).
+`create_dashboard(module, drive)` to supply two camera feeds, one gyro/IMU,
+Raspberry Pi digital inputs, and USB-controller analog/digital inputs to the
+separate full Driver Station at `/driver-station`. It is discovered
+automatically and is not required for drivetrain debugging or robot control.
+The Arduino GIGA R1 WiFi is recognized by USB VID/PID and the sample includes a
+reusable bridge sketch. The complete contract and copyable example are in
+[docs/CODING.md](docs/CODING.md#optional-full-driver-station-telemetry).
 
 This is a complete two-sided drive example:
 

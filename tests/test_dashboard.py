@@ -206,11 +206,17 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="bindingList"', drive)      # remappable keys
         self.assertIn(b'id="padIdentity"', drive)      # game controller
         self.assertIn(b'id="customControls"', drive)   # project-declared controls
-        self.assertIn(b'id="cameraStage"', drive)      # one/two-camera square workspace
-        self.assertIn(b'id="headingDial"', drive)      # dedicated IMU orientation
-        self.assertIn(b'id="sensorList"', drive)       # analog/digital sensor tray
-        self.assertIn(b"dashboard.py", drive)
+        self.assertIn(b'id="openDriverStation"', drive)
+        self.assertNotIn(b'id="cameraStage"', drive)   # telemetry belongs to the full station
+        self.assertNotIn(b'id="headingDial"', drive)
         self.assertIn(b"gamepadconnected", drive)
+        station = self.client.get("/driver-station").data
+        self.assertIn(b"Competition console", station)
+        self.assertIn(b'id="cameraStage"', station)
+        self.assertIn(b'id="headingDial"', station)
+        self.assertIn(b'id="piSensorList"', station)
+        self.assertIn(b'id="usbControllerList"', station)
+        self.assertNotIn(b'class="sidebar"', station)
         # Drive left the Code page entirely.
         code = self.client.get("/code").data
         self.assertNotIn(b'data-tab="drive"', code)
@@ -299,6 +305,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Mecanum/robot.py", names)
         self.assertIn("Mecanum/hardware.py", names)
         self.assertIn("Mecanum/dashboard.py", names)
+        self.assertIn("Mecanum/giga_sensor_bridge.ino", names)
         self.assertIn("Mecanum/README.md", names)
 
     def test_optional_dashboard_telemetry_api_exposes_typed_inputs(self):
@@ -319,6 +326,42 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(data["cameras"][0]["name"], "Front")
         self.assertEqual(data["imu"]["yaw"], 18.0)
         self.assertEqual([item["kind"] for item in data["sensors"]], ["analog", "digital"])
+        self.assertEqual(data["pi_inputs"], data["sensors"])
+        self.assertTrue(data["pi_gpio"]["digital_only"])
+
+    def test_giga_is_auto_discovered_and_merged_with_project_pin_data(self):
+        class Dashboard:
+            def snapshot(self):
+                return {
+                    "usb_controllers": [{
+                        "name": "GIGA",
+                        "board_id": "arduino_giga_r1_wifi",
+                        "connected": False,
+                        "bridge": "waiting-for-bridge",
+                        "pins": [{"name": "Beam", "value": None, "kind": "digital", "channel": "D22", "connected": False}],
+                    }],
+                }
+
+        discovered = [{
+            "name": "Arduino GIGA R1 WiFi",
+            "board_id": "arduino_giga_r1_wifi",
+            "connected": True,
+            "serial": "GIGA123",
+            "port": "/dev/ttyACM0",
+            "bridge": "detected",
+            "digital_pins": ["D0", "D75"],
+            "analog_pins": ["A0", "A7"],
+            "adc_bits": 12,
+            "pins": [],
+        }]
+        with patch("motion_module.dashboard.sensor_controllers", return_value=discovered):
+            app = create_app(self.module, dashboard_telemetry=Dashboard())
+            data = app.test_client().get("/api/drive/telemetry").get_json()
+        giga = data["usb_controllers"][0]
+        self.assertTrue(giga["connected"])
+        self.assertEqual(giga["port"], "/dev/ttyACM0")
+        self.assertEqual(giga["pins"][0]["channel"], "D22")
+        self.assertEqual(giga["digital_pins"], ["D0", "D75"])
 
     def test_project_dashboard_file_is_optional_and_auto_discovered(self):
         with tempfile.TemporaryDirectory() as directory:

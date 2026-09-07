@@ -1,12 +1,13 @@
 # Mecanum sample robot
 
-Three small files make the complete sample. Only one is required.
+Four small files make the complete sample. Only one is required.
 
 | File | What it does | Required? |
 | --- | --- | --- |
 | `robot.py` | Turns drive commands into wheel power | Yes |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
-| `dashboard.py` | Declares camera, IMU, and sensor telemetry | No — delete it to run Drive without telemetry |
+| `dashboard.py` | Declares full Driver Station cameras, Pi inputs, and GIGA inputs | No — delete it without affecting Drive |
+| `giga_sensor_bridge.ino` | Reusable GIGA R1 USB sensor firmware | No — flash it only when using the GIGA |
 
 ## Try it
 
@@ -50,17 +51,20 @@ After deploying, tick the enable box on the **Drive** page, then use W/S to
 drive, A/D to strafe, Q/E to rotate, and Space to stop. Start with the speed
 limit low.
 
-## Cameras, IMU, and sensors
+## Full Driver Station: cameras, IMU, and sensors
 
 `dashboard.py` is discovered automatically when it is beside `robot.py`.
-The sample declares two offline camera placeholders, an offline IMU, and
-example analog/digital inputs so the complete Driver Station layout is visible
-before those devices are installed. Add browser-readable stream URLs for a
-C920 or C270, then replace the placeholder reads with live hardware values.
+The compact **Drive** page remains a drivetrain debugger. Press **Open full
+Driver Station** for the independent operator console. The sample declares two
+offline camera placeholders, an offline IMU, an unused Pi GPIO input, and an
+Arduino GIGA R1 bridge. Add browser-readable stream URLs for a C920 or C270,
+then replace the placeholder reads with live hardware values.
 
 The camera selector shows the front feed, rear feed, or both square viewports.
-The sensor tray accepts up to 20 `SensorReading` values whose `kind` is
-`"analog"`, `"digital"`, or `"text"`.
+Pi digital readings and USB-controller readings are separate. Flash
+`giga_sensor_bridge.ino` to the GIGA once; the Pi detects USB `2341:0266`, and
+the `GigaPin` entries in `dashboard.py` configure which analog or digital pins
+the reusable sketch streams.
 
 Before putting the robot on the floor, use **Debug → Motor bench test** with
 every wheel off the ground and confirm each named motor turns the way you

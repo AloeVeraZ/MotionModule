@@ -69,10 +69,21 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         script = script[:script.index("/* ------------------------------------------------------------ startup */")]
         cls.fixture = {"nodes": dom.nodes, "script": script}
 
-    def run_behavior(self, scenario):
+        station_template = ROOT / "core" / "motion_module" / "templates" / "driver_station.html"
+        station_rendered = Environment().from_string(station_template.read_text(encoding="utf-8")).render(
+            dashboard_token="ui-test-token",
+            project_name="TestRobot",
+        )
+        station_dom = DashboardDOM()
+        station_dom.feed(station_rendered)
+        station_script = re.search(r"<script>(.*?)</script>", station_rendered, re.DOTALL).group(1)
+        station_script = station_script[:station_script.rfind("renderKeys();")]
+        cls.station_fixture = {"nodes": station_dom.nodes, "script": station_script, "kind": "station"}
+
+    def run_behavior(self, scenario, fixture=None):
         result = subprocess.run(
             [NODE, str(ROOT / "tests" / "dashboard_ui_harness.js"), scenario],
-            input=json.dumps(self.fixture),
+            input=json.dumps(fixture or self.fixture),
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -105,8 +116,8 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_reloaded_page_sends_sequences_newer_than_previous_page(self):
         self.run_behavior("reload-sequence")
 
-    def test_two_cameras_imu_and_typed_sensors_render_and_switch_layouts(self):
-        self.run_behavior("telemetry-layout")
+    def test_full_station_renders_cameras_imu_pi_inputs_and_usb_controller(self):
+        self.run_behavior("station-telemetry-layout", self.station_fixture)
 
 
 if __name__ == "__main__":

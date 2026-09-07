@@ -22,7 +22,8 @@ the Pi runs.
 MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
-├── dashboard.py   # optional: cameras, IMU, analog/digital sensor telemetry
+├── dashboard.py   # optional: full Driver Station cameras and sensor telemetry
+├── giga_sensor_bridge.ino # optional: reusable Arduino GIGA USB firmware
 └── helpers.py     # optional: any other Python files you want
 ```
 
@@ -83,14 +84,17 @@ stop() -> None
 Avoid permanent loops and hardware movement at module scope. MotionModule must
 be able to import the project before it can serve the dashboard.
 
-### Optional Driver Station telemetry
+### Optional full Driver Station telemetry
 
-Put `dashboard.py` beside `robot.py` to add up to two camera feeds, one
-gyro/IMU, and up to 20 analog, digital, or text sensor inputs. MotionModule
-discovers it automatically; no import in `robot.py` is required, and deleting
-the file does not affect driving.
+The normal **Drive** page is deliberately a drivetrain debugger. Its **Open
+full Driver Station** button opens `/driver-station`, a separate operator
+console. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
+one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
+sensor controller. MotionModule discovers it automatically; no import in
+`robot.py` is required, and deleting the file does not affect driving.
 
 ```python
+from motion_module.sensor_bridge import GigaPin, GigaR1Bridge
 from motion_module.telemetry import CameraFeed, IMUReading, SensorReading, TelemetryDashboard
 
 
@@ -102,6 +106,12 @@ class MyDashboard(TelemetryDashboard):
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
+        self.limit = module.digital_input(4, pull="up")
+        self.giga = GigaR1Bridge([
+            GigaPin("A0", "Arm potentiometer", kind="analog", unit="raw",
+                    minimum=0, maximum=4095),
+            GigaPin("D22", "Beam break", kind="digital", pull="up"),
+        ])
 
     def cameras(self):
         return [
@@ -113,14 +123,17 @@ class MyDashboard(TelemetryDashboard):
         # Replace this with yaw/pitch/roll/rate values from the installed IMU.
         return IMUReading(name="Robot IMU", connected=False, calibrated=False)
 
-    def sensors(self):
-        # Replace these offline placeholders with live ADC/DIO reads.
+    def pi_inputs(self):
         return [
-            SensorReading("Range", None, kind="analog", unit="V",
-                          channel="ADC 0", connected=False, minimum=0, maximum=3.3),
-            SensorReading("Beam break", None, kind="digital",
-                          channel="DIO 0", connected=False),
+            SensorReading("Forward limit", self.limit.value, kind="digital",
+                          channel="GPIO4 · pin 7"),
         ]
+
+    def usb_controllers(self):
+        return [self.giga.snapshot()]
+
+    def close(self):
+        self.giga.close()
 
 
 def create_dashboard(module, drive):
@@ -132,6 +145,18 @@ Station preserves square viewports and lets the operator show either feed or
 both. Return live readings quickly from `snapshot()`/the group methods; the
 page polls them at 4 Hz. Mark missing hardware `connected=False` so it is shown
 as offline rather than as a valid zero.
+
+`module.digital_input()` accepts only BCM GPIO that remains unused after the
+active motor map and MotionModule's I2C, ID, and UART reservations. Raspberry
+Pi header GPIO is digital-only; connect analog sensors through an ADC or the
+GIGA instead.
+
+For the GIGA, flash the sample `giga_sensor_bridge.ino` once. MotionModule then
+finds the board automatically as USB `2341:0266`, opens its CDC serial port,
+and sends the `GigaPin` modes above after every reconnect. The board streams
+only those configured readings. USB can identify the board, not the physical
+sensor attached to a pin, so names, units, ranges, and pin assignments remain
+explicit in `dashboard.py`.
 
 ## Motor API
 
@@ -194,7 +219,7 @@ Before changing the active project, the Pi checks:
 
 - one folder with a safe 1–64 character project name;
 - `robot.py` at the top level;
-- only `.py`, `.md`, and `.txt` files, up to 250 files and 8 MiB total;
+- only `.py`, `.ino`, `.md`, and `.txt` files, up to 250 files and 8 MiB total;
 - valid syntax in every Python file;
 - a synchronous top-level `create_drive(module)` function;
 - a synchronous top-level `create_dashboard(module, drive)` when a named

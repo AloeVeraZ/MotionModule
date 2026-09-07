@@ -1094,138 +1094,6 @@ kbd.active { border-color: var(--accent); background: var(--accent-soft); color:
 kbd:empty { border: 0; background: transparent; }
 .speed { display: grid; gap: 7px; margin-top: 16px; color: var(--muted); font-size: 13px; }
 
-/* The competition view follows the hierarchy used by strong FRC dashboards:
-   camera first, then drive state and orientation, then dense telemetry. */
-.competition-alert {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  margin-bottom: 16px; padding: 10px 13px;
-  border: 1px solid var(--red-line); border-radius: var(--radius-sm);
-  background: var(--red-soft); color: var(--muted); font-size: 11.5px;
-}
-.competition-alert strong { color: var(--red); }
-.driver-workspace {
-  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 14px; align-items: start;
-}
-.driver-workspace > .card { min-width: 0; }
-.drive-control-card { grid-column: 1 / 4; grid-row: 1; }
-.drive-input-card { grid-column: 1 / 4; grid-row: 2; }
-.camera-card { grid-column: 4 / 10; grid-row: 1; }
-.project-control-card { grid-column: 4 / 10; grid-row: 2; }
-.imu-card { grid-column: 10 / 13; grid-row: 1; }
-.sensor-card { grid-column: 10 / 13; grid-row: 2; }
-
-.camera-toolbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
-}
-.camera-toolbar > span { color: var(--faint); font-size: 10px; }
-.camera-modes { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--surface-2); }
-.camera-modes button {
-  padding: 6px 10px; border: 0; border-radius: 999px;
-  background: transparent; color: var(--muted); font-size: 10px; font-weight: 700;
-}
-.camera-modes button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
-.camera-stage {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px; padding: 2px; background: #090b10;
-}
-.camera-stage.single { grid-template-columns: minmax(0, 620px); justify-content: center; }
-.camera-frame {
-  position: relative; aspect-ratio: 1 / 1; min-width: 0; overflow: hidden;
-  background: #0e1117; color: #e5e7eb;
-}
-.camera-frame[hidden] { display: none; }
-.camera-frame img { width: 100%; height: 100%; display: block; object-fit: cover; background: #0e1117; }
-.camera-frame-meta {
-  position: absolute; left: 10px; right: 10px; bottom: 10px;
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 9px; border: 1px solid rgba(255,255,255,.13); border-radius: 9px;
-  background: rgba(9, 11, 16, .72); backdrop-filter: blur(8px);
-  font-size: 10px;
-}
-.camera-frame-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.camera-frame-meta span { color: #aeb6c3; white-space: nowrap; }
-.camera-empty {
-  position: absolute; inset: 0; display: grid; place-content: center; gap: 8px;
-  padding: 24px; text-align: center;
-}
-.camera-empty i {
-  width: 38px; height: 38px; display: grid; place-items: center; margin: auto;
-  border: 1px solid #343b48; border-radius: 50%; color: #8f99a8; font-style: normal;
-}
-.camera-empty strong { font-size: 12px; }
-.camera-empty span { max-width: 30ch; color: #8f99a8; font-size: 10px; line-height: 1.5; }
-
-.arm-copy { color: var(--muted); font-size: 11.5px; line-height: 1.6; }
-.arm-state {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--surface-2);
-}
-.arm-state strong { display: block; font-size: 12px; }
-.arm-state small { display: block; margin-top: 3px; color: var(--faint); font-size: 10px; }
-.arm-state input { width: 36px; height: 19px; accent-color: var(--accent); }
-.drive-control-card .keys { gap: 6px; }
-.drive-control-card kbd { min-height: 48px; border-radius: 9px; font-size: 9px; }
-.drive-control-card kbd b { font-size: 13px; }
-
-.imu-body { display: grid; gap: 16px; justify-items: center; }
-.heading-dial {
-  --yaw: 0deg;
-  position: relative; width: min(180px, 100%); aspect-ratio: 1;
-  display: grid; place-items: center;
-  border: 1px solid var(--line); border-radius: 50%;
-  background: radial-gradient(circle at center, var(--surface) 0 55%, transparent 56%),
-              conic-gradient(from -2deg, var(--accent) 0 4deg, var(--surface-3) 4deg 360deg);
-}
-.heading-dial::before {
-  content: ""; position: absolute; left: 50%; top: 12%; width: 2px; height: 38%;
-  border-radius: 2px; background: var(--accent); transform-origin: 50% 100%;
-  transform: translateX(-50%) rotate(var(--yaw));
-}
-.heading-dial::after {
-  content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--text);
-}
-.heading-dial > div {
-  position: relative; z-index: 2; display: grid; min-width: 72px; padding: 7px 10px;
-  border-radius: 11px; background: var(--surface); text-align: center;
-}
-.heading-dial strong { display: block; font-size: 25px; line-height: 1.05; font-variant-numeric: tabular-nums; }
-.heading-dial small { color: var(--faint); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
-.imu-values { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.imu-value { padding: 9px 6px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); text-align: center; }
-.imu-value small { display: block; color: var(--faint); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
-.imu-value strong { display: block; margin-top: 3px; font: 700 11px var(--mono); }
-
-.sensor-list { max-height: 470px; overflow: auto; }
-.sensor-row {
-  display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px; align-items: center;
-  padding: 11px 0; border-bottom: 1px solid var(--line-soft);
-}
-.sensor-row:last-child { border-bottom: 0; }
-.sensor-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
-.sensor-row.ok .sensor-dot { background: var(--green); }
-.sensor-row.warning .sensor-dot { background: var(--amber); }
-.sensor-row.fault .sensor-dot, .sensor-row.offline .sensor-dot { background: var(--red); }
-.sensor-name { min-width: 0; }
-.sensor-name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.sensor-name small { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; }
-.sensor-reading { text-align: right; font: 700 11px var(--mono); white-space: nowrap; }
-.sensor-reading small { margin-left: 3px; color: var(--faint); font: 500 9px var(--font); }
-.sensor-bar { grid-column: 2 / 4; height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-.sensor-bar i { display: block; height: 100%; background: var(--accent); }
-.telemetry-empty { padding: 12px 0; color: var(--faint); font-size: 11px; line-height: 1.6; }
-
-@media (max-width: 1320px) {
-  .driver-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .camera-card { grid-column: 1 / -1; grid-row: 1; }
-  .drive-control-card { grid-column: 1; grid-row: 2; }
-  .imu-card { grid-column: 2; grid-row: 2; }
-  .drive-input-card { grid-column: 1; grid-row: 3; }
-  .sensor-card { grid-column: 2; grid-row: 3; }
-  .project-control-card { grid-column: 1 / -1; grid-row: 4; }
-}
-
 /* --------------------------------------------------------------- terminal */
 
 .terminal-unlock { display: grid; gap: 12px; grid-template-columns: minmax(200px, 1fr) auto; align-items: end; }
@@ -1281,8 +1149,6 @@ kbd:empty { border: 0; background: transparent; }
   .servo-outputs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 9px; }
   .signal-flow { flex-wrap: wrap; }
   .driver-grid { grid-template-columns: minmax(0, 1fr); }
-  .driver-workspace { grid-template-columns: minmax(0, 1fr); }
-  .driver-workspace > .card { grid-column: 1; grid-row: auto; }
 }
 
 @media (max-width: 640px) {
@@ -1338,8 +1204,6 @@ kbd:empty { border: 0; background: transparent; }
   .test-row strong { overflow-wrap: anywhere; }
   .button.hold { min-width: 64px; padding-inline: 8px; }
   .pin { gap: 4px; padding-inline: 4px; }
-  .camera-stage { grid-template-columns: minmax(0, 1fr); }
-  .competition-alert { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1953,12 +1817,16 @@ kbd:empty { border: 0; background: transparent; }
       <section class="view" data-view="drive" hidden>
         <div class="hero">
           <div>
-            <p class="eyebrow">Competition workspace</p>
-            <h1>Driver Station</h1>
-            <p>Camera, orientation, sensor state, and deliberate robot control
-              in one low-distraction operator view.</p>
+            <p class="eyebrow">Driver station</p>
+            <h1>Drive it.</h1>
+            <p>Keyboard or game controller, straight to the robot code you
+              deployed. Every control here stops the moment you let go, leave the
+              page, or lose connection.</p>
           </div>
-          <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
+          <div class="button-row">
+            <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
+            <a class="button primary" id="openDriverStation" href="/driver-station">Open full Driver Station&nbsp; ↗</a>
+          </div>
         </div>
 
         <div class="driver-status">
@@ -1979,97 +1847,63 @@ kbd:empty { border: 0; background: transparent; }
 
         <!-- ----------------------------------------------------- pilot -->
         <div data-panel="pilot">
-          <div class="competition-alert">
-            <span><strong>Live robot control.</strong> Clear the area and keep the physical cutoff in reach.</span>
-            <span>Release input to stop</span>
+          <div class="notice danger" style="margin-bottom:16px">
+            <strong>Clear the area first.</strong> This moves the real robot
+            through your own <code>drive()</code> code. Keep a hand on the
+            physical cutoff.
           </div>
 
-          <div class="driver-workspace">
-            <article class="card drive-control-card">
+          <div class="grid equal">
+            <article class="card">
               <div class="panel-head">
-                <h2>Drive control</h2>
-                <span>WASD + Q / E</span>
+                <h2>Arm control</h2>
+                <span>Hold-to-move · releases stop</span>
               </div>
               <div class="panel-body stack">
-                <label class="arm-state">
-                  <span><strong>Arm keyboard input</strong><small>Movement stops on key release</small></span>
-                  <input id="driveEnable" type="checkbox" aria-label="Arm keyboard and controller drive input">
+                <label class="check">
+                  <input id="driveEnable" type="checkbox">
+                  <span>I am deliberately enabling drive, the area is clear, and
+                    the physical cutoff is in reach.</span>
                 </label>
                 <label class="speed">Maximum speed <output id="speedLabel">40%</output>
                   <input id="speed" type="range" min="10" max="100" step="5" value="40">
                 </label>
                 <div class="keys" id="driveKeys"></div>
-                <p class="arm-copy" id="driveKeyHint">Hold to move. Space immediately disarms and stops every output.</p>
+                <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
               </div>
             </article>
 
-            <article class="card camera-card">
-              <div class="panel-head">
-                <h2>Driver cameras</h2>
-                <span id="cameraSummary">Checking dashboard.py&hellip;</span>
-              </div>
-              <div class="camera-toolbar">
-                <span>Square operator viewports</span>
-                <div class="camera-modes" id="cameraModes" role="group" aria-label="Camera layout"></div>
-              </div>
-              <div class="camera-stage single" id="cameraStage">
-                <div class="camera-frame">
-                  <div class="camera-empty"><i aria-hidden="true">◎</i><strong>No camera configured</strong><span>Add up to two browser-readable feeds in dashboard.py.</span></div>
-                </div>
-              </div>
-            </article>
-
-            <article class="card imu-card">
-              <div class="panel-head">
-                <h2>Gyroscope / IMU</h2>
-                <span id="imuStatus">Not configured</span>
-              </div>
-              <div class="panel-body imu-body">
-                <div class="heading-dial" id="headingDial">
-                  <div><strong id="imuYaw">&mdash;</strong><small>Yaw</small></div>
-                </div>
-                <div class="imu-values">
-                  <div class="imu-value"><small>Pitch</small><strong id="imuPitch">&mdash;</strong></div>
-                  <div class="imu-value"><small>Roll</small><strong id="imuRoll">&mdash;</strong></div>
-                  <div class="imu-value"><small>Rate</small><strong id="imuRate">&mdash;</strong></div>
-                </div>
-                <p class="telemetry-empty" id="imuDetail">Add an IMU reading in dashboard.py. Keep the robot still while it calibrates.</p>
-              </div>
-            </article>
-
-            <article class="card drive-input-card">
+            <article class="card">
               <div class="panel-head">
                 <h2>Game controller</h2>
                 <span id="padSummary">No controller detected</span>
               </div>
+              <p class="lead">Plug in or pair any gamepad, then press a button on
+                it so the browser can see it. Left stick drives and strafes;
+                right stick turns.</p>
               <div class="panel-body stack">
                 <div class="kv-grid" id="padIdentity">
                   <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
                 </div>
                 <div id="padAxes" class="stack"></div>
-                <p class="arm-copy">Left stick drives and strafes; right stick turns. Press any controller button once so the browser can see it.</p>
-              </div>
-            </article>
-
-            <article class="card project-control-card">
-              <div class="panel-head">
-                <h2>Mechanism controls</h2>
-                <span id="customControlSummary">Checking the robot project&hellip;</span>
-              </div>
-              <p class="lead">Project-defined buttons, toggles, and sliders for intakes, arms, and other mechanisms.</p>
-              <div class="panel-body" id="customControls"></div>
-            </article>
-
-            <article class="card sensor-card">
-              <div class="panel-head">
-                <h2>Sensor inputs</h2>
-                <span id="sensorSummary">0 / 20</span>
-              </div>
-              <div class="panel-body sensor-list" id="sensorList">
-                <p class="telemetry-empty">Analog, digital, and text readings from dashboard.py appear here.</p>
+                <p class="muted small">Detected from the browser's gamepad list.
+                  A controller reporting the standard layout is mapped
+                  automatically; anything else still shows its raw sticks so you
+                  can check it is alive.</p>
               </div>
             </article>
           </div>
+
+          <article class="card spaced">
+            <div class="panel-head">
+              <h2>Project controls</h2>
+              <span id="customControlSummary">Checking the robot project&hellip;</span>
+            </div>
+            <p class="lead">Extra buttons and sliders this robot's own code asks
+              for. Define <code>controls()</code> and <code>control(name, value)</code>
+              in your drive object and they appear here.</p>
+            <div class="panel-body" id="customControls"></div>
+          </article>
         </div>
 
         <!-- -------------------------------------------------- bindings -->
@@ -2106,18 +1940,7 @@ def controls(self):
 
 def control(self, name, value):
     if name == "intake":
-        self.module.motor("driver_3a").set(value)
-
-# Optional dashboard.py, discovered automatically:
-from motion_module.telemetry import SensorReading, TelemetryDashboard
-
-class MyDashboard(TelemetryDashboard):
-    def sensors(self):
-        return [SensorReading("Beam break", False, kind="digital",
-                              channel="DIO 0", connected=False)]
-
-def create_dashboard(module, drive):
-    return MyDashboard()</pre>
+        self.module.motor("driver_3a").set(value)</pre>
                 </div>
                 <p class="muted small">Both input methods call the same
                   <code>drive()</code>, so code written for the keyboard works
@@ -2176,7 +1999,7 @@ def create_dashboard(module, drive):
               </div>
               <div class="panel-body stack">
                 <label class="deploy-drop">
-                  <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt">
+                  <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt,.ino">
                   <strong>Choose your robot folder</strong>
                   <span>Click here, then pick the folder that contains robot.py</span>
                 </label>
@@ -2235,7 +2058,7 @@ def create_dashboard(module, drive):
                       helpers.</p>
                   </div>
                   <div class="notice">Only <strong>.py</strong>, <strong>.md</strong>,
-                    and <strong>.txt</strong> files are accepted. MotionModule
+                    <strong>.txt</strong>, and Arduino <strong>.ino</strong> files are accepted. MotionModule
                     checks every Python file and every pin before it replaces the
                     running project.</div>
                 </div>
@@ -3900,7 +3723,7 @@ function updateDeployButton() {
 function selectProjectFolder(event) {
   const chosen = [...event.target.files];
   const excluded = new Set(['.git', '.mypy_cache', '.pytest_cache', '.ruff_cache', '.venv', '__pycache__', 'build', 'dist', 'node_modules']);
-  const allowed = new Set(['.py', '.md', '.txt']);
+  const allowed = new Set(['.py', '.md', '.txt', '.ino']);
 
   selectedProjectFiles = chosen.filter(file => {
     const parts = projectFilePath(file).split('/');
@@ -3936,7 +3759,7 @@ function selectProjectFolder(event) {
   let message = 'Ready to check and deploy.';
   let isError = false;
   if (chosen.length !== selectedProjectFiles.length) {
-    message = 'Only Python and documentation files will be uploaded; generated files were ignored.';
+    message = 'Only Python, Arduino sketch, and documentation files will be uploaded; generated files were ignored.';
   }
   if (roots.size !== 1) {
     message = 'Select exactly one folder, not loose files or several folders.';
@@ -4415,11 +4238,9 @@ if (activePage === 'code') {
 
 if (activePage === 'drive') {
   loadCustomControls();
-  refreshTelemetry();
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);
-  setInterval(refreshTelemetry, 250);
 }
 
 if (activePage === 'diagnostics') {

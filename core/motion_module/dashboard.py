@@ -38,12 +38,13 @@ from .deploy import (
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
 from .hardware_guide import hardware_guide
+from .input import available_input_gpios
 from .network import NetworkClient
-from .pinout import header_rows, motor_rows, servo_rows
+from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .runner import load_project
 from .terminal import TerminalManager
-from .telemetry import empty_snapshot, normalize_snapshot
-from .usb import usb_devices
+from .telemetry import empty_snapshot, merge_usb_controllers, normalize_snapshot
+from .usb import sensor_controllers, usb_devices
 
 
 DASHBOARD_PAGES = {"overview", "diagnostics", "code", "drive"}
@@ -284,10 +285,32 @@ def create_app(
     dashboard_token = secrets.token_urlsafe(32)
     app.config["DASHBOARD_TOKEN"] = dashboard_token
     last_sequence = -1
+    usb_sensor_cache = {"checked": 0.0, "controllers": []}
+    usb_sensor_lock = threading.Lock()
 
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
         return bool(provided) and secrets.compare_digest(provided, dashboard_token)
+
+    def discovered_sensor_controllers() -> list[dict]:
+        """Rate-limit sysfs scans while still noticing hot-plugged boards."""
+
+        now = time.monotonic()
+        with usb_sensor_lock:
+            if now - usb_sensor_cache["checked"] >= 1.0:
+                usb_sensor_cache["controllers"] = sensor_controllers()
+                usb_sensor_cache["checked"] = now
+            return list(usb_sensor_cache["controllers"])
+
+    @app.get("/driver-station")
+    def standalone_driver_station():
+        """Serve the focused competition console outside the workspace UI."""
+
+        return render_template(
+            "driver_station.html",
+            dashboard_token=dashboard_token,
+            project_name=project_name,
+        )
 
     @app.get("/")
     @app.get("/<page>")
@@ -438,7 +461,7 @@ def create_app(
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as output:
             for source in sorted(sample.rglob("*")):
-                if source.is_file() and source.suffix.casefold() in {".py", ".md", ".txt"}:
+                if source.is_file() and source.suffix.casefold() in {".py", ".md", ".txt", ".ino"}:
                     output.write(source, (Path("Mecanum") / source.relative_to(sample)).as_posix())
         archive.seek(0)
         return send_file(
@@ -615,26 +638,34 @@ def create_app(
     def drive_telemetry():
         payload = empty_snapshot()
         if dashboard_telemetry is None:
-            return jsonify({
-                "ok": True,
-                "configured": False,
-                "project": project_name,
-                **payload,
-            })
-        try:
-            payload = normalize_snapshot(dashboard_telemetry.snapshot())
-        except Exception as error:
-            app.logger.exception("The robot project's dashboard snapshot failed")
-            return jsonify({
-                "ok": False,
-                "configured": True,
-                "project": project_name,
-                "error": f"dashboard.py could not read telemetry: {error}",
-                **payload,
-            }), 503
+            configured = False
+        else:
+            configured = True
+            try:
+                payload = normalize_snapshot(dashboard_telemetry.snapshot())
+            except Exception as error:
+                app.logger.exception("The robot project's dashboard snapshot failed")
+                return jsonify({
+                    "ok": False,
+                    "configured": True,
+                    "project": project_name,
+                    "error": f"dashboard.py could not read telemetry: {error}",
+                    **payload,
+                }), 503
+        payload["usb_controllers"] = merge_usb_controllers(
+            payload["usb_controllers"], discovered_sensor_controllers()
+        )
+        free_gpios = available_input_gpios(module.config)
+        payload["pi_gpio"] = {
+            "digital_only": True,
+            "available": [
+                {"bcm": gpio, "physical": PHYSICAL_BY_BCM[gpio]}
+                for gpio in free_gpios
+            ],
+        }
         return jsonify({
             "ok": True,
-            "configured": True,
+            "configured": configured,
             "project": project_name,
             **payload,
         })
@@ -988,6 +1019,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
     project_name = project_path.parent.name if project_path else "No project"
     workspace = project_path.parent.parent.parent if project_path else None
     drive = load_drive(module, project_path)
+    dashboard_telemetry = load_dashboard_telemetry(module, drive, project_path)
     app = create_app(
         module,
         drive,
@@ -995,7 +1027,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         workspace_directory=workspace,
         restart_callback=stop_event.set,
         config_path=resolve_config_path(project=project_path.parent if project_path else None),
-        dashboard_telemetry=load_dashboard_telemetry(module, drive, project_path),
+        dashboard_telemetry=dashboard_telemetry,
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.
@@ -1007,6 +1039,9 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
             server.handle_request()
     finally:
         module.stop_all()
+        close_telemetry = getattr(dashboard_telemetry, "close", None)
+        if callable(close_telemetry):
+            close_telemetry()
         server.server_close()
 
 

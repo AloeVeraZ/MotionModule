@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 MAX_CAMERAS = 2
 MAX_SENSORS = 20
+MAX_USB_CONTROLLERS = 4
 SENSOR_KINDS = {"analog", "digital", "text"}
 STATUSES = {"ok", "warning", "fault", "offline", "unknown"}
 
@@ -60,6 +61,20 @@ class SensorReading:
     detail: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class USBController:
+    """One USB-connected sensor controller and its configured pin readings."""
+
+    name: str
+    board_id: str
+    connected: bool = True
+    serial: str = ""
+    port: str = ""
+    bridge: str = "unknown"
+    pins: tuple[SensorReading, ...] = ()
+    detail: str = ""
+
+
 class TelemetryDashboard:
     """Override only the telemetry groups a robot actually has.
 
@@ -75,18 +90,36 @@ class TelemetryDashboard:
         return None
 
     def sensors(self):
+        """Legacy alias for Raspberry Pi inputs."""
+
+        return ()
+
+    def pi_inputs(self):
+        return self.sensors()
+
+    def usb_controllers(self):
         return ()
 
     def snapshot(self) -> dict[str, Any]:
+        pi_inputs = self.pi_inputs()
         return {
             "cameras": self.cameras(),
             "imu": self.imu(),
-            "sensors": self.sensors(),
+            "pi_inputs": pi_inputs,
+            "usb_controllers": self.usb_controllers(),
+            # Kept for projects and clients written for MotionModule 0.10.
+            "sensors": pi_inputs,
         }
 
 
 def empty_snapshot() -> dict[str, Any]:
-    return {"cameras": [], "imu": None, "sensors": []}
+    return {
+        "cameras": [],
+        "imu": None,
+        "pi_inputs": [],
+        "usb_controllers": [],
+        "sensors": [],
+    }
 
 
 def _mapping(value: Any) -> Mapping[str, Any] | None:
@@ -207,6 +240,55 @@ def _sensor(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _pin_names(value: Any, maximum: int = 128) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    names = []
+    for candidate in value:
+        name = _text(candidate, 12)
+        if name and name not in names:
+            names.append(name)
+        if len(names) >= maximum:
+            break
+    return names
+
+
+def _usb_controller(value: Any, index: int) -> dict[str, Any] | None:
+    item = _mapping(value)
+    if item is None:
+        return None
+    board_id = _text(item.get("board_id"), 64) or "usb_sensor_controller"
+    name = _text(item.get("name"), 60) or f"USB controller {index + 1}"
+    connected = bool(item.get("connected", False))
+    pins = []
+    raw_pins = item.get("pins", ())
+    for candidate in raw_pins if isinstance(raw_pins, (list, tuple)) else ():
+        normalized = _sensor(candidate)
+        if normalized is not None:
+            pins.append(normalized)
+        if len(pins) >= MAX_SENSORS:
+            break
+    return {
+        "id": _text(item.get("id"), 120) or f"{board_id}:{index + 1}",
+        "name": name,
+        "board_id": board_id,
+        "connected": connected,
+        "vendor_id": _text(item.get("vendor_id"), 8),
+        "product_id": _text(item.get("product_id"), 8),
+        "serial": _text(item.get("serial"), 100),
+        "port": _text(item.get("port"), 160),
+        "permission": _text(item.get("permission"), 16) or "unknown",
+        "transport": _text(item.get("transport"), 40),
+        "bridge": _text(item.get("bridge"), 40) or "unknown",
+        "digital_pins": _pin_names(item.get("digital_pins")),
+        "analog_pins": _pin_names(item.get("analog_pins"), 32),
+        "dac_pins": _pin_names(item.get("dac_pins"), 16),
+        "adc_bits": int(item["adc_bits"]) if isinstance(item.get("adc_bits"), int) else None,
+        "pins": pins,
+        "detail": _text(item.get("detail"), 240),
+    }
+
+
 def normalize_snapshot(value: Any) -> dict[str, Any]:
     """Return a bounded, JSON-safe Driver Station snapshot."""
 
@@ -214,7 +296,8 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
     if item is None:
         return empty_snapshot()
     raw_cameras = item.get("cameras", ())
-    raw_sensors = item.get("sensors", ())
+    raw_sensors = item.get("pi_inputs", item.get("sensors", ()))
+    raw_controllers = item.get("usb_controllers", ())
     cameras = []
     for candidate in raw_cameras if isinstance(raw_cameras, (list, tuple)) else ():
         normalized = _camera(candidate, len(cameras))
@@ -229,4 +312,55 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
             sensors.append(normalized)
         if len(sensors) >= MAX_SENSORS:
             break
-    return {"cameras": cameras, "imu": _imu(item.get("imu")), "sensors": sensors}
+    controllers = []
+    for candidate in raw_controllers if isinstance(raw_controllers, (list, tuple)) else ():
+        normalized = _usb_controller(candidate, len(controllers))
+        if normalized is not None:
+            controllers.append(normalized)
+        if len(controllers) >= MAX_USB_CONTROLLERS:
+            break
+    return {
+        "cameras": cameras,
+        "imu": _imu(item.get("imu")),
+        "pi_inputs": sensors,
+        "usb_controllers": controllers,
+        "sensors": sensors,
+    }
+
+
+def merge_usb_controllers(configured: list[dict], discovered: list[dict]) -> list[dict]:
+    """Combine project pin telemetry with read-only USB board discovery."""
+
+    normalized_discovered = []
+    for item in discovered:
+        normalized = _usb_controller(item, len(normalized_discovered))
+        if normalized is not None:
+            normalized_discovered.append(normalized)
+
+    merged: list[dict] = []
+    used: set[int] = set()
+    for project in configured:
+        match = None
+        for index, device in enumerate(normalized_discovered):
+            if index in used or device["board_id"] != project["board_id"]:
+                continue
+            if project.get("serial") and device.get("serial") != project.get("serial"):
+                continue
+            match = (index, device)
+            break
+        if match is None:
+            merged.append(project)
+            continue
+        index, device = match
+        used.add(index)
+        combined = dict(device)
+        for key, value in project.items():
+            if value not in (None, "", [], ()) or key in {"pins", "connected", "bridge"}:
+                combined[key] = value
+        combined["connected"] = True
+        merged.append(combined)
+
+    merged.extend(
+        device for index, device in enumerate(normalized_discovered) if index not in used
+    )
+    return merged[:MAX_USB_CONTROLLERS]
