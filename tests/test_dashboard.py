@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import hardware_source, load_hardware_file, load_project_config
-from motion_module.dashboard import create_app, load_drive
+from motion_module.dashboard import create_app, load_dashboard_telemetry, load_drive
 from motion_module.servo import MockServoController, Servo
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
@@ -206,6 +206,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="bindingList"', drive)      # remappable keys
         self.assertIn(b'id="padIdentity"', drive)      # game controller
         self.assertIn(b'id="customControls"', drive)   # project-declared controls
+        self.assertIn(b'id="cameraStage"', drive)      # one/two-camera square workspace
+        self.assertIn(b'id="headingDial"', drive)      # dedicated IMU orientation
+        self.assertIn(b'id="sensorList"', drive)       # analog/digital sensor tray
+        self.assertIn(b"dashboard.py", drive)
         self.assertIn(b"gamepadconnected", drive)
         # Drive left the Code page entirely.
         code = self.client.get("/code").data
@@ -294,7 +298,43 @@ class DashboardTests(unittest.TestCase):
             names = set(archive.namelist())
         self.assertIn("Mecanum/robot.py", names)
         self.assertIn("Mecanum/hardware.py", names)
+        self.assertIn("Mecanum/dashboard.py", names)
         self.assertIn("Mecanum/README.md", names)
+
+    def test_optional_dashboard_telemetry_api_exposes_typed_inputs(self):
+        class Dashboard:
+            def snapshot(self):
+                return {
+                    "cameras": [{"name": "Front", "url": "/camera/front"}],
+                    "imu": {"name": "Pigeon", "yaw": 18, "pitch": 2, "roll": -1},
+                    "sensors": [
+                        {"name": "Range", "value": 42, "kind": "analog", "unit": "cm"},
+                        {"name": "Beam", "value": True, "kind": "digital"},
+                    ],
+                }
+
+        app = create_app(self.module, dashboard_telemetry=Dashboard(), project_name="SensorBot")
+        data = app.test_client().get("/api/drive/telemetry").get_json()
+        self.assertTrue(data["configured"])
+        self.assertEqual(data["cameras"][0]["name"], "Front")
+        self.assertEqual(data["imu"]["yaw"], 18.0)
+        self.assertEqual([item["kind"] for item in data["sensors"]], ["analog", "digital"])
+
+    def test_project_dashboard_file_is_optional_and_auto_discovered(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "robot.py"
+            project.write_text("# robot placeholder\n", encoding="utf-8")
+            self.assertIsNone(load_dashboard_telemetry(self.module, MecanumDrive(self.module), project))
+            project.with_name("dashboard.py").write_text(
+                "class Dashboard:\n"
+                "    def snapshot(self):\n"
+                "        return {'sensors': [{'name': 'Limit', 'value': False, 'kind': 'digital'}]}\n"
+                "def create_dashboard(module, drive):\n"
+                "    return Dashboard()\n",
+                encoding="utf-8",
+            )
+            telemetry = load_dashboard_telemetry(self.module, MecanumDrive(self.module), project)
+            self.assertEqual(telemetry.snapshot()["sensors"][0]["name"], "Limit")
 
     def test_browser_folder_deploy_requires_token_and_restarts(self):
         hardware = b'''HARDWARE = {"module": {"pwm_hz": 1000, "deadtime_ms": 2, "watchdog_ms": 500}, "motors": {1: {"forward_gpio": 4, "reverse_gpio": 17, "inverted": False}}, "servos": {"enabled": True, "i2c_bus": 1, "frequency_hz": 50, "addresses": [0x40], "minimum_pulse_us": 500, "maximum_pulse_us": 2500}}\n'''

@@ -221,6 +221,12 @@ letter and use only letters, numbers, and underscores.
 hardware or start a permanent loop at import time, because the dashboard loads
 this file during startup.
 
+An optional sibling `dashboard.py` can define
+`create_dashboard(module, drive)` to supply two camera feeds, one gyro/IMU, and
+up to 20 analog, digital, or text sensor readings to the Drive page. It is
+discovered automatically and is not required for robot control. The complete
+contract and a copyable example are in [docs/CODING.md](docs/CODING.md#optional-driver-station-telemetry).
+
 This is a complete two-sided drive example:
 
 ```python

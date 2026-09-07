@@ -32,7 +32,8 @@ fused power system and physical cutoff.
 ├── robots/
 │   ├── Mecanum/
 │   │   ├── robot.py
-│   │   └── hardware.py
+│   │   ├── hardware.py
+│   │   └── dashboard.py
 │   └── AnotherRobot/
 └── backups/
 
@@ -45,7 +46,8 @@ Installing a tag, branch, or commit builds and tests a new release before the
 `current` link changes. It does not overwrite robot projects. Rollback switches
 the runtime links, not the student folders.
 
-The service follows `~/MotionModule/active/robot.py`. GPIO and servo
+The service follows `~/MotionModule/active/robot.py` and auto-loads an optional
+sibling `dashboard.py` for camera, IMU, and sensor telemetry. GPIO and servo
 configuration is resolved in one order: the active project's data-only
 `hardware.py`, then the installed `~/.config/motionmodule/hardware.py`, then the
 copy shipped inside the runtime. Installs predating that file keep their TOML
@@ -60,8 +62,10 @@ local dashboard. The backend:
 2. accepts a single safe root folder and Python/text documentation only;
 3. enforces count, individual-file, and total-size limits;
 4. rejects path traversal, links, binary data, caches, and build output;
-5. compiles every `.py`, verifies `create_drive(module)`, and, when the folder
-   ships one, parses `hardware.py` with `ast.literal_eval` without importing it;
+5. compiles every `.py`, verifies `create_drive(module)`, verifies
+   `create_dashboard(module, drive)` when `dashboard.py` exists, and, when the
+   folder ships one, parses `hardware.py` with `ast.literal_eval` without
+   importing it;
 6. stops outputs before writing project state;
 7. moves an existing target to `backups`, atomically installs the staged
    folder, and atomically updates `active`; and

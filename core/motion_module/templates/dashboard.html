@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f4f7f9" media="(prefers-color-scheme: light)" data-scheme="light">
-<meta name="theme-color" content="#0d1520" media="(prefers-color-scheme: dark)" data-scheme="dark">
+<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)" data-scheme="light">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" data-scheme="dark">
 <script id="theme-boot">
 /* Runs before the page paints so a chosen theme never flashes the other one.
    No stored choice means no attribute, which leaves the CSS following the
@@ -37,28 +37,28 @@
   color-scheme: light;
 
   /* Surfaces, furthest back to closest to the reader */
-  --bg: #f4f7f9;
+  --bg: #f3f4f6;
   --bg-tint: none;
-  --rail: #ffffff;
-  --topbar: rgba(255, 255, 255, .82);
+  --rail: #fbfbfc;
+  --topbar: rgba(243, 244, 246, .86);
   --surface: #ffffff;
-  --surface-2: #f6f9fb;
-  --surface-3: #e9eff3;
-  --line: #dbe3e9;
-  --line-soft: #eaf0f4;
+  --surface-2: #f7f8fa;
+  --surface-3: #eceff3;
+  --line: #dfe3e8;
+  --line-soft: #eceff2;
 
   /* Text */
-  --text: #16293a;
-  --muted: #4a5c6b;
-  --faint: #5c6e7e;
+  --text: #15171c;
+  --muted: #505762;
+  --faint: #747c87;
 
   /* Brand */
-  --accent: #0b7f74;
-  --accent-hover: #096b62;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
   --accent-ink: #ffffff;
-  --accent-soft: #ecf7f4;
-  --accent-line: #c6e4dc;
-  --accent-text: #086a61;
+  --accent-soft: #eef4ff;
+  --accent-line: #cddcff;
+  --accent-text: #1d4ed8;
 
   /* Semantic */
   --blue: #2f6fc4;
@@ -104,11 +104,11 @@
 
   --chip-ink: #ffffff;
   --focus: #2a86c4;
-  --radius: 12px;
-  --radius-sm: 9px;
-  --radius-xs: 7px;
-  --shadow: 0 1px 2px rgba(20, 40, 55, .04), 0 1px 3px rgba(20, 40, 55, .03);
-  --shadow-lg: 0 10px 30px -12px rgba(20, 40, 55, .18);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-xs: 9px;
+  --shadow: 0 1px 2px rgba(17, 24, 39, .025), 0 8px 24px -24px rgba(17, 24, 39, .25);
+  --shadow-lg: 0 18px 48px -24px rgba(17, 24, 39, .28);
   --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --ease: cubic-bezier(.2, .7, .3, 1);
@@ -119,26 +119,26 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --bg: #0d1520;
-    --bg-tint: radial-gradient(900px 420px at 88% -8%, rgba(19, 148, 134, .10), transparent 70%);
-    --rail: #111b28;
-    --topbar: rgba(13, 21, 32, .82);
-    --surface: #131e2c;
-    --surface-2: #182635;
-    --surface-3: #1f2f41;
-    --line: #26374a;
-    --line-soft: #1e2c3c;
+    --bg: #0b0d12;
+    --bg-tint: none;
+    --rail: #0f1218;
+    --topbar: rgba(11, 13, 18, .86);
+    --surface: #12151c;
+    --surface-2: #171b23;
+    --surface-3: #202631;
+    --line: #282e39;
+    --line-soft: #202630;
 
-    --text: #e8eff6;
-    --muted: #9db0c1;
-    --faint: #8296a8;
+    --text: #f4f6f8;
+    --muted: #a6adb8;
+    --faint: #7d8591;
 
-    --accent: #2fbfae;
-    --accent-hover: #45cebd;
-    --accent-ink: #06231f;
-    --accent-soft: #12312e;
-    --accent-line: #24544e;
-    --accent-text: #5ad2c1;
+    --accent: #7aa2ff;
+    --accent-hover: #91b2ff;
+    --accent-ink: #0b1020;
+    --accent-soft: #192747;
+    --accent-line: #304c82;
+    --accent-text: #9ab8ff;
 
     --blue: #6ba5f5;
     --blue-soft: #16283e;
@@ -189,26 +189,26 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0d1520;
-  --bg-tint: radial-gradient(900px 420px at 88% -8%, rgba(19, 148, 134, .10), transparent 70%);
-  --rail: #111b28;
-  --topbar: rgba(13, 21, 32, .82);
-  --surface: #131e2c;
-  --surface-2: #182635;
-  --surface-3: #1f2f41;
-  --line: #26374a;
-  --line-soft: #1e2c3c;
+  --bg: #0b0d12;
+  --bg-tint: none;
+  --rail: #0f1218;
+  --topbar: rgba(11, 13, 18, .86);
+  --surface: #12151c;
+  --surface-2: #171b23;
+  --surface-3: #202631;
+  --line: #282e39;
+  --line-soft: #202630;
 
-  --text: #e8eff6;
-  --muted: #9db0c1;
-  --faint: #8296a8;
+  --text: #f4f6f8;
+  --muted: #a6adb8;
+  --faint: #7d8591;
 
-  --accent: #2fbfae;
-  --accent-hover: #45cebd;
-  --accent-ink: #06231f;
-  --accent-soft: #12312e;
-  --accent-line: #24544e;
-  --accent-text: #5ad2c1;
+  --accent: #7aa2ff;
+  --accent-hover: #91b2ff;
+  --accent-ink: #0b1020;
+  --accent-soft: #192747;
+  --accent-line: #304c82;
+  --accent-text: #9ab8ff;
 
   --blue: #6ba5f5;
   --blue-soft: #16283e;
@@ -290,7 +290,7 @@ a { color: var(--accent-text); text-underline-offset: 3px; }
 }
 .skip-link:focus { top: 12px; }
 
-.app { min-height: 100vh; display: grid; grid-template-columns: 236px minmax(0, 1fr); }
+.app { min-height: 100vh; display: grid; grid-template-columns: 216px minmax(0, 1fr); }
 
 /* Motion. Everything here is switched off under prefers-reduced-motion. */
 @keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
@@ -304,8 +304,8 @@ a { color: var(--accent-text); text-underline-offset: 3px; }
 .rail {
   position: sticky; top: 0;
   height: 100vh;
-  display: flex; flex-direction: column; gap: 26px;
-  padding: 26px 18px 20px;
+  display: flex; flex-direction: column; gap: 22px;
+  padding: 22px 16px 18px;
   border-right: 1px solid var(--line);
   background: var(--rail);
 }
@@ -315,7 +315,7 @@ a { color: var(--accent-text); text-underline-offset: 3px; }
   width: 38px; height: 38px;
   display: grid; place-items: center;
   border-radius: 11px;
-  background: linear-gradient(150deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #1b6ea8));
+  background: var(--accent);
   color: var(--accent-ink);
   font-weight: 900; font-size: 18px;
   box-shadow: var(--shadow);
@@ -405,7 +405,7 @@ nav a.active .nav-icon { color: var(--accent-text); }
 
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  min-height: 64px;
+  min-height: 68px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: 12px 36px;
   border-bottom: 1px solid var(--line);
@@ -449,7 +449,7 @@ nav a.active .nav-icon { color: var(--accent-text); }
   box-shadow: var(--shadow);
 }
 
-.content { max-width: 1600px; margin: auto; padding: 32px 36px 64px; animation: rise .3s var(--ease) both; }
+.content { max-width: 1760px; margin: auto; padding: 28px 34px 64px; animation: rise .3s var(--ease) both; }
 [data-panel]:not([hidden]) { animation: rise .24s var(--ease) both; }
 
 /* ------------------------------------------------------------------- hero */
@@ -457,9 +457,9 @@ nav a.active .nav-icon { color: var(--accent-text); }
 .hero {
   display: flex; align-items: center; justify-content: space-between;
   gap: 20px; flex-wrap: wrap;
-  margin-bottom: 25px;
+  margin-bottom: 22px;
 }
-.hero h1 { font-size: clamp(25px, 2.5vw, 34px); font-weight: 680; letter-spacing: -1.1px; }
+.hero h1 { font-size: clamp(27px, 2.5vw, 36px); font-weight: 720; letter-spacing: -1.25px; }
 .hero p:not(.eyebrow) { max-width: 68ch; margin-top: 6px; color: var(--muted); font-size: 13px; }
 .eyebrow {
   margin-bottom: 9px;
@@ -494,19 +494,21 @@ nav a.active .nav-icon { color: var(--accent-text); }
 /* ------------------------------------------------------------------- tabs */
 
 .tabs {
-  display: flex; gap: 22px; flex-wrap: wrap;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  display: inline-flex; gap: 3px; flex-wrap: wrap;
+  margin-bottom: 22px; padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
 }
 .tabs button {
-  padding: 10px 1px 14px;
-  border: 0; border-bottom: 2px solid transparent;
+  padding: 8px 15px;
+  border: 0; border-radius: 999px;
   background: transparent; color: var(--muted);
   font-size: 12px; font-weight: 650;
-  transition: color .16s var(--ease), border-color .16s var(--ease);
+  transition: color .16s var(--ease), background .16s var(--ease), box-shadow .16s var(--ease);
 }
 .tabs button:hover { color: var(--text); }
-.tabs button.active { color: var(--accent-text); border-color: var(--accent); }
+.tabs button.active { color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
 
 /* ------------------------------------------------------------------ cards */
 
@@ -1092,6 +1094,138 @@ kbd.active { border-color: var(--accent); background: var(--accent-soft); color:
 kbd:empty { border: 0; background: transparent; }
 .speed { display: grid; gap: 7px; margin-top: 16px; color: var(--muted); font-size: 13px; }
 
+/* The competition view follows the hierarchy used by strong FRC dashboards:
+   camera first, then drive state and orientation, then dense telemetry. */
+.competition-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-bottom: 16px; padding: 10px 13px;
+  border: 1px solid var(--red-line); border-radius: var(--radius-sm);
+  background: var(--red-soft); color: var(--muted); font-size: 11.5px;
+}
+.competition-alert strong { color: var(--red); }
+.driver-workspace {
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px; align-items: start;
+}
+.driver-workspace > .card { min-width: 0; }
+.drive-control-card { grid-column: 1 / 4; grid-row: 1; }
+.drive-input-card { grid-column: 1 / 4; grid-row: 2; }
+.camera-card { grid-column: 4 / 10; grid-row: 1; }
+.project-control-card { grid-column: 4 / 10; grid-row: 2; }
+.imu-card { grid-column: 10 / 13; grid-row: 1; }
+.sensor-card { grid-column: 10 / 13; grid-row: 2; }
+
+.camera-toolbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 12px 14px; border-bottom: 1px solid var(--line-soft);
+}
+.camera-toolbar > span { color: var(--faint); font-size: 10px; }
+.camera-modes { display: inline-flex; gap: 3px; padding: 3px; border-radius: 999px; background: var(--surface-2); }
+.camera-modes button {
+  padding: 6px 10px; border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: 10px; font-weight: 700;
+}
+.camera-modes button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.camera-stage {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px; padding: 2px; background: #090b10;
+}
+.camera-stage.single { grid-template-columns: minmax(0, 620px); justify-content: center; }
+.camera-frame {
+  position: relative; aspect-ratio: 1 / 1; min-width: 0; overflow: hidden;
+  background: #0e1117; color: #e5e7eb;
+}
+.camera-frame[hidden] { display: none; }
+.camera-frame img { width: 100%; height: 100%; display: block; object-fit: cover; background: #0e1117; }
+.camera-frame-meta {
+  position: absolute; left: 10px; right: 10px; bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 9px; border: 1px solid rgba(255,255,255,.13); border-radius: 9px;
+  background: rgba(9, 11, 16, .72); backdrop-filter: blur(8px);
+  font-size: 10px;
+}
+.camera-frame-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camera-frame-meta span { color: #aeb6c3; white-space: nowrap; }
+.camera-empty {
+  position: absolute; inset: 0; display: grid; place-content: center; gap: 8px;
+  padding: 24px; text-align: center;
+}
+.camera-empty i {
+  width: 38px; height: 38px; display: grid; place-items: center; margin: auto;
+  border: 1px solid #343b48; border-radius: 50%; color: #8f99a8; font-style: normal;
+}
+.camera-empty strong { font-size: 12px; }
+.camera-empty span { max-width: 30ch; color: #8f99a8; font-size: 10px; line-height: 1.5; }
+
+.arm-copy { color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.arm-state {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.arm-state strong { display: block; font-size: 12px; }
+.arm-state small { display: block; margin-top: 3px; color: var(--faint); font-size: 10px; }
+.arm-state input { width: 36px; height: 19px; accent-color: var(--accent); }
+.drive-control-card .keys { gap: 6px; }
+.drive-control-card kbd { min-height: 48px; border-radius: 9px; font-size: 9px; }
+.drive-control-card kbd b { font-size: 13px; }
+
+.imu-body { display: grid; gap: 16px; justify-items: center; }
+.heading-dial {
+  --yaw: 0deg;
+  position: relative; width: min(180px, 100%); aspect-ratio: 1;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: radial-gradient(circle at center, var(--surface) 0 55%, transparent 56%),
+              conic-gradient(from -2deg, var(--accent) 0 4deg, var(--surface-3) 4deg 360deg);
+}
+.heading-dial::before {
+  content: ""; position: absolute; left: 50%; top: 12%; width: 2px; height: 38%;
+  border-radius: 2px; background: var(--accent); transform-origin: 50% 100%;
+  transform: translateX(-50%) rotate(var(--yaw));
+}
+.heading-dial::after {
+  content: ""; position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--text);
+}
+.heading-dial > div {
+  position: relative; z-index: 2; display: grid; min-width: 72px; padding: 7px 10px;
+  border-radius: 11px; background: var(--surface); text-align: center;
+}
+.heading-dial strong { display: block; font-size: 25px; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.heading-dial small { color: var(--faint); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.imu-values { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.imu-value { padding: 9px 6px; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--surface-2); text-align: center; }
+.imu-value small { display: block; color: var(--faint); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+.imu-value strong { display: block; margin-top: 3px; font: 700 11px var(--mono); }
+
+.sensor-list { max-height: 470px; overflow: auto; }
+.sensor-row {
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 9px; align-items: center;
+  padding: 11px 0; border-bottom: 1px solid var(--line-soft);
+}
+.sensor-row:last-child { border-bottom: 0; }
+.sensor-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.sensor-row.ok .sensor-dot { background: var(--green); }
+.sensor-row.warning .sensor-dot { background: var(--amber); }
+.sensor-row.fault .sensor-dot, .sensor-row.offline .sensor-dot { background: var(--red); }
+.sensor-name { min-width: 0; }
+.sensor-name strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.sensor-name small { display: block; margin-top: 2px; color: var(--faint); font-size: 9px; }
+.sensor-reading { text-align: right; font: 700 11px var(--mono); white-space: nowrap; }
+.sensor-reading small { margin-left: 3px; color: var(--faint); font: 500 9px var(--font); }
+.sensor-bar { grid-column: 2 / 4; height: 3px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+.sensor-bar i { display: block; height: 100%; background: var(--accent); }
+.telemetry-empty { padding: 12px 0; color: var(--faint); font-size: 11px; line-height: 1.6; }
+
+@media (max-width: 1320px) {
+  .driver-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .camera-card { grid-column: 1 / -1; grid-row: 1; }
+  .drive-control-card { grid-column: 1; grid-row: 2; }
+  .imu-card { grid-column: 2; grid-row: 2; }
+  .drive-input-card { grid-column: 1; grid-row: 3; }
+  .sensor-card { grid-column: 2; grid-row: 3; }
+  .project-control-card { grid-column: 1 / -1; grid-row: 4; }
+}
+
 /* --------------------------------------------------------------- terminal */
 
 .terminal-unlock { display: grid; gap: 12px; grid-template-columns: minmax(200px, 1fr) auto; align-items: end; }
@@ -1147,6 +1281,8 @@ kbd:empty { border: 0; background: transparent; }
   .servo-outputs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 9px; }
   .signal-flow { flex-wrap: wrap; }
   .driver-grid { grid-template-columns: minmax(0, 1fr); }
+  .driver-workspace { grid-template-columns: minmax(0, 1fr); }
+  .driver-workspace > .card { grid-column: 1; grid-row: auto; }
 }
 
 @media (max-width: 640px) {
@@ -1176,7 +1312,7 @@ kbd:empty { border: 0; background: transparent; }
   .stats { gap: 9px; }
   .stat { padding: 13px; }
   .stat-value { font-size: 22px; }
-  .tabs { gap: 18px; flex-wrap: nowrap; overflow-x: auto; }
+  .tabs { gap: 3px; flex-wrap: nowrap; overflow-x: auto; }
   .tabs button { white-space: nowrap; font-size: 11px; }
   .grid.equal, .spec-grid, .glossary { grid-template-columns: minmax(0, 1fr); }
   .panel-head, .panel-body { padding: 16px; }
@@ -1202,6 +1338,8 @@ kbd:empty { border: 0; background: transparent; }
   .test-row strong { overflow-wrap: anywhere; }
   .button.hold { min-width: 64px; padding-inline: 8px; }
   .pin { gap: 4px; padding-inline: 4px; }
+  .camera-stage { grid-template-columns: minmax(0, 1fr); }
+  .competition-alert { align-items: flex-start; flex-direction: column; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1289,8 +1427,8 @@ kbd:empty { border: 0; background: transparent; }
         <div class="hero">
           <div>
             <p class="eyebrow">CONTROL CENTER <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
-            <h1>Your robot, at a glance.</h1>
-            <p>A clear view of your outputs, connections, and controller health.</p>
+            <h1>System overview</h1>
+            <p>Live outputs, connections, and controller health without the noise.</p>
           </div>
           <span class="pill good" id="safetyPill">OUTPUTS IDLE</span>
         </div>
@@ -1419,7 +1557,7 @@ kbd:empty { border: 0; background: transparent; }
         <div class="hero">
           <div>
             <p class="eyebrow">HARDWARE WORKBENCH</p>
-            <h1>Know your robot.</h1>
+            <h1>Hardware diagnostics</h1>
             <p>Every part, every connection, and the tools to make it work.</p>
           </div>
         </div>
@@ -1815,11 +1953,10 @@ kbd:empty { border: 0; background: transparent; }
       <section class="view" data-view="drive" hidden>
         <div class="hero">
           <div>
-            <p class="eyebrow">Driver station</p>
-            <h1>Drive it.</h1>
-            <p>Keyboard or game controller, straight to the robot code you
-              deployed. Every control here stops the moment you let go, leave the
-              page, or lose connection.</p>
+            <p class="eyebrow">Competition workspace</p>
+            <h1>Driver Station</h1>
+            <p>Camera, orientation, sensor state, and deliberate robot control
+              in one low-distraction operator view.</p>
           </div>
           <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
         </div>
@@ -1842,63 +1979,97 @@ kbd:empty { border: 0; background: transparent; }
 
         <!-- ----------------------------------------------------- pilot -->
         <div data-panel="pilot">
-          <div class="notice danger" style="margin-bottom:16px">
-            <strong>Clear the area first.</strong> This moves the real robot
-            through your own <code>drive()</code> code. Keep a hand on the
-            physical cutoff.
+          <div class="competition-alert">
+            <span><strong>Live robot control.</strong> Clear the area and keep the physical cutoff in reach.</span>
+            <span>Release input to stop</span>
           </div>
 
-          <div class="grid equal">
-            <article class="card">
+          <div class="driver-workspace">
+            <article class="card drive-control-card">
               <div class="panel-head">
-                <h2>Arm control</h2>
-                <span>Hold-to-move · releases stop</span>
+                <h2>Drive control</h2>
+                <span>WASD + Q / E</span>
               </div>
               <div class="panel-body stack">
-                <label class="check">
-                  <input id="driveEnable" type="checkbox">
-                  <span>I am deliberately enabling drive, the area is clear, and
-                    the physical cutoff is in reach.</span>
+                <label class="arm-state">
+                  <span><strong>Arm keyboard input</strong><small>Movement stops on key release</small></span>
+                  <input id="driveEnable" type="checkbox" aria-label="Arm keyboard and controller drive input">
                 </label>
                 <label class="speed">Maximum speed <output id="speedLabel">40%</output>
                   <input id="speed" type="range" min="10" max="100" step="5" value="40">
                 </label>
                 <div class="keys" id="driveKeys"></div>
-                <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
+                <p class="arm-copy" id="driveKeyHint">Hold to move. Space immediately disarms and stops every output.</p>
               </div>
             </article>
 
-            <article class="card">
+            <article class="card camera-card">
+              <div class="panel-head">
+                <h2>Driver cameras</h2>
+                <span id="cameraSummary">Checking dashboard.py&hellip;</span>
+              </div>
+              <div class="camera-toolbar">
+                <span>Square operator viewports</span>
+                <div class="camera-modes" id="cameraModes" role="group" aria-label="Camera layout"></div>
+              </div>
+              <div class="camera-stage single" id="cameraStage">
+                <div class="camera-frame">
+                  <div class="camera-empty"><i aria-hidden="true">◎</i><strong>No camera configured</strong><span>Add up to two browser-readable feeds in dashboard.py.</span></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="card imu-card">
+              <div class="panel-head">
+                <h2>Gyroscope / IMU</h2>
+                <span id="imuStatus">Not configured</span>
+              </div>
+              <div class="panel-body imu-body">
+                <div class="heading-dial" id="headingDial">
+                  <div><strong id="imuYaw">&mdash;</strong><small>Yaw</small></div>
+                </div>
+                <div class="imu-values">
+                  <div class="imu-value"><small>Pitch</small><strong id="imuPitch">&mdash;</strong></div>
+                  <div class="imu-value"><small>Roll</small><strong id="imuRoll">&mdash;</strong></div>
+                  <div class="imu-value"><small>Rate</small><strong id="imuRate">&mdash;</strong></div>
+                </div>
+                <p class="telemetry-empty" id="imuDetail">Add an IMU reading in dashboard.py. Keep the robot still while it calibrates.</p>
+              </div>
+            </article>
+
+            <article class="card drive-input-card">
               <div class="panel-head">
                 <h2>Game controller</h2>
                 <span id="padSummary">No controller detected</span>
               </div>
-              <p class="lead">Plug in or pair any gamepad, then press a button on
-                it so the browser can see it. Left stick drives and strafes;
-                right stick turns.</p>
               <div class="panel-body stack">
                 <div class="kv-grid" id="padIdentity">
                   <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
                 </div>
                 <div id="padAxes" class="stack"></div>
-                <p class="muted small">Detected from the browser's gamepad list.
-                  A controller reporting the standard layout is mapped
-                  automatically; anything else still shows its raw sticks so you
-                  can check it is alive.</p>
+                <p class="arm-copy">Left stick drives and strafes; right stick turns. Press any controller button once so the browser can see it.</p>
+              </div>
+            </article>
+
+            <article class="card project-control-card">
+              <div class="panel-head">
+                <h2>Mechanism controls</h2>
+                <span id="customControlSummary">Checking the robot project&hellip;</span>
+              </div>
+              <p class="lead">Project-defined buttons, toggles, and sliders for intakes, arms, and other mechanisms.</p>
+              <div class="panel-body" id="customControls"></div>
+            </article>
+
+            <article class="card sensor-card">
+              <div class="panel-head">
+                <h2>Sensor inputs</h2>
+                <span id="sensorSummary">0 / 20</span>
+              </div>
+              <div class="panel-body sensor-list" id="sensorList">
+                <p class="telemetry-empty">Analog, digital, and text readings from dashboard.py appear here.</p>
               </div>
             </article>
           </div>
-
-          <article class="card spaced">
-            <div class="panel-head">
-              <h2>Project controls</h2>
-              <span id="customControlSummary">Checking the robot project&hellip;</span>
-            </div>
-            <p class="lead">Extra buttons and sliders this robot's own code asks
-              for. Define <code>controls()</code> and <code>control(name, value)</code>
-              in your drive object and they appear here.</p>
-            <div class="panel-body" id="customControls"></div>
-          </article>
         </div>
 
         <!-- -------------------------------------------------- bindings -->
@@ -1935,7 +2106,18 @@ def controls(self):
 
 def control(self, name, value):
     if name == "intake":
-        self.module.motor("driver_3a").set(value)</pre>
+        self.module.motor("driver_3a").set(value)
+
+# Optional dashboard.py, discovered automatically:
+from motion_module.telemetry import SensorReading, TelemetryDashboard
+
+class MyDashboard(TelemetryDashboard):
+    def sensors(self):
+        return [SensorReading("Beam break", False, kind="digital",
+                              channel="DIO 0", connected=False)]
+
+def create_dashboard(module, drive):
+    return MyDashboard()</pre>
                 </div>
                 <p class="muted small">Both input methods call the same
                   <code>drive()</code>, so code written for the keyboard works
@@ -2038,6 +2220,13 @@ def control(self, name, value):
                       and the robot uses the names that ship with MotionModule
                       (<code>driver_1a</code>&hellip;<code>driver_4b</code>,
                       <code>servo_0</code>&hellip;<code>servo_15</code>).</p>
+                  </div>
+                  <div class="format-file">
+                    <span class="tag">Optional</span>
+                    <code>MyRobot/dashboard.py</code>
+                    <p>Declares up to two camera feeds, one gyro/IMU, and up to
+                      20 analog, digital, or text sensor readings. MotionModule
+                      discovers it automatically.</p>
                   </div>
                   <div class="format-file">
                     <span class="tag">Optional</span>
@@ -2168,6 +2357,7 @@ def create_drive(module):
    polling a small JSON API:
 
      GET  /api/status        live motor, servo, and system state (1 s)
+     GET  /api/drive/telemetry  optional cameras, IMU, and 20 sensors (250 ms)
      GET  /api/config        pin map and names from hardware.py (once)
      GET  /api/diagnostics   Doctor checks
      GET  /api/usb           attached USB devices
@@ -2269,7 +2459,7 @@ function ioStatus(state, label) {
    storage, matchMedia, or a documentElement. */
 
 const THEME_KEY = 'motionmodule-theme';
-const THEME_COLORS = { light: '#f4f7f9', dark: '#0d1520' };
+const THEME_COLORS = { light: '#f3f4f6', dark: '#0b0d12' };
 
 function storedTheme() {
   try {
@@ -3013,6 +3203,185 @@ async function sendCustomControl(name, value) {
     });
   } catch (error) {
     toast(error.message, true);
+  }
+}
+
+/* ------------------------------------------------ dashboard.py telemetry */
+
+let cameraMode = 'both';
+let cameraSignature = '';
+
+function telemetryPlaceholder(title, detail) {
+  const empty = element('div', 'camera-empty');
+  empty.append(
+    element('i', null, '◎'),
+    element('strong', null, title),
+    element('span', null, detail),
+  );
+  return empty;
+}
+
+function applyCameraMode() {
+  const stage = $('#cameraStage');
+  if (!stage) return;
+  const frames = [...stage.querySelectorAll('[data-camera-id]')];
+  const showBoth = cameraMode === 'both' && frames.length > 1;
+  stage.className = `camera-stage ${showBoth ? 'dual' : 'single'}`;
+  frames.forEach(frame => { frame.hidden = !showBoth && frame.dataset.cameraId !== cameraMode; });
+  $$('#cameraModes button').forEach(button =>
+    button.classList.toggle('active', button.dataset.cameraMode === cameraMode));
+}
+
+function renderCameras(data) {
+  const cameras = Array.isArray(data.cameras) ? data.cameras.slice(0, 2) : [];
+  const signature = JSON.stringify(cameras);
+  const online = cameras.filter(camera => camera.connected && camera.url).length;
+  const summary = $('#cameraSummary');
+  if (summary) {
+    summary.textContent = !data.configured ? 'No dashboard.py'
+      : !cameras.length ? 'No feeds declared'
+      : `${cameras.length} configured · ${online} online`;
+  }
+  if (signature === cameraSignature) return;
+  cameraSignature = signature;
+  const stage = $('#cameraStage');
+  const modes = $('#cameraModes');
+  if (!stage || !modes) return;
+  if (!cameras.length) {
+    const frame = element('div', 'camera-frame');
+    frame.append(telemetryPlaceholder(
+      'No camera configured',
+      data.configured ? 'Return one or two CameraFeed entries from dashboard.py.' : 'Add optional dashboard.py beside robot.py.',
+    ));
+    replaceWith(stage, [frame]);
+    replaceWith(modes, []);
+    stage.className = 'camera-stage single';
+    return;
+  }
+
+  replaceWith(stage, cameras.map(camera => {
+    const frame = element('div', 'camera-frame');
+    frame.dataset.cameraId = camera.id;
+    frame.setAttribute('data-camera-id', camera.id);
+    const empty = telemetryPlaceholder(
+      `${camera.name} offline`,
+      camera.detail || 'Set a browser-readable camera URL in dashboard.py.',
+    );
+    if (camera.connected && camera.url) {
+      const image = element('img');
+      image.src = camera.url;
+      image.alt = `${camera.name} live view`;
+      empty.hidden = true;
+      image.addEventListener('error', () => {
+        image.hidden = true;
+        empty.hidden = false;
+        if (summary) summary.textContent = `${camera.name} stream unavailable`;
+      });
+      image.addEventListener('load', () => { empty.hidden = true; });
+      frame.append(image);
+    }
+    frame.append(empty);
+    const meta = element('div', 'camera-frame-meta');
+    meta.append(
+      element('strong', null, camera.name),
+      element('span', null, camera.connected && camera.url ? 'LIVE' : 'OFFLINE'),
+    );
+    frame.append(meta);
+    return frame;
+  }));
+
+  const choices = cameras.length > 1
+    ? [{id: 'both', name: 'Both'}, ...cameras.map(camera => ({id: camera.id, name: camera.name}))]
+    : cameras.map(camera => ({id: camera.id, name: camera.name}));
+  if (!choices.some(choice => choice.id === cameraMode)) {
+    cameraMode = cameras.length > 1 ? 'both' : cameras[0].id;
+  }
+  replaceWith(modes, choices.map(choice => {
+    const button = element('button', null, choice.name);
+    button.type = 'button';
+    button.dataset.cameraMode = choice.id;
+    button.setAttribute('data-camera-mode', choice.id);
+    button.addEventListener('click', () => { cameraMode = choice.id; applyCameraMode(); });
+    return button;
+  }));
+  applyCameraMode();
+}
+
+const telemetryNumber = (value, suffix = '°') =>
+  Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : '—';
+
+function renderImu(imu) {
+  const connected = Boolean(imu?.connected);
+  const calibrated = Boolean(imu?.calibrated);
+  $('#imuStatus').textContent = !imu ? 'Not configured' : !connected ? 'Offline' : calibrated ? 'Ready' : 'Calibrating';
+  const yaw = Number.isFinite(imu?.yaw) ? ((Number(imu.yaw) % 360) + 360) % 360 : null;
+  $('#imuYaw').textContent = telemetryNumber(yaw);
+  $('#imuPitch').textContent = telemetryNumber(imu?.pitch);
+  $('#imuRoll').textContent = telemetryNumber(imu?.roll);
+  $('#imuRate').textContent = telemetryNumber(imu?.rate, '°/s');
+  $('#headingDial').style['--yaw'] = `${yaw ?? 0}deg`;
+  $('#imuDetail').textContent = imu?.detail || (connected
+    ? 'Yaw is the field heading; pitch and roll show robot attitude.'
+    : 'Add an IMU reading in dashboard.py. Keep the robot still while it calibrates.');
+}
+
+function sensorValue(sensor) {
+  if (!sensor.connected || sensor.value == null) return '—';
+  if (sensor.kind === 'digital') return sensor.value ? 'ON' : 'OFF';
+  if (sensor.kind === 'analog' && Number.isFinite(sensor.value)) return Number(sensor.value).toFixed(2);
+  return String(sensor.value);
+}
+
+function renderSensors(sensors) {
+  const readings = Array.isArray(sensors) ? sensors.slice(0, 20) : [];
+  $('#sensorSummary').textContent = `${readings.length} / 20`;
+  const list = $('#sensorList');
+  if (!readings.length) {
+    replaceWith(list, [element('p', 'telemetry-empty',
+      'No inputs declared. Add analog, digital, or text SensorReading entries in dashboard.py.')]);
+    return;
+  }
+  replaceWith(list, readings.map(sensor => {
+    const row = element('div', `sensor-row ${sensor.status || 'unknown'}`);
+    if (sensor.detail) row.title = sensor.detail;
+    row.append(element('i', 'sensor-dot'));
+    const label = element('div', 'sensor-name');
+    label.append(
+      element('strong', null, sensor.name),
+      element('small', null, [sensor.kind, sensor.channel].filter(Boolean).join(' · ')),
+    );
+    const value = element('div', 'sensor-reading', sensorValue(sensor));
+    if (sensor.unit && sensor.value != null) value.append(element('small', null, sensor.unit));
+    row.append(label, value);
+    if (sensor.kind === 'analog' && Number.isFinite(sensor.value)
+        && Number.isFinite(sensor.minimum) && Number.isFinite(sensor.maximum)) {
+      const percent = Math.max(0, Math.min(100,
+        (sensor.value - sensor.minimum) / (sensor.maximum - sensor.minimum) * 100));
+      const bar = element('div', 'sensor-bar');
+      const fill = element('i');
+      fill.style.width = `${percent}%`;
+      bar.append(fill);
+      row.append(bar);
+    }
+    return row;
+  }));
+}
+
+function markTelemetryUnavailable(message) {
+  $('#cameraSummary').textContent = 'Telemetry unavailable';
+  $('#imuStatus').textContent = 'Unavailable';
+  $('#sensorSummary').textContent = 'Unavailable';
+  replaceWith($('#sensorList'), [element('p', 'telemetry-empty', message)]);
+}
+
+async function refreshTelemetry() {
+  try {
+    const data = await jsonFetch('/api/drive/telemetry');
+    renderCameras(data);
+    renderImu(data.imu);
+    renderSensors(data.sensors);
+  } catch (error) {
+    markTelemetryUnavailable(error.message);
   }
 }
 
@@ -4046,9 +4415,11 @@ if (activePage === 'code') {
 
 if (activePage === 'drive') {
   loadCustomControls();
+  refreshTelemetry();
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);
+  setInterval(refreshTelemetry, 250);
 }
 
 if (activePage === 'diagnostics') {

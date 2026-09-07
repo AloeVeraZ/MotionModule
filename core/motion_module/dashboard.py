@@ -42,6 +42,7 @@ from .network import NetworkClient
 from .pinout import header_rows, motor_rows, servo_rows
 from .runner import load_project
 from .terminal import TerminalManager
+from .telemetry import empty_snapshot, normalize_snapshot
 from .usb import usb_devices
 
 
@@ -228,6 +229,28 @@ def load_drive(module, project_path: Path | None = None):
     return drive
 
 
+def load_dashboard_telemetry(module, drive, project_path: Path | None = None):
+    """Auto-load an optional dashboard.py beside the active robot.py file."""
+
+    if project_path is None:
+        return None
+    dashboard_path = project_path.with_name("dashboard.py")
+    if not dashboard_path.is_file():
+        return None
+    project = load_project(dashboard_path)
+    factory = getattr(project, "create_dashboard", None)
+    if not callable(factory):
+        raise RuntimeError(
+            f"{dashboard_path} must define create_dashboard(module, drive)"
+        )
+    telemetry = factory(module, drive)
+    if not callable(getattr(telemetry, "snapshot", None)):
+        raise RuntimeError(
+            "create_dashboard(module, drive) must return an object with snapshot()"
+        )
+    return telemetry
+
+
 def create_app(
     module,
     drive=None,
@@ -237,6 +260,7 @@ def create_app(
     workspace_directory: str | os.PathLike[str] | None = None,
     restart_callback=None,
     config_path: str | os.PathLike[str] | None = None,
+    dashboard_telemetry=None,
 ) -> Flask:
     app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
@@ -587,6 +611,34 @@ def create_app(
     def drive_control_list():
         return jsonify({"ok": True, "controls": drive_controls(), "project": project_name})
 
+    @app.get("/api/drive/telemetry")
+    def drive_telemetry():
+        payload = empty_snapshot()
+        if dashboard_telemetry is None:
+            return jsonify({
+                "ok": True,
+                "configured": False,
+                "project": project_name,
+                **payload,
+            })
+        try:
+            payload = normalize_snapshot(dashboard_telemetry.snapshot())
+        except Exception as error:
+            app.logger.exception("The robot project's dashboard snapshot failed")
+            return jsonify({
+                "ok": False,
+                "configured": True,
+                "project": project_name,
+                "error": f"dashboard.py could not read telemetry: {error}",
+                **payload,
+            }), 503
+        return jsonify({
+            "ok": True,
+            "configured": True,
+            "project": project_name,
+            **payload,
+        })
+
     @app.post("/api/drive/control")
     def drive_control_command():
         if not authorized():
@@ -935,13 +987,15 @@ def create_app(
 def serve(module, stop_event: threading.Event, project_path: Path | None = None) -> None:
     project_name = project_path.parent.name if project_path else "No project"
     workspace = project_path.parent.parent.parent if project_path else None
+    drive = load_drive(module, project_path)
     app = create_app(
         module,
-        load_drive(module, project_path),
+        drive,
         project_name=project_name,
         workspace_directory=workspace,
         restart_callback=stop_event.set,
         config_path=resolve_config_path(project=project_path.parent if project_path else None),
+        dashboard_telemetry=load_dashboard_telemetry(module, drive, project_path),
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.

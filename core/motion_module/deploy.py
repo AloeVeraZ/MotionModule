@@ -123,6 +123,20 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
             for node in tree.body
         ):
             raise MotionModuleError("robot.py must define create_drive(module)")
+    dashboard = project / "dashboard.py"
+    if dashboard.is_file():
+        try:
+            with tokenize.open(dashboard) as source_file:
+                dashboard_tree = ast.parse(source_file.read(), filename=str(dashboard))
+        except (OSError, SyntaxError, UnicodeError) as error:
+            raise MotionModuleError(f"Could not validate dashboard.py: {error}") from error
+        if not any(
+            isinstance(node, ast.FunctionDef) and node.name == "create_dashboard"
+            for node in dashboard_tree.body
+        ):
+            raise MotionModuleError(
+                "dashboard.py must define create_dashboard(module, drive)"
+            )
     # hardware.py is optional: a folder without one runs on the pin map that
     # ships with MotionModule. A folder that has one must be valid.
     if (project / PROJECT_CONFIG_NAME).is_file():

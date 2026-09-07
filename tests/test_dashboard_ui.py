@@ -105,6 +105,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_reloaded_page_sends_sequences_newer_than_previous_page(self):
         self.run_behavior("reload-sequence")
 
+    def test_two_cameras_imu_and_typed_sensors_render_and_switch_layouts(self):
+        self.run_behavior("telemetry-layout")
+
 
 if __name__ == "__main__":
     unittest.main()

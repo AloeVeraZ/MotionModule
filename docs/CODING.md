@@ -22,6 +22,7 @@ the Pi runs.
 MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
+├── dashboard.py   # optional: cameras, IMU, analog/digital sensor telemetry
 └── helpers.py     # optional: any other Python files you want
 ```
 
@@ -81,6 +82,56 @@ stop() -> None
 
 Avoid permanent loops and hardware movement at module scope. MotionModule must
 be able to import the project before it can serve the dashboard.
+
+### Optional Driver Station telemetry
+
+Put `dashboard.py` beside `robot.py` to add up to two camera feeds, one
+gyro/IMU, and up to 20 analog, digital, or text sensor inputs. MotionModule
+discovers it automatically; no import in `robot.py` is required, and deleting
+the file does not affect driving.
+
+```python
+from motion_module.telemetry import CameraFeed, IMUReading, SensorReading, TelemetryDashboard
+
+
+FRONT_STREAM = ""  # e.g. http://motionmodule.local:1181/?action=stream
+REAR_STREAM = ""   # e.g. http://motionmodule.local:1182/?action=stream
+
+
+class MyDashboard(TelemetryDashboard):
+    def __init__(self, module, drive):
+        self.module = module
+        self.drive = drive
+
+    def cameras(self):
+        return [
+            CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM)),
+            CameraFeed("Rear", REAR_STREAM, connected=bool(REAR_STREAM)),
+        ]
+
+    def imu(self):
+        # Replace this with yaw/pitch/roll/rate values from the installed IMU.
+        return IMUReading(name="Robot IMU", connected=False, calibrated=False)
+
+    def sensors(self):
+        # Replace these offline placeholders with live ADC/DIO reads.
+        return [
+            SensorReading("Range", None, kind="analog", unit="V",
+                          channel="ADC 0", connected=False, minimum=0, maximum=3.3),
+            SensorReading("Beam break", None, kind="digital",
+                          channel="DIO 0", connected=False),
+        ]
+
+
+def create_dashboard(module, drive):
+    return MyDashboard(module, drive)
+```
+
+Camera URLs must be relative browser paths or HTTP/HTTPS streams. The Driver
+Station preserves square viewports and lets the operator show either feed or
+both. Return live readings quickly from `snapshot()`/the group methods; the
+page polls them at 4 Hz. Mark missing hardware `connected=False` so it is shown
+as offline rather than as a valid zero.
 
 ## Motor API
 
@@ -146,6 +197,8 @@ Before changing the active project, the Pi checks:
 - only `.py`, `.md`, and `.txt` files, up to 250 files and 8 MiB total;
 - valid syntax in every Python file;
 - a synchronous top-level `create_drive(module)` function;
+- a synchronous top-level `create_dashboard(module, drive)` when a named
+  `dashboard.py` is present;
 - and, when the folder includes `hardware.py`, literal-only data with valid
   GPIOs, unique motor pins, unique names, allowed I2C addresses, pulse limits,
   and watchdog limits.

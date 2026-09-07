@@ -127,6 +127,19 @@ class DeployTests(unittest.TestCase):
                     root / "backups",
                 )
 
+    def test_named_dashboard_file_requires_its_optional_factory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(MotionModuleError, "create_dashboard"):
+                deploy_project_files(
+                    [
+                        ("BadBot/robot.py", b"def create_drive(module):\n    return module\n"),
+                        ("BadBot/dashboard.py", b"SENSORS = []\n"),
+                    ],
+                    root / "robots",
+                    root / "backups",
+                )
+
     def test_archive_checks_hardware_before_replacing_an_existing_project(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
