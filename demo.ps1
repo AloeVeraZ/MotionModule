@@ -70,15 +70,19 @@
             $source = $PSScriptRoot
             Say "Using this copy of MotionModule: $source"
         } else {
+            # Short folder names: Windows PowerShell cannot unpack a path longer
+            # than 260 characters, and the repository nests a few folders deep.
             $safeBranch = $branch -replace '[^A-Za-z0-9._-]', '-'
-            $source = Join-Path $data "source-$safeBranch"
-            $zip = Join-Path $data "download-$safeBranch.zip"
-            $staging = Join-Path $data "staging-$safeBranch"
+            $source = Join-Path $data $safeBranch
+            $zip = Join-Path $data 'download.zip'
+            $staging = Join-Path $data 'unpack'
             Say "Downloading the $branch branch of MotionModule..."
             try {
                 Invoke-WebRequest -UseBasicParsing -Uri "https://codeload.github.com/AloeVeraZ/MotionModule/zip/refs/heads/$branch" -OutFile $zip
                 if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
-                Expand-Archive -Path $zip -DestinationPath $staging -Force
+                # A failed unpack throws; 2>$null only hides the cleanup noise
+                # Expand-Archive prints for every file it could not write.
+                Expand-Archive -Path $zip -DestinationPath $staging -Force 2>$null
                 $inner = Get-ChildItem -Path $staging -Directory | Select-Object -First 1
                 if (-not $inner -or -not (Test-Path (Join-Path $inner.FullName 'core\motion_module\demo.py'))) {
                     throw "The $branch branch does not include the demo."
@@ -89,7 +93,7 @@
                 if (Test-Path (Join-Path $source 'core\motion_module\demo.py')) {
                     Say "Could not download $branch ($($_.Exception.Message)). Using the copy from last time."
                 } else {
-                    throw "Could not download the $branch branch: $($_.Exception.Message)"
+                    throw "Could not download or unpack the $branch branch: $($_.Exception.Message)"
                 }
             } finally {
                 Remove-Item -Force -ErrorAction SilentlyContinue $zip
