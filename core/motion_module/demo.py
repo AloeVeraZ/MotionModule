@@ -148,7 +148,7 @@ class DemoTelemetry:
                 "digital_pins": ["D0", "D75"],
                 "analog_pins": ["A0", "A7"],
                 "adc_bits": 12,
-                "detail": "Simulated MotionModule sensor firmware 2.0.0",
+                "detail": "Simulated MotionModule sensor firmware 3.0.0",
                 "pins": [
                     {"name": "Arm potentiometer", "value": round(2048 + 1700 * math.sin(t / 2)),
                      "kind": "analog", "unit": "raw", "channel": "A0", "minimum": 0, "maximum": 4095,

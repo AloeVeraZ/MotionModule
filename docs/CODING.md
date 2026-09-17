@@ -142,14 +142,16 @@ go on the GIGA.
 ## Sensors on the Arduino GIGA
 
 An Arduino GIGA R1 WiFi on one of the Pi's USB ports works as the robot's
-sensor extender. It reads each digital pin as on or off and each analog pin
-as a number, does the IMU maths itself, and streams everything to the Pi. Its
+sensor board. It reads each digital pin as on or off, each analog pin as a
+number, and whichever I2C registers the Pi asks for, then passes the numbers
+up the cable; the Pi sets the sensors up and does every calculation. Its
 firmware installs from the Pi with no Arduino IDE (`motionmodule giga flash`,
 or **Debug → Checks & logs → Install firmware**); setup and wiring are in
 [SETUP.md](SETUP.md#5-add-sensors-with-the-arduino-giga-optional).
 
-The firmware is the same for every robot. `sensors.py` says what is wired to
-it, and MotionModule sends that list every time it connects:
+The firmware is the same for every robot, and never changes when the sensors
+do. `sensors.py` says what is wired to the board, and MotionModule sends that
+list every time it connects:
 
 ```python
 from motion_module.sensor_bridge import GigaIMU, GigaPin

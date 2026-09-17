@@ -70,7 +70,8 @@ routine cannot fight over the motors.
 
 `sensors.py` lists everything wired to the Arduino GIGA R1 WiFi: a BNO055
 9-axis IMU, an ISM330DHCX 6-axis IMU, an arm potentiometer on A0, and an intake
-beam break on D22. `robot.py` imports it, and the drive object carries it as
+beam break on D22. The GIGA reads them and passes the numbers to the Pi, which
+does the rest. `robot.py` imports this file, and the drive object carries it as
 `drive.sensors`, which `autonomous.py` and `dashboard.py` both use.
 
 1. Plug the GIGA into a Pi USB port and install its firmware from **Debug →

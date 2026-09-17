@@ -73,12 +73,12 @@ def parts_groups() -> list[dict]:
             "items": [
                 _part("1", "Arduino GIGA R1 WiFi", "ABX00063, on a USB-C data cable to any Pi USB port", "Reads every sensor and streams the values to the Pi. Its firmware installs from the Pi, with no Arduino IDE", "selected", "https://store-usa.arduino.cc/products/giga-r1-wifi"),
                 _part("1", "9-axis IMU: Adafruit BNO055", "STEMMA QT version, product 4646, I2C address 0x28", "Heading, tilt and turn rate. It fuses its own readings and is ready about a second after power-on", "selected", "https://www.adafruit.com/product/4646"),
-                _part("1", "6-axis IMU: Adafruit ISM330DHCX", "STEMMA QT version, product 4502, I2C address 0x6A", "A second heading source from an industrial-grade gyro; the GIGA fuses its readings", "selected", "https://www.adafruit.com/product/4502"),
+                _part("1", "6-axis IMU: Adafruit ISM330DHCX", "STEMMA QT version, product 4502, I2C address 0x6A", "A second heading source from an industrial-grade gyro; the Pi turns its readings into a heading", "selected", "https://www.adafruit.com/product/4502"),
                 _part("Alternative", "6-axis IMU: Adafruit LSM6DSOX", "STEMMA QT version, product 4438; same wiring and code as the ISM330DHCX", "Lower-cost 6-axis choice", "optional", "https://www.adafruit.com/product/4438"),
                 _part("1", "STEMMA QT to male header cable", "Adafruit 4209, 150 mm", "First IMU to the GIGA: red 3.3V, black GND, blue SDA 20, yellow SCL 21", "selected", "https://www.adafruit.com/product/4209"),
                 _part("1", "STEMMA QT cable", "Adafruit 4210, 100 mm", "Chains the second IMU off the first", "selected", "https://www.adafruit.com/product/4210"),
             ],
-            "note": "Recommended, not required: the robot drives without sensors. The GIGA's pins take 3.3 V at most. The robot's sensors.py names what is wired to it; the Pi reads digital pins as on or off and analog pins as 0-4095.",
+            "note": "Recommended, not required: the robot drives without sensors. The GIGA only reads what the Pi asks it to and passes the numbers on; the Pi does the rest. Its pins take 3.3 V at most. The robot's sensors.py names what is wired to it; digital pins arrive as on or off and analog pins as 0-4095.",
         },
         {
             "id": "wiring", "title": "Wiring",

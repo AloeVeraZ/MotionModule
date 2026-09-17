@@ -122,7 +122,7 @@ See the root-level **[bill of materials](BOM.md)** for the reference parts:
   and to a separate regulated rail for the servos;
 - Wago 221 lever connectors for the 12 V joins and ordinary jumper wires for
   the Pi's control signals; and
-- optionally, an Arduino GIGA R1 WiFi on the Pi's USB that reads every sensor,
+- optionally, an Arduino GIGA R1 WiFi on the Pi's USB as the sensor board,
   with a 9-axis BNO055 and a 6-axis ISM330DHCX IMU on its I2C pins.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
@@ -342,11 +342,12 @@ The complete contract and copyable example are in
 ### Sensors: `sensors.py` and the Arduino GIGA
 
 An Arduino GIGA R1 WiFi plugged into the Pi's USB works as the robot's sensor
-extender: digital pins arrive as on or off, analog pins as 0-4095, and the
-GIGA does the IMU maths. Its firmware installs from the Pi with
+board. It reads the pins and sensors the Pi asks for and passes the numbers
+on: digital pins arrive as on or off, analog pins as 0-4095, and the Pi turns
+an IMU's registers into a heading. Its firmware installs from the Pi with
 `motionmodule giga flash` or **Debug → Checks & logs → Install firmware**, with
-no Arduino IDE, and the same firmware serves every robot. The sample's
-`sensors.py` names what is wired to it and `robot.py` imports it:
+no Arduino IDE, and the same firmware serves every robot, whatever is wired to
+it. The sample's `sensors.py` names what is connected and `robot.py` imports it:
 
 ```python
 from motion_module.sensor_bridge import GigaIMU, GigaPin

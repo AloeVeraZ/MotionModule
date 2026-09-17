@@ -1,10 +1,11 @@
 """Every sensor on this robot. The Arduino GIGA R1 WiFi reads them all.
 
-The GIGA is the robot's sensor extender. It reads each digital pin as on or
-off, each analog pin as a number, and does the IMU maths itself, then streams
-it all to the Pi over its USB cable. This file says what is wired to it and
-gives every reading a name. robot.py imports it, so the drive code,
-autonomous.py, and dashboard.py all share the same sensors.
+The GIGA is the robot's sensor board. It reads each digital pin as on or off,
+each analog pin as a number, and whichever sensor registers the Pi asks for,
+then passes the numbers up its USB cable; the Pi does every calculation. This
+file says what is wired to the GIGA and gives every reading a name. robot.py
+imports it, so the drive code, autonomous.py, and dashboard.py all share the
+same sensors.
 
 Set up the GIGA once, no Arduino IDE needed:
   1. Plug its USB-C port into one of the Pi's USB ports.
@@ -26,13 +27,15 @@ from motion_module.sensor_bridge import GigaIMU, GigaPin
 # IMUs on the GIGA's I2C pins. Delete a line if that board is not fitted; the
 # first IMU listed is the one the robot steers by.
 IMUS = [
-    # Adafruit BNO055 9-axis. It fuses its own readings and is ready in about a
-    # second. compass=True adds its magnetometer for a north heading, but motors
-    # and steel nearby bend that, so a robot is usually better off without it.
+    # Adafruit BNO055 9-axis. The chip fuses its own readings and is ready in
+    # about a second. compass=True adds its magnetometer for a north heading,
+    # but motors and steel nearby bend that, so a robot is usually better off
+    # without it.
     GigaIMU("bno055", "Main IMU"),
     # Adafruit ISM330DHCX 6-axis (an LSM6DSOX works the same way; say
-    # "lsm6dsox"). The GIGA fuses its readings. Keep the robot still for a
-    # second after power-on while its gyro calibrates.
+    # "lsm6dsox"). It reports a raw gyro and accelerometer, and the Pi turns
+    # those into a heading. Keep the robot still for a second after power-on
+    # while it measures the gyro at rest.
     GigaIMU("ism330dhcx", "Backup IMU"),
 ]
 

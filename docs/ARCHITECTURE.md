@@ -110,35 +110,44 @@ USB discovery alone cannot identify which physical sensor is wired to a pin.
 ## Arduino GIGA sensor bridge
 
 ```text
-firmware/giga_sensor_bridge/giga_sensor_bridge.ino   the sketch
+firmware/giga_sensor_bridge/giga_sensor_bridge.ino   the firmware, generic
 firmware/giga_sensor_bridge.bin                      prebuilt, flashed by the Pi
 firmware/giga_sensor_bridge.json                     version and checksums
 firmware/build.py                                    rebuilds the binary (arduino-cli)
+core/motion_module/imu.py                            the sensor drivers, on the Pi
 ```
 
-The firmware is the same for every robot. The project's `sensors.py` declares
-pins and IMUs; `module.giga()` creates one `GigaR1Bridge` for the process
-(never opened in simulation), and its reader thread sends
-`MM2 CONFIG <id> <pins> <imus>` after every connection. The GIGA answers with
-one JSON line of readings every 20 ms, tagged with that id, so readings meant
-for another configuration are never used. Sending the same configuration again
-keeps the IMUs running, so a dashboard restart does not reset them. The
-original `MM1 CONFIG` pins-only protocol is still understood in both
-directions, so older MotionModule software and the original sketch keep working.
+The firmware only moves bytes: it reads the pins and I2C registers it is told
+to, at the interval it is told, and answers one-off reads, writes and bus
+scans. The project's `sensors.py` declares pins and IMUs; `module.giga()`
+creates one `GigaR1Bridge` for the process (never opened in simulation), and
+its reader thread sends `MM3 CONFIG <id> <ms> <pins> <streams>` after every
+connection. The GIGA answers with one JSON line of readings per interval,
+tagged with that id, so readings meant for another configuration are never
+used. The original `MM1 CONFIG` pins-only protocol is still understood in both
+directions, so older MotionModule software and the original sketch keep
+working; firmware whose protocol this version cannot use is reported as
+needing a flash rather than guessed at.
 
-On the GIGA, IMUs are read without Arduino libraries. A BNO055 fuses its own
-readings (IMU mode by default, NDOF when `compass=True`); an LSM6-family 6-axis
-IMU is fused on the GIGA: gyro bias measured while still and re-measured
-whenever the robot rests, and yaw integrated about the measured up direction so
-tilt never reads as turning. Yaw counts up counter-clockwise, as `rotate` does.
+Nothing about a particular sensor lives on the GIGA. `motion_module.imu`
+holds the drivers: each writes its chip's set-up registers through one-off
+`MM3 I2C` commands (written as a generator of reads, writes and waits, so the
+reader thread never blocks), declares the registers to repeat, and decodes
+them. A BNO055 is put in fusion mode and its heading is unwrapped on the Pi;
+an LSM6-family 6-axis IMU is fused on the Pi, with the gyro bias measured
+while still and re-measured whenever the robot rests, and yaw integrated about
+the measured up direction so tilt never reads as turning. Readings carry the
+GIGA's own millisecond clock, so integration does not depend on USB timing.
+Yaw counts up counter-clockwise, as `rotate` does.
 
 `motionmodule giga flash` and Debug's Install firmware button run
 `motion_module.giga_firmware`: the reader releases the port, a 1200-baud touch
 restarts the board into its bootloader, `dfu-util` writes the bundled binary at
 0x08040000, and the board's version is checked once it restarts. The installer
 provides `dfu-util`, the `dialout` and `plugdev` groups, and a udev rule for the
-GIGA's USB IDs. `tests/firmware/harness.cpp` runs the real sketch against
-simulated IMUs on a development computer.
+GIGA's USB IDs. `tests/firmware/harness.cpp` runs the real firmware against
+simulated I2C chips, and `tests/fake_giga.py` runs the real drivers against a
+simulated board, so both sides are tested without hardware.
 
 The reference GPIO H-bridges and PWM servo signal have no return channel.
 MotionModule can validate their configured pins and safely pulse an output, but
