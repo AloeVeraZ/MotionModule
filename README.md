@@ -1,6 +1,7 @@
 # MotionModule
 
-<!-- TESTING BRANCH NOTICE: delete this whole block when `testing` is merged into `main`. -->
+<!-- TESTING BRANCH NOTICE: delete this whole block when `testing` is merged into `main`,
+     and change the demo links under "Try the dashboard without a robot" from testing to main. -->
 > [!WARNING]
 > **This is the `testing` branch. It is not the main line.**
 >
@@ -70,6 +71,44 @@ walking, or other robot.
 > MotionModule is developmental lab hardware, not an approved competition
 > controller. Fuse every power branch, keep a physical motor-power cutoff in
 > reach, and raise the wheels for initial tests.
+
+## Try the dashboard without a robot
+
+To show the dashboard off, or to work on it, run it on any computer. The demo
+is the real dashboard and Driver Station connected to a simulated robot: arm
+Drive and hold W and the motor bars move, the simulated cameras and IMU run,
+the sensors change, and the example autonomous routine can be enabled. Nothing
+touches hardware or the computer's network.
+
+Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/demo.ps1 | iex
+```
+
+macOS or Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/demo.sh | bash
+```
+
+The command downloads MotionModule, sets up its own Python environment (it
+needs Python 3.11 or newer; on Windows it offers to install Python with winget
+when there is none), and opens `http://127.0.0.1:8080` in the browser. Press
+Ctrl+C to stop it. Running the command again fetches the latest version; with
+no internet it reuses the last download.
+
+In a clone of the repository, run `.\demo.ps1` or `./demo.sh` instead. That
+copy is used as it is, so changes to the dashboard appear the next time the
+demo starts.
+
+To open the demo from a phone or tablet on the same Wi-Fi, set
+`MOTIONMODULE_DEMO_HOST` to `0.0.0.0` before the command
+(`$env:MOTIONMODULE_DEMO_HOST = '0.0.0.0'` in PowerShell, or
+`export MOTIONMODULE_DEMO_HOST=0.0.0.0` in a Unix shell), allow Python through
+the firewall if asked, and browse to the computer's IP address on port 8080.
+`MOTIONMODULE_DEMO_BRANCH` picks another branch and `MOTIONMODULE_DEMO_PORT`
+another port.
 
 ## Hardware
 
