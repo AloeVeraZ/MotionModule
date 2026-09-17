@@ -25,7 +25,7 @@ fused power system and physical cutoff.
 ```text
 ~/.local/share/motionmodule/
 ├── current -> releases/main-...
-├── previous -> releases/v0.8.1-...
+├── previous -> releases/main-...        # only an earlier release of the same branch
 └── releases/
 
 ~/MotionModule/
@@ -45,8 +45,13 @@ fused power system and physical cutoff.
 ```
 
 Installing a tag, branch, or commit builds and tests a new release before the
-`current` link changes. It does not overwrite robot projects. Rollback switches
-the runtime links, not the student folders.
+`current` link changes. It does not overwrite robot projects. Once the new
+release is running, the install replaces the old MotionModule software: other
+releases and stale MotionModule system files are removed, so `main` and
+`testing` can replace each other in either direction. Only an earlier release
+of the same branch is kept, for rollback. Rollback switches the runtime links,
+not the student folders. See [installer/README.md](../installer/README.md) for
+exactly what is removed and what is kept.
 
 The service follows `~/MotionModule/active/robot.py` and auto-loads an optional
 sibling `dashboard.py` for the separate full Driver Station's camera, IMU, Pi

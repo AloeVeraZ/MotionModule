@@ -28,6 +28,45 @@ per-release virtual environment, runs the unit tests, and marks the release
 complete. Only then does the `current` link change. Failure before activation
 leaves the previous runtime selected.
 
+## Installing replaces MotionModule
+
+An install replaces the MotionModule software instead of adding a version next
+to the old ones. That is what makes the `main` and `testing` branches
+interchangeable: a Pi on either one can install the other, in either
+direction, as often as needed.
+
+```bash
+motionmodule install testing   # from main
+motionmodule install main      # back again
+```
+
+Once the new release is active and its service has stayed up for a few
+seconds, the installer removes what older installs left behind:
+
+- every other release in `~/.local/share/motionmodule/releases`;
+- MotionModule scripts in `/usr/local/sbin`, sudo rules, systemd services, and
+  nginx sites that this version does not ship, disabling a stale service
+  before deleting it;
+- leftover upload archives and any temporary web terminal access code.
+
+It never removes the robot's own files: the projects in
+`~/MotionModule/robots`, their backups in `~/MotionModule/backups`, the
+`active` project link, the pin names in `~/.config/motionmodule/hardware.py`
+(and an older `config.toml`), or the Wi-Fi, hotspot, and hostname settings.
+
+Two releases can remain after an install:
+
+- When the release it replaced came from the same branch, tag, or commit, that
+  release stays as the offline `motionmodule rollback` target. A release from
+  another branch is always removed, so branches never mix.
+- When the new service could not be confirmed running (it crashed, or
+  `--no-start` was used), the release it replaced stays, whatever branch it
+  came from, as the way back. The next install removes it.
+
+`motionmodule install REF` downloads that ref's own bootstrap, falling back to
+`main`'s, so each branch installs with its own scripts even after they
+change.
+
 Bundled examples are copied once into `~/MotionModule/robots`; existing robot
 folders are never overwritten. The `active` symlink selects the project loaded
 by the dashboard. A project may include its own data-only `hardware.py`;
@@ -60,4 +99,5 @@ still has more work to do.
 
 No update service or timer is installed. Runtime changes require an explicit
 `motionmodule install REF`, `motionmodule activate NAME`, or
-`motionmodule rollback`.
+`motionmodule rollback`. Rollback returns to the earlier release of the same
+branch when one is kept; switching branches is always `motionmodule install`.

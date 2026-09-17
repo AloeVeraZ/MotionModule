@@ -60,6 +60,9 @@ trap 'fail "Installation stopped on line $LINENO. Read the error above and rerun
 SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 [ -f "$SOURCE_DIR/pyproject.toml" ] || fail "pyproject.toml is missing from $SOURCE_DIR"
 [ -f "$SOURCE_DIR/core/motion_module/hardware.py" ] || fail "The default hardware definition file is missing."
+[ -f "$SOURCE_DIR/installer/runtime_cleanup.sh" ] || fail "installer/runtime_cleanup.sh is missing from $SOURCE_DIR"
+# shellcheck source=runtime_cleanup.sh
+. "$SOURCE_DIR/installer/runtime_cleanup.sh"
 if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
     fail "Invalid robot project name: $ROBOT_PROJECT"
 fi
@@ -150,8 +153,10 @@ rm -rf -- "$release_dir/.git" "$release_dir/.venv" "$release_dir/__pycache__"
 printf '%s\n' "$VERSION_REF" > "$release_dir/INSTALL_REF"
 
 python3 -m venv --system-site-packages "$release_dir/.venv"
-"$release_dir/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
-"$release_dir/.venv/bin/python" -m pip install --no-build-isolation -e "$release_dir"
+# No pip download cache: every release builds its own environment, and a cache
+# would only pile up on the SD card between installs.
+"$release_dir/.venv/bin/python" -m pip install --no-cache-dir --upgrade pip setuptools wheel
+"$release_dir/.venv/bin/python" -m pip install --no-cache-dir --no-build-isolation -e "$release_dir"
 (
     cd "$release_dir"
     ./.venv/bin/python -m unittest discover -s tests -v
@@ -267,17 +272,25 @@ EOF
 fi
 
 say "Installing the dashboard, service, management command, and Wi-Fi failover controller..."
-sudo install -m 0755 "$release_dir/installer/motionmodule" /usr/local/bin/motionmodule
-sudo install -m 0755 "$release_dir/installer/network_manager.py" /usr/local/sbin/motionmodule-network
-sudo install -m 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionmodule-hotspot
-sudo install -m 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
+# Every file this install writes outside the release is recorded, so the sweep
+# further down can tell it apart from files an older install left behind.
+installed_system_files=()
+install_system_file() {
+    sudo install -m "$1" "$2" "$3"
+    installed_system_files+=("$3")
+}
+
+install_system_file 0755 "$release_dir/installer/motionmodule" /usr/local/bin/motionmodule
+install_system_file 0755 "$release_dir/installer/network_manager.py" /usr/local/sbin/motionmodule-network
+install_system_file 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionmodule-hotspot
+install_system_file 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
 
 sudoers_temp="$(mktemp)"
 systemctl_path="$(command -v systemctl)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-network *\n' "$USER" > "$sudoers_temp"
 printf '%s ALL=(root) NOPASSWD: %s restart motionmodule.service\n' "$USER" "$systemctl_path" >> "$sudoers_temp"
 sudo visudo -cf "$sudoers_temp" >/dev/null
-sudo install -m 0440 "$sudoers_temp" /etc/sudoers.d/motionmodule-network
+install_system_file 0440 "$sudoers_temp" /etc/sudoers.d/motionmodule-network
 rm -f "$sudoers_temp"
 
 say "Saving the Raspberry Pi Imager Wi-Fi as the preferred startup network..."
@@ -300,7 +313,7 @@ RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
-sudo install -m 0644 "$network_service_temp" /etc/systemd/system/motionmodule-network.service
+install_system_file 0644 "$network_service_temp" /etc/systemd/system/motionmodule-network.service
 rm -f "$network_service_temp"
 
 nginx_temp="$(mktemp)"
@@ -323,12 +336,11 @@ server {
     }
 }
 EOF
-sudo install -m 0644 "$nginx_temp" /etc/nginx/sites-available/motionmodule
+install_system_file 0644 "$nginx_temp" /etc/nginx/sites-available/motionmodule
 rm -f "$nginx_temp"
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo ln -sfn /etc/nginx/sites-available/motionmodule /etc/nginx/sites-enabled/motionmodule
-sudo nginx -t
-sudo systemctl enable nginx.service
+installed_system_files+=(/etc/nginx/sites-enabled/motionmodule)
 
 service_temp="$(mktemp)"
 cat > "$service_temp" <<EOF
@@ -353,8 +365,28 @@ TimeoutStopSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-sudo install -m 0644 "$service_temp" /etc/systemd/system/motionmodule.service
+install_system_file 0644 "$service_temp" /etc/systemd/system/motionmodule.service
 rm -f "$service_temp"
+
+# Scripts, sudo rules, services, and web server sites that an older install
+# wrote but this version does not ship. Removing them means a file one branch
+# installs never lingers after switching to a branch without it.
+while IFS= read -r stale; do
+    case "$stale" in
+        /etc/systemd/system/*.service)
+            sudo systemctl disable --now "${stale##*/}" >/dev/null 2>&1 || true
+            ;;
+    esac
+    sudo rm -f -- "$stale"
+    say "Removed $stale, left by an older MotionModule install."
+done < <(
+    { sudo find /usr/local/sbin /etc/sudoers.d /etc/systemd/system /etc/nginx/sites-available /etc/nginx/sites-enabled \
+        -maxdepth 1 -name 'motionmodule*' \( -type f -o -type l \) 2>/dev/null || true; } \
+        | unlisted_paths "${installed_system_files[@]}"
+)
+
+sudo nginx -t
+sudo systemctl enable nginx.service
 sudo systemctl daemon-reload
 sudo systemctl enable motionmodule-network.service motionmodule.service
 
@@ -367,15 +399,15 @@ if [ -n "$TARGET_HOSTNAME" ]; then
         sudo /usr/local/sbin/motionmodule-network hostname >/dev/null
 fi
 
-say "Activating the new release without deleting older versions..."
+say "Activating the new release..."
 old_target=""
 if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK/.complete" ]; then
     old_target="$(readlink -f "$CURRENT_LINK")"
-    ln -sfn "$old_target" "$PREVIOUS_LINK"
 fi
 ln -s "$release_dir" "$INSTALL_ROOT/current.new.$$"
 mv -Tf "$INSTALL_ROOT/current.new.$$" "$CURRENT_LINK"
 
+new_release_running=false
 if [ "$START_SERVICE" = true ]; then
     sudo systemctl restart motionmodule-network.service
     if ! sudo systemctl restart motionmodule.service; then
@@ -390,7 +422,44 @@ if [ "$START_SERVICE" = true ]; then
         fail "The new service did not start; the previous release was restored when available. Check journalctl."
     fi
     sudo systemctl restart nginx.service
+    # A restart returns as soon as the process launches. Before the release it
+    # replaced is deleted, confirm the same process is still running a few
+    # seconds later rather than crashing and being restarted.
+    started_at="$(systemctl show -p ActiveEnterTimestampMonotonic --value motionmodule.service 2>/dev/null || true)"
+    sleep 8
+    if systemctl is-active --quiet motionmodule.service \
+        && [ "$(systemctl show -p ActiveEnterTimestampMonotonic --value motionmodule.service 2>/dev/null || true)" = "$started_at" ]; then
+        new_release_running=true
+    fi
 fi
+
+# ---- Replace the old software, keep the robot --------------------------------
+# An install replaces MotionModule rather than stacking versions beside each
+# other, so main and testing (or any tag or commit) can replace one another in
+# either direction. The rules live in runtime_cleanup.sh. Robot projects and
+# their backups, the active project, hardware.py pin names, and the Wi-Fi and
+# hotspot settings are never removed.
+keep_release="$(rollback_candidate "$old_target" "$VERSION_REF")"
+if [ -n "$old_target" ] && [ "$new_release_running" != true ]; then
+    # Until the new release has been seen running, the one it replaced stays
+    # as the way back, whichever branch it came from.
+    keep_release="$old_target"
+    say "Keeping $(basename "$old_target") for motionmodule rollback until the new release is confirmed running; the next install removes it."
+elif [ -n "$keep_release" ]; then
+    say "Keeping $(basename "$keep_release") from the same branch ($VERSION_REF) for motionmodule rollback."
+fi
+if [ -n "$keep_release" ]; then
+    ln -sfn "$keep_release" "$PREVIOUS_LINK"
+else
+    rm -f -- "$PREVIOUS_LINK"
+fi
+while IFS= read -r removed; do
+    say "Removed older MotionModule release $removed."
+done < <(remove_other_releases "$RELEASES_DIR" "$release_dir" "$keep_release")
+rm -f -- "$INSTALL_ROOT"/current.new.* "$INSTALL_ROOT"/current.restore.* "$PROJECT_DIR"/active.new.*
+rm -rf -- "$PROJECT_DIR/.uploads"
+rm -f -- "$CONFIG_DIR/terminal-access.json"
+say "Kept the robot's own files: $ROBOT_DIR, $PROJECT_DIR/backups, the active project, $CONFIG_FILE, and the Wi-Fi settings."
 
 say "Running the automatic non-moving hardware check..."
 if ! /usr/local/bin/motionmodule doctor; then
