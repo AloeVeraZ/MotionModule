@@ -368,6 +368,66 @@ class DashboardTests(unittest.TestCase):
         # The GIGA firmware installs from the Pi, so projects no longer carry it.
         self.assertFalse(any(name.endswith(".ino") for name in names))
 
+    def test_update_panel_reports_branches_and_guards_installs(self):
+        class Checker:
+            """Stands in for the GitHub check."""
+
+            def __init__(self):
+                self.started = []
+                self.refreshed = []
+
+            def snapshot(self, refresh=False):
+                self.refreshed.append(refresh)
+                return {
+                    "repository": "AloeVeraZ/MotionModule",
+                    "installed": {"ref": "testing", "commit": "abc1234"},
+                    "lines": [
+                        {"ref": "testing", "label": "Testing line", "current": True,
+                         "status": "update-available", "latest": "def5678", "installed": "abc1234",
+                         "action": "Update now", "note": ""},
+                        {"ref": "main", "label": "Main line", "current": False,
+                         "status": "other-line", "latest": "999aaaa", "installed": "",
+                         "action": "Switch to the main line", "note": ""},
+                    ],
+                    "checking": False, "checked_at": 1.0, "error": "", "installable": True,
+                    "job": {"state": "idle", "log": [], "finished_at": None, "result": ""},
+                }
+
+            def start_update(self, ref):
+                if ref not in ("main", "testing"):
+                    from motion_module.errors import MotionModuleError
+
+                    raise MotionModuleError("MotionModule installs the main or the testing branch")
+                self.started.append(ref)
+                return f"Installing the {ref} branch."
+
+            def close(self):
+                pass
+
+        checker = Checker()
+        app = create_app(self.module, MecanumDrive(self.module), self.network, update_checker=checker)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+
+        data = client.get("/api/updates").get_json()
+        self.assertTrue(data["ok"])
+        self.assertEqual([line["ref"] for line in data["lines"]], ["testing", "main"])
+        self.assertEqual(data["installed"]["ref"], "testing")
+        client.get("/api/updates?refresh=1")
+        self.assertEqual(checker.refreshed, [False, True])
+
+        self.assertEqual(client.post("/api/updates", json={"ref": "testing"}).status_code, 403)
+        refused = client.post("/api/updates", headers=headers, json={"ref": "somewhere-else"})
+        self.assertEqual(refused.status_code, 400)
+        self.assertIn("main or the testing", refused.get_json()["error"])
+        self.assertEqual(checker.started, [])
+
+        started = client.post("/api/updates", headers=headers, json={"ref": "testing"})
+        self.assertEqual(started.status_code, 202)
+        self.assertEqual(checker.started, ["testing"])
+        # Outputs stop before the software is replaced.
+        self.assertTrue(self.module.stopped)
+
     def test_giga_firmware_status_and_install_are_guarded(self):
         status = self.client.get("/api/giga/firmware").get_json()
         self.assertTrue(status["ok"])

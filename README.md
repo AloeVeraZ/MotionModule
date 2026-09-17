@@ -156,8 +156,9 @@ Do not put `sudo` before that command. The installer:
 6. reboots the Pi.
 
 The first install uses hostname `motionmodule`. Give multiple robots unique
-names with `--hostname motionmodule-01`. Updates are always explicit; no
-automatic updater is installed.
+names with `--hostname motionmodule-01`. Updates are always explicit: the Pi
+checks GitHub for a newer version and says so under **Debug -> Checks & logs**,
+but nothing is ever installed until you press **Update now**.
 
 ## Connect to the robot UI
 
@@ -535,7 +536,15 @@ Useful commands are also explained inside Debug:
 
 ## Updates and development
 
-Runtime changes are explicit:
+Open **Debug -> Checks & logs** in the dashboard. A Pi with internet access
+asks GitHub what each branch is on and shows a line per branch: green when
+this robot is running the newest version, red with **Update now** when one is
+waiting. A Pi on `testing` also sees the `main` line, so it can go back; a Pi
+on `main` sees only `main`. Pressing the button stops the motors, runs the
+update as root in the background, and restarts MotionModule; the log appears
+under the card while it works. Nothing installs on its own.
+
+The same thing over SSH:
 
 ```bash
 motionmodule install main

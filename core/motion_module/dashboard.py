@@ -48,6 +48,7 @@ from .runner import load_project
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
 from .telemetry import empty_snapshot, merge_usb_controllers, normalize_snapshot
+from .updates import UpdateChecker, installed_release
 from .usb import sensor_controllers, usb_devices
 
 
@@ -80,12 +81,7 @@ def install_ref(release_root: Path | None = None) -> str:
     checkout has none, which reads as an empty string.
     """
 
-    root = release_root or Path(__file__).resolve().parents[2]
-    try:
-        ref = (root / "INSTALL_REF").read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return ""
-    return ref if re.fullmatch(r"[A-Za-z0-9._/-]{1,80}", ref) else ""
+    return installed_release(release_root)["ref"]
 
 
 def servo_profiles(config) -> list[dict]:
@@ -302,6 +298,7 @@ def create_app(
     workspace_directory: str | os.PathLike[str] | None = None,
     restart_callback=None,
     config_path: str | os.PathLike[str] | None = None,
+    update_checker=None,
     dashboard_telemetry=None,
     autonomous_routine=None,
     autonomous_error: str = "",
@@ -338,6 +335,8 @@ def create_app(
     usb_sensor_lock = threading.Lock()
     firmware_job = {"state": "idle", "log": [], "error": "", "version": ""}
     firmware_lock = threading.Lock()
+    updates = update_checker if update_checker is not None else UpdateChecker()
+    app.config["UPDATE_CHECKER"] = updates
 
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
@@ -507,6 +506,29 @@ def create_app(
     @app.get("/api/usb")
     def usb_inventory():
         return jsonify({"ok": True, **usb_devices()})
+
+    @app.get("/api/updates")
+    def update_status():
+        """What GitHub has, what this Pi runs, and any update in progress."""
+
+        return jsonify({"ok": True, **updates.snapshot(refresh=request.args.get("refresh") == "1")})
+
+    @app.post("/api/updates")
+    def install_update():
+        """Install a branch, the same way motionmodule install does."""
+
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        ref = str((request.get_json(silent=True) or {}).get("ref", ""))
+        # The robot must not be driving while its software is replaced.
+        autonomous.stop()
+        with command_lock:
+            stop_outputs()
+        try:
+            message = updates.start_update(ref)
+        except MotionModuleError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        return jsonify({"ok": True, "started": True, "ref": ref, "message": message}), 202
 
     @app.get("/api/giga/firmware")
     def giga_firmware_status():
@@ -1254,6 +1276,9 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         close_telemetry = getattr(dashboard_telemetry, "close", None)
         if callable(close_telemetry):
             close_telemetry()
+        checker = app.config.get("UPDATE_CHECKER")
+        if checker is not None:
+            checker.close()
         server.server_close()
 
 

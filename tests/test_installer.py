@@ -286,6 +286,31 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('exit "$flash_status"', flash)
         self.assertIn("giga status | giga flash", manager)
 
+    def test_release_records_the_commit_the_dashboard_compares_with_github(self):
+        commit = self.script.index('release_commit="$(git -C "$SOURCE_DIR" rev-parse HEAD')
+        copied = self.script.index('cp -a "$SOURCE_DIR/." "$release_dir/"')
+        self.assertLess(commit, copied)  # .git is removed from the release
+        self.assertIn('"$release_commit" > "$release_dir/INSTALL_COMMIT"', self.script)
+
+    def test_dashboard_can_install_a_branch_through_one_restricted_helper(self):
+        self.assertIn('install_system_file 0755 "$release_dir/installer/update.sh" /usr/local/sbin/motionmodule-update',
+                      self.script)
+        self.assertIn("NOPASSWD: /usr/local/sbin/motionmodule-update main", self.script)
+        self.assertIn("NOPASSWD: /usr/local/sbin/motionmodule-update testing", self.script)
+        self.assertIn('install_system_file 0440 "$update_sudoers_temp" /etc/sudoers.d/motionmodule-update',
+                      self.script)
+        self.assertIn("visudo -cf \"$update_sudoers_temp\"", self.script)
+
+        helper = (INSTALLER.parent / "update.sh").read_text(encoding="utf-8")
+        # Only the two branches, and only ever one argument.
+        self.assertIn("main|testing) ;;", helper)
+        self.assertIn('[ "$#" -eq 1 ]', helper)
+        # The update outlives the restart of the service that started it.
+        self.assertIn("systemd-run", helper)
+        self.assertIn('--uid="$OWNER"', helper)
+        self.assertIn("/usr/local/bin/motionmodule install \"$REF\" --no-reboot", helper)
+        self.assertIn("/var/log/motionmodule-update.log", helper)
+
     def test_manager_installs_each_branch_through_its_own_bootstrap(self):
         manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
         self.assertIn('"$RAW_BASE/$ref/install.sh"', manager)

@@ -103,7 +103,13 @@ GPIO/I2C membership and boot configuration take effect. Its final printed
 message is the GitHub pinout link. Use `--no-reboot` only when provisioning
 still has more work to do.
 
-No update service or timer is installed. Runtime changes require an explicit
-`motionmodule install REF`, `motionmodule activate NAME`, or
+No update service or timer is installed, and nothing installs itself. The
+dashboard's update card reads `INSTALL_REF` and `INSTALL_COMMIT` from the
+release root, compares them against `git ls-remote` for `main` and `testing`,
+and, when you press the button, runs `/usr/local/sbin/motionmodule-update REF`
+through the `motionmodule-update` sudoers rule. That helper starts a transient
+`systemd-run` unit so the install survives the service restart it causes, and
+logs to `/var/log/motionmodule-update.log`. Runtime changes otherwise require
+an explicit `motionmodule install REF`, `motionmodule activate NAME`, or
 `motionmodule rollback`. Rollback returns to the earlier release of the same
 branch when one is kept; switching branches is always `motionmodule install`.
