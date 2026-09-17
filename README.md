@@ -452,7 +452,8 @@ Useful commands are also explained inside Debug:
 | `motionmodule project list` | List installed robot folders |
 | `motionmodule project NAME` | Select another installed folder |
 | `motionmodule versions` | List installed runtime versions |
-| `motionmodule rollback` | Activate the previous runtime |
+| `motionmodule rollback` | Return to the earlier release of the same branch |
+| `motionmodule install main` | Replace MotionModule with a branch, tag, or commit |
 
 ## Updates and development
 
@@ -463,6 +464,14 @@ motionmodule install main
 motionmodule versions
 motionmodule rollback
 ```
+
+Installing replaces the MotionModule software rather than stacking versions,
+so the `main` and `testing` branches are interchangeable: a Pi on either one
+can install the other, in either direction. Robot projects and their backups,
+the active project, `hardware.py` pin names, and Wi-Fi settings are always
+kept. `motionmodule rollback` returns to the earlier release of the same
+branch when one is kept; to change branches, install the other one. The
+[installer notes](installer/README.md) list exactly what is removed.
 
 To test the repository without robot hardware:
 

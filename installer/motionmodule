@@ -10,7 +10,8 @@ ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 BACKUP_DIR="${MOTIONMODULE_BACKUP_DIR:-$PROJECT_DIR/backups}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
 TERMINAL_ACCESS_FILE="${MOTIONMODULE_TERMINAL_ACCESS:-$CONFIG_DIR/terminal-access.json}"
-RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/install.sh}"
+RAW_BASE="https://raw.githubusercontent.com/AloeVeraZ/MotionModule"
+RAW_INSTALL="${MOTIONMODULE_RAW_INSTALL:-}"
 
 fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 1; }
 runtime_python() {
@@ -74,6 +75,11 @@ case "$command" in
     rollback)
         previous="$(readlink -f "$PREVIOUS_LINK" 2>/dev/null || true)"
         current="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+        # Installing replaces MotionModule, so only an earlier release of the
+        # same branch is kept to roll back to. Another branch is one install away.
+        if [ -z "$previous" ] || [ ! -f "$previous/.complete" ]; then
+            fail "No earlier release of this branch is kept on the Pi. Switch with motionmodule install main (or testing); robot projects are kept."
+        fi
         validate_release "$previous"
         validate_release "$current"
         ln -s "$previous" "$INSTALL_ROOT/current.new.$$"
@@ -86,7 +92,17 @@ case "$command" in
         [ "$#" -ge 1 ] || fail "Usage: motionmodule install VERSION_OR_GIT_REF [--robot PROJECT]"
         ref="$1"
         shift
-        curl -fsSL "$RAW_INSTALL" | bash -s -- --version "$ref" "$@"
+        printf '%s' "$ref" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$' || fail "Invalid branch, tag, or commit: $ref"
+        # Each branch installs through its own bootstrap, so main and testing
+        # can replace each other even after their install scripts drift apart.
+        # A ref without a bootstrap of its own falls back to main's.
+        if [ -n "$RAW_INSTALL" ]; then
+            bootstrap="$(curl -fsSL "$RAW_INSTALL")" || fail "Could not download the installer from $RAW_INSTALL"
+        elif ! bootstrap="$(curl -fsSL "$RAW_BASE/$ref/install.sh" 2>/dev/null)"; then
+            bootstrap="$(curl -fsSL "$RAW_BASE/main/install.sh")" \
+                || fail "Could not download the MotionModule installer. Check the Pi's internet connection."
+        fi
+        printf '%s\n' "$bootstrap" | bash -s -- --version "$ref" "$@"
         ;;
     deploy)
         [ "$#" -eq 2 ] || fail "Usage: motionmodule deploy PROJECT_NAME UPLOADED_ARCHIVE"
@@ -211,8 +227,12 @@ MotionModule commands:
   test-motor CHANNEL [--power 0.15] [--seconds 0.5]
   test-servo CHANNEL [--board 0] [--angle 90]
   versions | activate RELEASE_NAME | rollback
+                                  rollback returns to the earlier release of
+                                  the same branch, when one is kept
   install VERSION_OR_GIT_REF [--robot PROJECT]
-                                  explicit, opt-in install/update
+                                  replace MotionModule with a branch, tag, or
+                                  commit (main, testing, ...); robot projects,
+                                  hardware.py, and Wi-Fi settings are kept
   deploy PROJECT_NAME UPLOADED_ARCHIVE
                                   validate, activate, and run an uploaded project
   project [list|PROJECT_NAME]      list or switch robot code folders
