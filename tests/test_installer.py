@@ -264,6 +264,28 @@ class InstallerFinishTests(unittest.TestCase):
             ["/usr/local/sbin/motionmodule-legacy", "/etc/systemd/system/motionmodule-camera.service"],
         )
 
+    def test_pi_is_ready_to_read_and_flash_the_giga(self):
+        self.assertRegex(self.script, r"\n    dfu-util \\\n")
+        self.assertIn("for group in gpio i2c dialout plugdev; do", self.script)
+        self.assertIn("install_system_file 0644 \"$udev_temp\" /etc/udev/rules.d/motionmodule-giga.rules", self.script)
+        self.assertIn('ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0266|0366", MODE="0660", GROUP="plugdev"', self.script)
+        # The rule is swept like every other file an install writes.
+        sweep = self.script.index('| unlisted_paths "${installed_system_files[@]}"')
+        self.assertIn("/etc/udev/rules.d", self.script[self.script.index("sudo find /usr/local/sbin"):sweep])
+        self.assertLess(self.script.index("motionmodule-giga.rules"), sweep)
+
+    def test_manager_flashes_the_giga_with_the_service_paused(self):
+        manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
+        flash = manager[manager.index("    giga)"):manager.index("    terminal)")]
+        self.assertIn("-m motion_module.giga_firmware flash", flash)
+        stop = flash.index("sudo systemctl stop motionmodule.service")
+        run = flash.index("-m motion_module.giga_firmware flash")
+        start = flash.index("sudo systemctl start motionmodule.service")
+        self.assertLess(stop, run)
+        self.assertLess(run, start)
+        self.assertIn('exit "$flash_status"', flash)
+        self.assertIn("giga status | giga flash", manager)
+
     def test_manager_installs_each_branch_through_its_own_bootstrap(self):
         manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
         self.assertIn('"$RAW_BASE/$ref/install.sh"', manager)

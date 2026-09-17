@@ -463,7 +463,7 @@ kbd.unbound b { color: var(--faint); }
           <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
           <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
         </div>
-        <p class="imu-detail" id="imuDetail">Declare the installed IMU in dashboard.py.</p>
+        <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
       </div>
     </section>
 
@@ -806,9 +806,11 @@ const numberText = (value, suffix='°') => Number.isFinite(value) ? `${Number(va
 function renderImu(imu) {
   const available = Boolean(imu && imu.connected);
   $('#imuStatus').textContent = !imu ? 'Not configured' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
-  const yaw = Number.isFinite(imu?.yaw) ? ((Number(imu.yaw)%360)+360)%360 : null;
+  // Yaw counts up turning left (counter-clockwise), as robot code and rotate
+  // do. Shown from -180 to 180; the needle turns the way the robot turned.
+  const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
-  $('#headingDial').style.setProperty?.('--yaw', `${yaw || 0}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in dashboard.py.';
+  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
 }
 
 function sensorText(sensor) {

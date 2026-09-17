@@ -106,20 +106,28 @@ class HardwareGuideTests(unittest.TestCase):
         for part in linked:
             self.assertIn(part["url"].rstrip("/").rsplit("/", 1)[-1], bom, part["name"])
         self.assertIn("not detected inventory", guide["inventory_note"])
-        self.assertIn("No sensors", guide["inventory_note"])
+        self.assertIn("Arduino GIGA R1 WiFi", guide["inventory_note"])
 
     def test_the_two_required_groups_come_first_and_the_rest_are_advice(self):
         groups = hardware_guide(self.config)["parts_groups"]
         self.assertEqual(
             [group["id"] for group in groups],
-            ["controllers", "power", "actuators", "wiring", "tools"],
+            ["controllers", "power", "actuators", "sensors", "wiring", "tools"],
         )
         self.assertEqual(
             [group["requirement"] for group in groups],
-            ["required", "required", "recommended", "recommended", "recommended"],
+            ["required", "required", "recommended", "recommended", "recommended", "recommended"],
         )
         by_id = {group["id"]: group for group in groups}
         self.assertIn("recommendations, not requirements", by_id["actuators"]["note"].lower())
+
+    def test_sensor_group_names_one_nine_axis_and_one_six_axis_imu(self):
+        sensors = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "sensors")
+        selected = {part["name"] for part in sensors["items"] if part["status"] == "selected"}
+        self.assertIn("9-axis IMU: Adafruit BNO055", selected)
+        self.assertIn("6-axis IMU: Adafruit ISM330DHCX", selected)
+        self.assertIn("Arduino GIGA R1 WiFi", selected)
+        self.assertIn("3.3 V", sensors["note"])
 
     def test_the_battery_is_chosen_and_carries_its_own_fuse(self):
         power = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "power")

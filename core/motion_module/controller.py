@@ -36,6 +36,7 @@ class MotionModule:
         self._last_feed = time.monotonic()
         self._last_servo_probe = time.monotonic()
         self._stop_event = threading.Event()
+        self._giga = None
         self._motors = {
             item.channel: HBridgeMotor(self.gpio, item, self.config.pwm_hz)
             for item in self.config.motors
@@ -96,6 +97,37 @@ class MotionModule:
             raise ValueError("Digital input pull must be 'none', 'up', or 'down'")
         self.gpio.claim_input(gpio, pull)
         return DigitalInput(self.gpio, gpio, pull)
+
+    @property
+    def hardware(self) -> bool:
+        """True on a Raspberry Pi driving real pins, False in simulation."""
+
+        return bool(getattr(self.gpio, "is_hardware", False))
+
+    def giga(self, pins=(), imus=(), *, serial: str = ""):
+        """The Arduino GIGA R1 WiFi reading this robot's sensors.
+
+        Declare every pin and IMU wired to the GIGA in one call, normally in
+        sensors.py; calling again with the same declarations returns the same
+        bridge. In simulation the board is never opened, so a laptop demo or a
+        test cannot take the port from a running robot.
+        """
+
+        from .sensor_bridge import GigaR1Bridge
+
+        with self._lock:
+            bridge = self._giga
+            created = bridge is None
+            if created:
+                bridge = self._giga = GigaR1Bridge(pins, imus=imus, serial=serial, simulated=not self.hardware)
+        if created:
+            return bridge.start()
+        if bridge.matches(pins, imus, serial):
+            return bridge
+        raise ValueError(
+            "The GIGA is already set up with other sensors. Declare all of its pins and IMUs "
+            "once, in sensors.py, and share that object."
+        )
 
     @property
     def servo_outputs_enabled(self) -> bool:
@@ -298,8 +330,11 @@ class MotionModule:
                     pass
             self._servos.close()
             self.gpio.close()
+            giga, self._giga = self._giga, None
         self._stop_event.set()
         self._watchdog_thread.join(timeout=1)
+        if giga is not None:
+            giga.close()
 
     def __enter__(self):
         return self

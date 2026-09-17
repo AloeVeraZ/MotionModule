@@ -114,20 +114,22 @@ class DemoTelemetry:
 
     def snapshot(self) -> dict:
         t = time.monotonic() - self.started
+        heading = (t * 9.0 + 180.0) % 360.0 - 180.0
         return {
             "cameras": [
                 {"name": "Front", "url": "/demo/camera/front.svg", "detail": "Simulated feed"},
                 {"name": "Rear", "url": "/demo/camera/rear.svg", "detail": "Simulated feed"},
             ],
             "imu": {
-                "name": "Simulated IMU",
+                "name": "Main IMU",
                 "connected": True,
                 "calibrated": True,
-                "yaw": (t * 9.0) % 360,
+                # Counter-clockwise positive, as a real IMU reports it.
+                "yaw": heading,
                 "pitch": 1.6 * math.sin(t / 3.1),
                 "roll": -2.2 * math.cos(t / 4.3),
                 "rate": 9.0,
-                "detail": "Simulated: the demo robot turns slowly in place.",
+                "detail": "Simulated BNO055 at 0x28: the demo robot turns slowly left.",
             },
             "pi_inputs": [
                 {"name": "Forward limit", "value": math.sin(t / 2.5) > 0.6, "kind": "digital",
@@ -146,7 +148,7 @@ class DemoTelemetry:
                 "digital_pins": ["D0", "D75"],
                 "analog_pins": ["A0", "A7"],
                 "adc_bits": 12,
-                "detail": "Simulated MotionModule sensor bridge",
+                "detail": "Simulated MotionModule sensor firmware 2.0.0",
                 "pins": [
                     {"name": "Arm potentiometer", "value": round(2048 + 1700 * math.sin(t / 2)),
                      "kind": "analog", "unit": "raw", "channel": "A0", "minimum": 0, "maximum": 4095,
@@ -156,6 +158,10 @@ class DemoTelemetry:
                      "status": "ok"},
                     {"name": "Intake beam", "value": int(t / 3) % 2 == 0, "kind": "digital",
                      "channel": "D22", "status": "ok"},
+                    {"name": "Main IMU heading", "value": round(heading, 1), "kind": "analog",
+                     "unit": "°", "channel": "I2C 0x28", "minimum": -180, "maximum": 180, "status": "ok"},
+                    {"name": "Backup IMU heading", "value": round(heading - 0.4, 1), "kind": "analog",
+                     "unit": "°", "channel": "I2C 0x6A", "minimum": -180, "maximum": 180, "status": "ok"},
                 ],
             }],
         }

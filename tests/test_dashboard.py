@@ -2,6 +2,7 @@ import io
 import re
 import threading
 import tempfile
+import time
 import unittest
 import sys
 import zipfile
@@ -360,9 +361,56 @@ class DashboardTests(unittest.TestCase):
             names = set(archive.namelist())
         self.assertIn("Mecanum/robot.py", names)
         self.assertIn("Mecanum/hardware.py", names)
+        self.assertIn("Mecanum/sensors.py", names)
         self.assertIn("Mecanum/dashboard.py", names)
-        self.assertIn("Mecanum/giga_sensor_bridge.ino", names)
+        self.assertIn("Mecanum/autonomous.py", names)
         self.assertIn("Mecanum/README.md", names)
+        # The GIGA firmware installs from the Pi, so projects no longer carry it.
+        self.assertFalse(any(name.endswith(".ino") for name in names))
+
+    def test_giga_firmware_status_and_install_are_guarded(self):
+        status = self.client.get("/api/giga/firmware").get_json()
+        self.assertTrue(status["ok"])
+        self.assertEqual(status["job"]["state"], "idle")
+        self.assertFalse(status["installable"])  # no installed Pi runtime here
+        self.assertEqual(self.client.post("/api/giga/firmware").status_code, 403)
+        refused = self.client.post("/api/giga/firmware", headers=self.headers)
+        self.assertEqual(refused.status_code, 503)
+
+    def test_giga_firmware_install_pauses_the_bridge_and_reports_progress(self):
+        class Bridge:
+            firmware = "1"
+            released = started = 0
+
+            def release(self):
+                Bridge.released += 1
+                return True
+
+            def start(self):
+                Bridge.started += 1
+
+        def flash(log):
+            log("Writing firmware 2.0.0 (137 KB)...")
+            return {"version": "2.0.0", "verified": True}
+
+        with tempfile.TemporaryDirectory() as directory, \
+                patch("motion_module.dashboard.active_bridges", return_value=[Bridge()]), \
+                patch("motion_module.dashboard.flash_giga", side_effect=flash):
+            app = create_app(self.module, MecanumDrive(self.module), self.network,
+                             workspace_directory=directory, restart_callback=lambda: None)
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            self.assertEqual(client.post("/api/giga/firmware", headers=headers).status_code, 202)
+            deadline = time.monotonic() + 5
+            while client.get("/api/giga/firmware").get_json()["job"]["state"] == "running":
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.02)
+            job = client.get("/api/giga/firmware").get_json()["job"]
+        self.assertEqual(job["state"], "done")
+        self.assertEqual(job["version"], "2.0.0")
+        self.assertIn("Writing firmware 2.0.0 (137 KB)...", job["log"])
+        self.assertEqual((Bridge.released, Bridge.started), (1, 1))
+        self.assertTrue(self.module.stopped)
 
     def test_optional_dashboard_telemetry_api_exposes_typed_inputs(self):
         class Dashboard:
@@ -502,7 +550,8 @@ class DashboardTests(unittest.TestCase):
             json={"sequence": 3, "forward": 0, "strafe": 0, "rotate": 1, "speed": 0.4},
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.module.outputs[1], 0.4)
+        # A left turn runs the front-left wheel (channel 1) backward.
+        self.assertEqual(self.module.outputs[1], -0.4)
 
     def test_page_reload_can_resume_above_server_sequence_floor(self):
         first = self.client.post(
