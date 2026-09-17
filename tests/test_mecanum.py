@@ -156,7 +156,8 @@ class MecanumSensorTests(unittest.TestCase):
         import sensors
 
         self.assertEqual([imu.chip for imu in sensors.IMUS], ["bno055", "ism330dhcx"])
-        self.assertEqual([imu.bridge_spec for imu in sensors.IMUS], ["BNO055@28", "LSM6@6A"])
+        self.assertEqual([imu.address for imu in sensors.IMUS], [0x28, 0x6A])
+        self.assertEqual([imu.driver for imu in sensors.IMUS], ["BNO055", "LSM6"])
 
     def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
         sensors = FakeHeadingSensors()

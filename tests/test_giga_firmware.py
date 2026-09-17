@@ -30,10 +30,11 @@ from motion_module.giga_firmware import (
     find_boards,
     flash_giga,
 )
+from fake_giga import Clock, FakeGiga
 from motion_module.sensor_bridge import (
     GIGA_FIRMWARE_VERSION,
+    PROTOCOL,
     PROTOCOL_V1,
-    PROTOCOL_V2,
     GigaIMU,
     GigaPin,
     GigaR1Bridge,
@@ -50,7 +51,7 @@ class PrebuiltFirmwareTests(unittest.TestCase):
         source = SKETCH.read_text(encoding="utf-8")
         self.assertIn(f'const char BRIDGE_VERSION[] = "{GIGA_FIRMWARE_VERSION}";', source)
         self.assertIn(PROTOCOL_V1, source)
-        self.assertIn(PROTOCOL_V2, source)
+        self.assertIn(PROTOCOL, source)
 
     def test_binary_was_built_from_this_sketch(self):
         """Change the sketch, then run python firmware/build.py to rebuild the binary."""
@@ -223,7 +224,12 @@ def compiler() -> list[str] | None:
 @unittest.skipUnless(os.environ.get("MOTIONMODULE_FIRMWARE_TESTS") == "1" and compiler(),
                      "set MOTIONMODULE_FIRMWARE_TESTS=1 and provide a C++ compiler")
 class FirmwareSimulationTests(unittest.TestCase):
-    """The real sketch, compiled for this computer, against simulated IMUs."""
+    """The real firmware, compiled for this computer, against simulated chips.
+
+    The firmware only moves bytes, so these tests check exactly that: the pins
+    and registers the Pi asked for come back, one-off reads and writes reach
+    the right chip, and nothing is invented along the way.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -253,163 +259,130 @@ class FirmwareSimulationTests(unittest.TestCase):
         return self.messages
 
     def readings(self, since=0):
-        return [(ms, message) for ms, message in self.messages if "seq" in message and ms >= since]
+        return [(ms, message) for ms, message in self.messages if "seq" in message and "values" in message
+                and ms >= since]
+
+    def events(self, name):
+        return [message for _ms, message in self.messages if message.get("event") == name]
 
     def last(self):
         return self.readings()[-1][1]
 
-    CONFIG = "send MM2 CONFIG 7 A0:A,D22:U BNO055@28,LSM6@6A"
-    BOTH = ("attach bno055 40 700", "attach lsm6 106 107")
+    CONFIG = "send MM3 CONFIG 7 20 A0:A,D22:U 28:1A:6,6A:22:12"
 
-    def test_says_hello_until_configured_then_streams_fifty_times_a_second(self):
+    def test_says_hello_until_configured_then_reads_at_the_asked_rate(self):
         self.simulate("run 2100", self.CONFIG, "run 1000")
-        hellos = [message for _ms, message in self.messages if message.get("event") == "hello"]
-        self.assertEqual([hello["firmware"] for hello in hellos], [GIGA_FIRMWARE_VERSION] * 2)
-        configured = next(message for _ms, message in self.messages if message.get("event") == "configured")
-        self.assertEqual((configured["config"], configured["pins"], configured["imus"]), (7, 2, 2))
+        self.assertEqual([hello["firmware"] for hello in self.events("hello")], [GIGA_FIRMWARE_VERSION] * 2)
+        configured = self.events("configured")[0]
+        self.assertEqual(
+            (configured["config"], configured["pins"], configured["streams"], configured["interval"]),
+            (7, 2, 2, 20),
+        )
         self.assertTrue(49 <= len(self.readings()) <= 51)
+        self.simulate("send MM3 CONFIG 8 50 - -", "run 1000")
+        self.assertTrue(19 <= len(self.readings()) <= 21)
 
     def test_pins_arrive_as_on_off_and_numbers_with_their_pulls_set(self):
-        self.simulate("pin A0 3071", "pin D22 1", "send MM2 CONFIG 3 A0:A,D22:U,D5:N -", "run 100",
+        self.simulate("pin A0 3071", "pin D22 1", "send MM3 CONFIG 3 20 A0:A,D22:U,D5:N -", "run 100",
                       "pin D22 0", "run 100", "pinmode D22", "pinmode D5")
-        first = self.readings()[0][1]
-        self.assertEqual(first["values"], {"A0": 3071, "D22": 1, "D5": 0})
+        self.assertEqual(self.readings()[0][1]["values"], {"A0": 3071, "D22": 1, "D5": 0})
         self.assertEqual(self.last()["values"]["D22"], 0)
         self.assertIn("PINMODE D22 2", self.lines)  # INPUT_PULLUP
         self.assertIn("PINMODE D5 3", self.lines)   # INPUT_PULLDOWN
 
-    def test_both_imus_track_a_left_turn_as_positive_yaw(self):
-        self.simulate(*self.BOTH, self.CONFIG, "run 3000", "spin 90", "run 1000", "spin 0", "run 200", "crystal 40")
-        bno, lsm = self.last()["imus"]
-        self.assertEqual((bno["state"], lsm["state"]), ("ok", "ok"))
-        self.assertAlmostEqual(bno["yaw"], 90.0, delta=1.0)
-        self.assertAlmostEqual(lsm["yaw"], 90.0, delta=1.0)
-        turning = self.readings(since=3500)[0][1]["imus"]
-        self.assertAlmostEqual(turning[0]["rate"], 90.0, delta=0.5)
-        self.assertAlmostEqual(turning[1]["rate"], 90.0, delta=0.5)
-        self.assertIn("CRYSTAL 1 0", self.lines)  # the BNO055 uses its board's crystal, degrees
+    def test_registers_are_relayed_exactly_and_missing_chips_read_as_nothing(self):
+        self.simulate("attach 40", "poke 40 26 171", "poke 40 27 205", self.CONFIG, "run 60")
+        readings = self.last()["i2c"]
+        self.assertEqual(readings["28:1a"], "abcd0000" + "0000")
+        self.assertIsNone(readings["6a:22"])        # nothing is attached at 0x6A
+        # A chip that stops answering reads as nothing, and the light says so.
+        self.simulate("attach 40", self.CONFIG, "run 60", "quiet 40 1", "run 4060", "led")
+        self.assertIsNone(self.last()["i2c"]["28:1a"])
+        self.assertIn("LED 1 0 1", self.lines)      # magenta: check the wiring
 
-    def test_tilt_reads_front_up_and_right_side_down_as_positive(self):
-        self.simulate(*self.BOTH, "tilt 10 -6", self.CONFIG, "run 3500")
-        for imu in self.last()["imus"]:
-            self.assertAlmostEqual(imu["pitch"], 10.0, delta=0.5)
-            self.assertAlmostEqual(imu["roll"], -6.0, delta=0.5)
+    def test_one_off_reads_and_writes_reach_the_chip(self):
+        self.simulate("attach 40", "poke 40 0 160", self.CONFIG, "run 60",
+                      "send MM3 I2C 11 28 R 00 1", "send MM3 I2C 12 28 W 3D 08", "run 60", "peek 40 61")
+        answers = {message["seq"]: message for message in self.events("i2c")}
+        self.assertEqual(answers[11]["data"], "a0")
+        self.assertEqual((answers[11]["addr"], answers[11]["reg"], answers[11]["ok"]), (40, 0, 1))
+        self.assertEqual(answers[12]["ok"], 1)
+        self.assertIn("PEEK 40 61 8", self.lines)   # the write landed in the chip
+        # A chip that is not there is reported, not guessed at.
+        self.simulate(self.CONFIG, "run 60", "send MM3 I2C 13 6a R 0F 1", "run 60")
+        self.assertEqual(self.events("i2c")[0]["ok"], 0)
 
-    def test_the_six_axis_gyro_bias_is_removed_at_rest(self):
-        self.simulate("attach lsm6 106 108", "bias 106 0.8 -0.6 1.3", "noise 106 0.3",
-                      "send MM2 CONFIG 9 - LSM6@6A", "run 12000")
-        imu = self.last()["imus"][0]
-        self.assertEqual(imu["state"], "ok")
-        self.assertEqual(imu["id"], 108)
-        self.assertLess(abs(imu["yaw"]), 0.3)
+    def test_scan_lists_what_is_on_the_bus(self):
+        self.simulate("attach 40", "attach 106", self.CONFIG, "run 60", "send MM3 SCAN 4", "run 60")
+        self.assertEqual(self.events("scan")[0]["found"], [40, 106])
 
-    def test_calibration_waits_for_the_robot_to_stop(self):
-        self.simulate("attach lsm6 106 107", "spin 40", "send MM2 CONFIG 9 - LSM6@6A", "run 2500")
-        moving = self.last()["imus"][0]
-        self.assertEqual(moving["state"], "calibrating")
-        self.assertEqual(moving.get("moving"), 1)
-        self.simulate("attach lsm6 106 107", "spin 40", "send MM2 CONFIG 9 - LSM6@6A", "run 2500",
-                      "spin 0", "run 2600")
-        self.assertEqual(self.last()["imus"][0]["state"], "ok")
-
-    def test_a_missing_imu_is_reported_and_found_when_plugged_in(self):
-        self.simulate("attach lsm6 106 107", self.CONFIG, "run 2500")
-        missing = self.last()["imus"][0]
-        self.assertEqual(missing["state"], "missing")
-        self.assertEqual(missing["seen"], [106])
-        self.simulate("attach lsm6 106 107", self.CONFIG, "run 2500", "attach bno055 40 0", "run 3500")
-        self.assertEqual(self.last()["imus"][0]["state"], "ok")
-
-    def test_sending_the_same_configuration_keeps_the_imus_running(self):
-        self.simulate(*self.BOTH, self.CONFIG, "run 3000", "spin 45", "run 1000", "spin 0",
-                      self.CONFIG, "run 500")
-        states = {message["imus"][0]["state"] for _ms, message in self.readings(since=4000)}
-        self.assertEqual(states, {"ok"})
-        self.assertAlmostEqual(self.last()["imus"][0]["yaw"], 45.0, delta=1.0)
-        self.assertEqual(sum(1 for _ms, message in self.messages if message.get("event") == "configured"), 2)
-
-    def test_calibrate_command_measures_the_gyro_again_and_keeps_yaw(self):
-        self.simulate("attach lsm6 106 107", "send MM2 CONFIG 9 - LSM6@6A", "run 1500", "spin 30",
-                      "run 1000", "spin 0", "send MM2 CALIBRATE", "run 300")
-        self.assertEqual(self.last()["imus"][0]["state"], "calibrating")
-        self.simulate("attach lsm6 106 107", "send MM2 CONFIG 9 - LSM6@6A", "run 1500", "spin 30",
-                      "run 1000", "spin 0", "send MM2 CALIBRATE", "run 1500")
-        imu = self.last()["imus"][0]
-        self.assertEqual(imu["state"], "ok")
-        self.assertAlmostEqual(imu["yaw"], 30.0, delta=1.0)
+    def test_sending_the_same_configuration_again_does_not_interrupt_readings(self):
+        self.simulate("attach 40", self.CONFIG, "run 500", self.CONFIG, "run 500")
+        self.assertEqual(len(self.events("configured")), 2)
+        gaps = [second - first for (first, _a), (second, _b) in zip(self.readings(), self.readings()[1:])]
+        self.assertTrue(all(gap <= 40 for gap in gaps), gaps)
 
     def test_a_bad_configuration_is_rejected_and_the_old_one_kept(self):
-        self.simulate("pin D2 1", "send MM2 CONFIG 1 D2:D -", "run 100", "send MM2 CONFIG 2 D99:D -", "run 100")
-        error = next(message for _ms, message in self.messages if message.get("event") == "error")
-        self.assertIn("pin", error["message"])
+        self.simulate("pin D2 1", "send MM3 CONFIG 1 20 D2:D -", "run 100",
+                      "send MM3 CONFIG 2 20 D99:D -", "run 100",
+                      "send MM3 CONFIG 3 20 - ZZ:00:4", "run 100")
+        messages = [event["message"] for event in self.events("error")]
+        self.assertIn("pin list not understood", messages)
+        self.assertIn("I2C stream list not understood", messages)
         self.assertEqual(self.last()["config"], 1)
 
     def test_original_protocol_still_works_for_older_motionmodule(self):
         self.simulate("pin A0 1234", "send MM1 CONFIG A0:A", "run 1000")
-        streamed = [message for _ms, message in self.messages if message.get("protocol") == PROTOCOL_V1 and "values" in message]
+        streamed = [message for _ms, message in self.messages
+                    if message.get("protocol") == PROTOCOL_V1 and "values" in message]
         self.assertTrue(9 <= len(streamed) <= 11)
         self.assertEqual(streamed[0]["values"], {"A0": 1234})
         self.assertEqual(streamed[0]["firmware"], GIGA_FIRMWARE_VERSION)
 
     def test_nothing_is_sent_while_the_pi_has_the_port_closed(self):
-        self.simulate("send MM2 CONFIG 1 D2:D -", "run 200", "host 0", "run 500", "host 1", "run 200")
-        gap = [ms for ms, _message in self.readings() if 220 <= ms < 700]
-        self.assertEqual(gap, [])
+        self.simulate("send MM3 CONFIG 1 20 D2:D -", "run 200", "host 0", "run 500", "host 1", "run 200")
+        self.assertEqual([ms for ms, _message in self.readings() if 220 <= ms < 700], [])
         self.assertTrue(self.readings(since=700))
 
     def test_status_light(self):
         self.simulate("run 2060", "led")
-        self.assertIn("LED 0 0 1", self.lines)  # blue blink: waiting for the Pi
-        self.simulate("attach lsm6 106 107", self.CONFIG, "run 4060", "led")
-        self.assertIn("LED 1 0 1", self.lines)  # magenta: an IMU is missing
+        self.assertIn("LED 0 0 1", self.lines)   # blue blink: waiting for the Pi
+        self.simulate("attach 40", self.CONFIG.replace("6A:22:12", "28:1A:6"), "run 2060", "led")
+        self.assertIn("LED 0 1 0", self.lines)   # green blip: sending readings
 
-    def test_the_python_bridge_reads_the_firmware(self):
-        """End to end: the sketch's own output, fed to the Pi-side bridge."""
+    def test_the_firmware_and_the_pi_agree_on_the_protocol(self):
+        """The bridge's own command line, and the firmware's own readings."""
 
-        pins = [GigaPin("A0", "Arm", kind="analog"), GigaPin("D22", "Beam", pull="up")]
-        imus = [GigaIMU("bno055", "Main IMU"), GigaIMU("ism330dhcx", "Backup IMU")]
-        bridge = GigaR1Bridge(pins, imus=imus, autostart=False, discovery=lambda: [{
-            "board_id": "arduino_giga_r1_wifi", "port": "/dev/ttyACM0", "mode": "sketch"}],
-            serial_factory=lambda *_args, **_kwargs: port)
+        board = FakeGiga()   # only to open the bridge; the firmware answers below
+        clock = Clock()
+        bridge = GigaR1Bridge(
+            [GigaPin("A0", "Arm", kind="analog"), GigaPin("D22", "Beam", pull="up")],
+            imus=[GigaIMU("bno055", "Main IMU")], autostart=False, clock=clock,
+            discovery=lambda: [{"board_id": "arduino_giga_r1_wifi", "port": "/dev/ttyACM0"}],
+            serial_factory=lambda *_args, **_keywords: board,
+        )
         self.addCleanup(bridge.close)
-
-        class Port:
-            def __init__(self):
-                self.incoming = bytearray()
-                self.written = []
-
-            @property
-            def in_waiting(self):
-                return len(self.incoming)
-
-            def read(self, size):
-                data = bytes(self.incoming[:size])
-                del self.incoming[:size]
-                return data
-
-            def write(self, data):
-                self.written.append(data)
-
-            def close(self):
-                pass
-
-        port = Port()
         bridge.poll()
-        config = port.written[0].decode().strip()
-        self.simulate("pin A0 2048", "pin D22 0", *self.BOTH, f"send {config}", "run 3000",
-                      "spin -60", "run 1500", "spin 0", "run 100")
-        for line in self.lines:
-            if line.startswith("OUT "):
-                port.incoming += line.split(" ", 2)[2].encode() + b"\n"
+        config = board.commands[0]
+
+        # The firmware accepts exactly what the bridge sends.
+        self.simulate("attach 40", "poke 40 26 171", "pin A0 2048", "pin D22 0",
+                      f"send {config}", "run 100")
+        configured = self.events("configured")[0]
+        self.assertEqual(configured["config"], bridge.config_id)
+        self.assertEqual((configured["pins"], configured["streams"]), (2, 2))
+
+        # And the bridge accepts exactly what the firmware sends back.
+        for _ms, message in self.readings():
+            board.incoming += json.dumps(message).encode() + b"\n"
         bridge.poll()
         self.assertEqual(bridge.value("Arm"), 2048.0)
         self.assertIs(bridge.value("Beam"), False)
-        self.assertEqual(bridge.imu("Main IMU").chip, "BNO055")
-        self.assertEqual(bridge.imu("Backup IMU").chip, "ISM330DHCX")
-        # Turning right for 1.5 s at 60 degrees a second.
-        self.assertAlmostEqual(bridge.imu("Main IMU").heading(), -90.0, delta=1.5)
-        self.assertAlmostEqual(bridge.imu("Backup IMU").heading(), -90.0, delta=1.5)
-        self.assertTrue(bridge.imu("Main IMU").calibrated)
+        self.assertTrue(bridge.streaming)
+        self.assertIn("Streaming", bridge.status)
+        # Seeing its own configuration, the bridge starts setting the IMU up.
+        bridge.poll()
+        self.assertTrue(any(command.startswith("MM3 I2C") for command in board.commands))
 
 
 if __name__ == "__main__":

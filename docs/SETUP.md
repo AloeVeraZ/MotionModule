@@ -72,9 +72,10 @@ servos one channel at a time after selecting the correct voltage and behavior.
 ## 5. Add sensors with the Arduino GIGA (optional)
 
 An Arduino GIGA R1 WiFi reads every sensor on the robot: IMUs, switches,
-beam breaks, potentiometers. It streams the readings to the Pi over its USB
-cable, so the Pi's own header stays free for motors and servos. The parts, with
-links, are in [the bill of materials](../BOM.md#recommended--sensors-on-the-arduino-giga).
+beam breaks, potentiometers. It passes the numbers to the Pi over its USB
+cable and the Pi does the rest, so the Pi's own header stays free for motors
+and servos. The parts, with links, are in
+[the bill of materials](../BOM.md#recommended--sensors-on-the-arduino-giga).
 
 **Install its firmware from the Pi. No Arduino IDE is needed.**
 
@@ -96,9 +97,9 @@ links, are in [the bill of materials](../BOM.md#recommended--sensors-on-the-ardu
    **cyan** while an IMU starts or calibrates, and a **magenta** double blink
    when an IMU it was told about does not answer.
 
-The firmware is generic, so this is done once. Which pins and IMUs it reads
-comes from the robot project's `sensors.py`, sent every time MotionModule
-connects, so changing sensors never means reflashing.
+The firmware knows nothing about any particular sensor, so this is done once.
+What to read comes from the robot project's `sensors.py`, sent every time
+MotionModule connects, so changing sensors never means reflashing.
 
 **Wire the IMUs.** Both recommended boards have STEMMA QT / Qwiic sockets.
 A STEMMA QT to male-header cable connects the first one to the GIGA, and a
