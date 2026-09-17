@@ -1,7 +1,8 @@
 """Mecanum drive sample — the only file you have to write for a robot.
 
 `hardware.py` next to this file names the four wheels. This file turns the
-Drive page's forward / strafe / rotate commands into wheel power.
+Drive page's forward / strafe / rotate commands into wheel power, and
+`sensors.py` gives it the robot's sensors, all read by the Arduino GIGA.
 
 The same three numbers arrive whether someone is using the keyboard or a game
 controller, the way an FTC opmode reads one gamepad's sticks:
@@ -17,6 +18,8 @@ MotionModule calls `create_drive(module)` once at startup, then calls
 """
 
 import math
+
+from sensors import create_sensors  # sensors.py, next to this file
 
 
 WHEELS = ("front_left", "rear_left", "front_right", "rear_right")
@@ -38,8 +41,10 @@ def mix(forward, strafe, rotate):
 
     forward  positive drives toward the front of the robot
     strafe   positive slides the robot to the right
-    rotate   positive spins the robot counter-clockwise
+    rotate   positive spins the robot counter-clockwise (a left turn), the
+             same direction an IMU heading counts up
 
+    Turning left runs the left wheels backward and the right wheels forward.
     Wheel powers are scaled down together when a combined command would
     exceed full power, so the robot keeps driving in the requested direction.
     """
@@ -48,10 +53,10 @@ def mix(forward, strafe, rotate):
     strafe = clamp(strafe)
     rotate = clamp(rotate)
     wheels = {
-        "front_left": forward + strafe + rotate,
-        "rear_left": forward - strafe + rotate,
-        "front_right": forward - strafe - rotate,
-        "rear_right": forward + strafe - rotate,
+        "front_left": forward + strafe - rotate,
+        "rear_left": forward - strafe - rotate,
+        "front_right": forward - strafe + rotate,
+        "rear_right": forward + strafe + rotate,
     }
     scale = max(1.0, *(abs(power) for power in wheels.values()))
     return {name: power / scale for name, power in wheels.items()}
@@ -60,8 +65,10 @@ def mix(forward, strafe, rotate):
 class MecanumDrive:
     """Drives the four wheels named in hardware.py."""
 
-    def __init__(self, module, wheels=WHEELS):
+    def __init__(self, module, wheels=WHEELS, sensors=None):
         self.module = module
+        # autonomous.py and dashboard.py read the sensors from here.
+        self.sensors = sensors
         self.wheels = tuple(wheels)
         if len(self.wheels) != 4 or len(set(self.wheels)) != 4:
             raise ValueError("Choose four different motors in front-left, rear-left, front-right, rear-right order")
@@ -88,13 +95,21 @@ class MecanumDrive:
     def controls(self):
         """Describe controls for the Drive page. Delete this if you want none."""
 
-        return [
+        controls = [
             {"name": "spin_test", "label": "Spin in place", "kind": "hold",
              "detail": "Turns slowly for as long as you hold it"},
             {"name": "creep", "label": "Creep forward", "kind": "slider",
              "minimum": -0.3, "maximum": 0.3, "step": 0.05,
              "detail": "Fine positioning without touching the sticks"},
         ]
+        if self.sensors is not None:
+            controls += [
+                {"name": "zero_heading", "label": "Zero heading", "kind": "button",
+                 "detail": "The way the robot faces now becomes 0°"},
+                {"name": "calibrate_gyro", "label": "Calibrate gyro", "kind": "button",
+                 "detail": "Measures the 6-axis gyro again; keep the robot still"},
+            ]
+        return controls
 
     def control(self, name, value):
         """Handle one control from the Drive page. `value` is a number."""
@@ -103,13 +118,19 @@ class MecanumDrive:
             return self.drive(0, 0, 1 if value else 0, speed=0.2)
         if name == "creep":
             return self.drive(value, 0, 0, speed=1.0)
+        if name == "zero_heading" and self.sensors is not None:
+            self.sensors.zero_heading()
+            return {"heading": self.sensors.heading()}
+        if name == "calibrate_gyro" and self.sensors is not None:
+            self.sensors.calibrate_gyro()
+            return {"calibrating": True}
         raise ValueError(f"Unknown control: {name}")
 
 
 def create_drive(module):
     """Required entry point. Return anything with drive(...) and stop()."""
 
-    return MecanumDrive(module)
+    return MecanumDrive(module, sensors=create_sensors(module))
 
 
 # ---------------------------------------------------------------------------

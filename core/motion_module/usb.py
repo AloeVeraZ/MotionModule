@@ -2,7 +2,7 @@
 
 USB descriptors can identify a controller and its serial port.  They cannot
 identify a sensor wired to one of that controller's pins, so sensor names and
-pin modes stay in the robot project's optional ``dashboard.py``.
+pin modes stay in the robot project's ``sensors.py``.
 """
 
 from __future__ import annotations
@@ -11,17 +11,21 @@ import os
 from pathlib import Path
 
 
+_GIGA = {
+    "board_id": "arduino_giga_r1_wifi",
+    "name": "Arduino GIGA R1 WiFi",
+    "digital_pins": [f"D{number}" for number in range(76)],
+    "analog_pins": [f"A{number}" for number in range(8)],
+    "dac_pins": ["A12", "A13"],
+    "adc_bits": 12,
+}
+
 USB_CONTROLLER_PROFILES = {
-    # Arduino's GIGA variant declares this VID/PID in pins_arduino.h.
-    ("2341", "0266"): {
-        "board_id": "arduino_giga_r1_wifi",
-        "name": "Arduino GIGA R1 WiFi",
-        "transport": "USB CDC serial",
-        "digital_pins": [f"D{number}" for number in range(76)],
-        "analog_pins": [f"A{number}" for number in range(8)],
-        "dac_pins": ["A12", "A13"],
-        "adc_bits": 12,
-    },
+    # Arduino's GIGA variant declares 2341:0266 in pins_arduino.h. After a
+    # 1200-baud touch, or two presses of reset, its bootloader answers as
+    # 2341:0366 and waits for firmware.
+    ("2341", "0266"): {**_GIGA, "transport": "USB CDC serial", "mode": "sketch"},
+    ("2341", "0366"): {**_GIGA, "transport": "USB DFU bootloader", "mode": "bootloader"},
 }
 
 
@@ -136,6 +140,18 @@ def sensor_controllers(inventory: dict | None = None) -> list[dict]:
             permission = "ready" if serial_node.exists() and os.access(
                 serial_node, os.R_OK | os.W_OK
             ) else "limited"
+        if profile.get("mode") == "bootloader":
+            bridge = "bootloader"
+            detail = (
+                "The GIGA is in its bootloader, waiting for firmware. Run motionmodule giga flash, "
+                "or press its reset button once to go back to the installed firmware."
+            )
+        else:
+            bridge = "detected" if port else "serial-port-missing"
+            detail = (
+                "Board detected. Readings appear once the MotionModule firmware is installed "
+                "(motionmodule giga flash) and the robot's sensors.py declares what is wired to it."
+            )
         controllers.append({
             **profile,
             "id": f"{profile['board_id']}:{device.get('serial') or device.get('path')}",
@@ -145,11 +161,8 @@ def sensor_controllers(inventory: dict | None = None) -> list[dict]:
             "serial": device.get("serial", ""),
             "port": port,
             "permission": permission,
-            "bridge": "detected" if port else "serial-port-missing",
+            "bridge": bridge,
             "pins": [],
-            "detail": (
-                "Board detected. Sensor values appear after the MotionModule bridge sketch is "
-                "installed and matching pins are declared in dashboard.py."
-            ),
+            "detail": detail,
         })
     return controllers

@@ -6,7 +6,8 @@
 > **This is the `testing` branch. It is not the main line.**
 >
 > Every new change lands here first, before it is merged into `main`. Right
-> now that is the redesigned dashboard and Driver Station. Code on this branch
+> now that is the redesigned dashboard and Driver Station, and Arduino GIGA
+> sensors with firmware installed from the Pi. Code on this branch
 > can be unfinished or broken at any time. **If something stops working after
 > you install from `testing`, assume it is because you are on the testing
 > branch**, and go back to `main` before reporting a bug.
@@ -118,9 +119,11 @@ See the root-level **[bill of materials](BOM.md)** for the reference parts:
 - four dual H-bridge boards for eight brushed-motor outputs;
 - one PCA9685 I2C board, giving 16 servo channels;
 - one 12 V battery for the whole robot, stepped down to 5 V USB-C for the Pi
-  and to a separate regulated rail for the servos; and
+  and to a separate regulated rail for the servos;
 - Wago 221 lever connectors for the 12 V joins and ordinary jumper wires for
-  the Pi's control signals.
+  the Pi's control signals; and
+- optionally, an Arduino GIGA R1 WiFi on the Pi's USB that reads every sensor,
+  with a 9-axis BNO055 and a 6-axis ISM330DHCX IMU on its I2C pins.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
 wiring. Never connect motor battery positive or the PCA9685 servo V+ rail to a
@@ -262,8 +265,9 @@ Every project is self-contained, and only the first file is required:
 MyRobot/
 ├── robot.py          # required browser-control entry point
 ├── hardware.py       # optional: your own names, pins, and inversions
+├── sensors.py        # optional: what is wired to the Arduino GIGA, by name
+├── autonomous.py     # optional: the routine the robot runs by itself
 ├── dashboard.py      # optional: full Driver Station cameras and sensors
-├── sensor_bridge.ino # optional: firmware for a USB sensor controller
 ├── drivetrain.py     # optional Python modules
 ├── mechanisms.py
 └── README.md         # optional project notes
@@ -332,9 +336,36 @@ An optional sibling `dashboard.py` can define
 Raspberry Pi digital inputs, and USB-controller analog/digital inputs to the
 separate full Driver Station at `/driver-station`. It is discovered
 automatically and is not required for drivetrain debugging or robot control.
-The Arduino GIGA R1 WiFi is recognized by USB VID/PID and the sample includes a
-reusable bridge sketch. The complete contract and copyable example are in
+The complete contract and copyable example are in
 [docs/CODING.md](docs/CODING.md#optional-full-driver-station-telemetry).
+
+### Sensors: `sensors.py` and the Arduino GIGA
+
+An Arduino GIGA R1 WiFi plugged into the Pi's USB works as the robot's sensor
+extender: digital pins arrive as on or off, analog pins as 0-4095, and the
+GIGA does the IMU maths. Its firmware installs from the Pi with
+`motionmodule giga flash` or **Debug → Checks & logs → Install firmware**, with
+no Arduino IDE, and the same firmware serves every robot. The sample's
+`sensors.py` names what is wired to it and `robot.py` imports it:
+
+```python
+from motion_module.sensor_bridge import GigaIMU, GigaPin
+
+IMUS = [GigaIMU("bno055", "Main IMU"), GigaIMU("ism330dhcx", "Backup IMU")]
+PINS = [GigaPin("D22", "Intake beam", pull="up")]
+
+
+class RobotSensors:
+    def __init__(self, module):
+        self.giga = module.giga(pins=PINS, imus=IMUS)
+        self.imu = self.giga.imu("Main IMU")
+```
+
+`self.imu.heading()` is degrees from -180 to 180, counting up as the robot
+turns left, the same way a positive `rotate` turns it. Wiring, parts, and the
+full API are in [docs/SETUP.md](docs/SETUP.md#5-add-sensors-with-the-arduino-giga-optional),
+[BOM.md](BOM.md#recommended--sensors-on-the-arduino-giga), and
+[docs/CODING.md](docs/CODING.md#sensors-on-the-arduino-giga).
 
 This is a complete two-sided drive example:
 
@@ -352,8 +383,9 @@ class TankDrive:
         self.module = module
 
     def drive(self, forward, strafe, rotate, speed=0.5):
-        left = forward + rotate
-        right = forward - rotate
+        # rotate +1 turns left (counter-clockwise): left side back, right forward
+        left = forward - rotate
+        right = forward + rotate
         scale = max(1.0, abs(left), abs(right))
         outputs = {name: clamp(left / scale * speed) for name in LEFT}
         outputs.update({name: clamp(right / scale * speed) for name in RIGHT})
@@ -497,6 +529,8 @@ Useful commands are also explained inside Debug:
 | `motionmodule versions` | List installed runtime versions |
 | `motionmodule rollback` | Return to the earlier release of the same branch |
 | `motionmodule install main` | Replace MotionModule with a branch, tag, or commit |
+| `motionmodule giga flash` | Install the sensor firmware on the plugged-in Arduino GIGA |
+| `motionmodule giga status` | Show the GIGA, the bundled firmware, and `dfu-util` |
 
 ## Updates and development
 

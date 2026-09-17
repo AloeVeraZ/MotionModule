@@ -1,4 +1,6 @@
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -10,7 +12,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from robot import MecanumDrive, mix  # noqa: E402
+from autonomous import MecanumAutonomous  # noqa: E402
+from robot import MecanumDrive, create_drive, mix  # noqa: E402
 
 
 class FakeModule:
@@ -41,10 +44,12 @@ class MecanumTests(unittest.TestCase):
             {"front_left": 1, "rear_left": -1, "front_right": -1, "rear_right": 1},
         )
 
-    def test_rotation_commands_left_opposite_right(self):
+    def test_positive_rotation_turns_left(self):
+        """Counter-clockwise, like Q and an IMU heading: left side back, right side forward."""
+
         self.assertEqual(
             mix(0, 0, 1),
-            {"front_left": 1, "rear_left": 1, "front_right": -1, "rear_right": -1},
+            {"front_left": -1, "rear_left": -1, "front_right": 1, "rear_right": 1},
         )
 
     def test_combined_commands_normalize(self):
@@ -58,10 +63,10 @@ class MecanumTests(unittest.TestCase):
         self.assertEqual(
             module.outputs,
             {
-                "front_left": 0.5,
-                "rear_left": 0.5,
-                "front_right": -0.5,
-                "rear_right": -0.5,
+                "front_left": -0.5,
+                "rear_left": -0.5,
+                "front_right": 0.5,
+                "rear_right": 0.5,
             },
         )
 
@@ -97,6 +102,90 @@ class MecanumTests(unittest.TestCase):
                 self.assertEqual(gpio.values[gpio_number], 0)
             drive.stop()
             self.assertEqual(set(gpio.values.values()), {0})
+
+
+class FakeHeadingSensors:
+    """An IMU on a robot that turns as fast as it is told to."""
+
+    def __init__(self):
+        self.value = 0.0
+        self.zeroed = False
+        self.imus = []
+
+    def heading(self):
+        return self.value
+
+    def zero_heading(self):
+        self.value = 0.0
+        self.zeroed = True
+
+
+class TurningModule(FakeModule):
+    def __init__(self, sensors):
+        super().__init__()
+        self.sensors = sensors
+
+    def set_motors(self, outputs):
+        super().set_motors(outputs)
+        # Right wheels forward and left wheels back turn the robot left,
+        # which a heading counts up.
+        left = (outputs["front_left"] + outputs["rear_left"]) / 2
+        right = (outputs["front_right"] + outputs["rear_right"]) / 2
+        self.sensors.value += (right - left) * 20
+
+
+class MecanumSensorTests(unittest.TestCase):
+    def test_create_drive_brings_the_sensors_from_sensors_py(self):
+        import sensors
+
+        config = load_project_config(PROJECT_DIR)
+        with MotionModule(config, gpio=MockGPIO()) as module:
+            drive = create_drive(module)
+            # One GIGA for the whole robot: sensors.py's declarations, simulated here.
+            self.assertIs(drive.sensors.giga, module.giga(pins=sensors.PINS, imus=sensors.IMUS))
+            self.assertTrue(drive.sensors.giga.simulated)
+            self.assertIsNone(drive.sensors.heading())
+            self.assertIsNone(drive.sensors.arm_position())
+            self.assertIsNone(drive.sensors.intake_blocked())
+            names = [control["name"] for control in drive.controls()]
+            self.assertIn("zero_heading", names)
+            self.assertIn("calibrate_gyro", names)
+            self.assertEqual(drive.control("zero_heading", 1), {"heading": None})
+
+    def test_sensors_file_declares_both_recommended_imus(self):
+        import sensors
+
+        self.assertEqual([imu.chip for imu in sensors.IMUS], ["bno055", "ism330dhcx"])
+        self.assertEqual([imu.bridge_spec for imu in sensors.IMUS], ["BNO055@28", "LSM6@6A"])
+
+    def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
+        sensors = FakeHeadingSensors()
+        module = TurningModule(sensors)
+        drive = MecanumDrive(module, sensors=sensors)
+        routine = MecanumAutonomous(module, drive)
+        self.assertTrue(routine.turn_to(90, threading.Event(), timeout=5))
+        self.assertAlmostEqual(sensors.value, 90, delta=routine.TURN_TOLERANCE_DEGREES + 1)
+        self.assertEqual(set(module.outputs.values()), {0})
+
+    def test_autonomous_turn_takes_the_short_way_round(self):
+        sensors = FakeHeadingSensors()
+        sensors.value = 170.0
+        module = TurningModule(sensors)
+        drive = MecanumDrive(module, sensors=sensors)
+        routine = MecanumAutonomous(module, drive)
+        routine.turn_to(-170, threading.Event(), timeout=5)
+        # Turning left 20 degrees from 170 lands on -170 after passing 180.
+        self.assertGreater(sensors.value, 180)
+
+    def test_autonomous_turn_stops_when_disabled(self):
+        sensors = FakeHeadingSensors()
+        routine = MecanumAutonomous(TurningModule(sensors), MecanumDrive(TurningModule(sensors), sensors=sensors))
+        stop = threading.Event()
+        stop.set()
+        started = time.monotonic()
+        self.assertFalse(routine.turn_to(90, stop))
+        self.assertLess(time.monotonic() - started, 0.5)
+
 
 if __name__ == "__main__":
     unittest.main()

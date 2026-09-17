@@ -68,6 +68,18 @@ class UsbInventoryTests(unittest.TestCase):
         self.assertEqual(controllers[0]["serial"], "GIGA123")
         self.assertEqual(controllers[0]["analog_pins"], ["A0", "A7"])
 
+    def test_giga_in_its_bootloader_is_recognized_and_explained(self):
+        from motion_module.usb import USB_CONTROLLER_PROFILES
+
+        profile = USB_CONTROLLER_PROFILES[("2341", "0366")]
+        self.assertEqual(profile["mode"], "bootloader")
+        self.assertEqual(USB_CONTROLLER_PROFILES[("2341", "0266")]["mode"], "sketch")
+        inventory = {"devices": [{"path": "1-4", "vendor_id": "2341", "product_id": "0366",
+                                  "serial": "", "serial_port": "", "controller": dict(profile)}]}
+        controller = sensor_controllers(inventory)[0]
+        self.assertEqual(controller["bridge"], "bootloader")
+        self.assertIn("motionmodule giga flash", controller["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

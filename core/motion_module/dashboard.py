@@ -39,11 +39,13 @@ from .deploy import (
 from .autonomous import AutonomousRunner, load_autonomous
 from .diagnostics import dashboard_checks
 from .errors import MotionModuleError
+from .giga_firmware import bundled_firmware, flash_giga
 from .hardware_guide import hardware_guide
 from .input import available_input_gpios
 from .network import NetworkClient
 from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .runner import load_project
+from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
 from .telemetry import empty_snapshot, merge_usb_controllers, normalize_snapshot
 from .usb import sensor_controllers, usb_devices
@@ -334,6 +336,8 @@ def create_app(
     last_sequence = -1
     usb_sensor_cache = {"checked": 0.0, "controllers": []}
     usb_sensor_lock = threading.Lock()
+    firmware_job = {"state": "idle", "log": [], "error": "", "version": ""}
+    firmware_lock = threading.Lock()
 
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
@@ -503,6 +507,68 @@ def create_app(
     @app.get("/api/usb")
     def usb_inventory():
         return jsonify({"ok": True, **usb_devices()})
+
+    @app.get("/api/giga/firmware")
+    def giga_firmware_status():
+        try:
+            bundled, problem = bundled_firmware()["version"], ""
+        except MotionModuleError as error:
+            bundled, problem = "", str(error)
+        with firmware_lock:
+            job = {**firmware_job, "log": list(firmware_job["log"])}
+        return jsonify({
+            "ok": True,
+            "installable": workspace is not None,
+            "bundled": bundled,
+            "problem": problem,
+            "dfu_util": bool(shutil.which("dfu-util")),
+            "running": next((bridge.firmware for bridge in active_bridges() if bridge.firmware), ""),
+            "job": job,
+        })
+
+    @app.post("/api/giga/firmware")
+    def giga_firmware_install():
+        """Flash the bundled sensor firmware onto the GIGA, as motionmodule giga flash does."""
+
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        if workspace is None:
+            return jsonify({"ok": False, "error": "Firmware installs run on the robot's installed Pi runtime"}), 503
+        with firmware_lock:
+            if firmware_job["state"] == "running":
+                return jsonify({"ok": False, "error": "The GIGA firmware is already being installed"}), 409
+            firmware_job.update(state="running", log=[], error="", version="")
+        # The robot must not move while its sensors disappear for a minute.
+        autonomous.stop()
+        with command_lock:
+            stop_outputs()
+
+        def log(message: str) -> None:
+            with firmware_lock:
+                firmware_job["log"] = (firmware_job["log"] + [str(message)[:240]])[-20:]
+
+        def install() -> None:
+            # This process's own bridge holds the port; give it up while flashing.
+            paused = [bridge for bridge in active_bridges() if bridge.release()]
+            state, error, version = "done", "", ""
+            try:
+                version = flash_giga(log=log)["version"]
+            except MotionModuleError as failure:
+                state, error = "failed", str(failure)
+            except Exception as failure:
+                app.logger.exception("Installing the GIGA firmware failed")
+                state, error = "failed", f"{type(failure).__name__}: {failure}"
+            finally:
+                for bridge in paused:
+                    try:
+                        bridge.start()
+                    except Exception:
+                        app.logger.exception("The GIGA bridge could not restart after flashing")
+            with firmware_lock:
+                firmware_job.update(state=state, error=error, version=version)
+
+        threading.Thread(target=install, name="motionmodule-giga-firmware", daemon=True).start()
+        return jsonify({"ok": True, "running": True}), 202
 
     @app.get("/api/projects/status")
     def project_status():

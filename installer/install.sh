@@ -119,6 +119,7 @@ apt_get install -y \
     avahi-daemon \
     ca-certificates \
     curl \
+    dfu-util \
     git \
     i2c-tools \
     iproute2 \
@@ -137,7 +138,9 @@ if command -v raspi-config >/dev/null 2>&1; then
     sudo raspi-config nonint do_i2c 0
 fi
 
-for group in gpio i2c; do
+# dialout opens the Arduino GIGA's USB serial port; plugdev lets the udev rule
+# below give the same user its bootloader for firmware installs.
+for group in gpio i2c dialout plugdev; do
     if getent group "$group" >/dev/null; then
         sudo usermod -aG "$group" "$USER"
     fi
@@ -368,9 +371,22 @@ EOF
 install_system_file 0644 "$service_temp" /etc/systemd/system/motionmodule.service
 rm -f "$service_temp"
 
-# Scripts, sudo rules, services, and web server sites that an older install
-# wrote but this version does not ship. Removing them means a file one branch
-# installs never lingers after switching to a branch without it.
+# The Arduino GIGA R1 WiFi reads the robot's sensors. This lets the MotionModule
+# user flash its firmware over USB without sudo, whether it is running a sketch
+# (2341:0266) or waiting in its bootloader (2341:0366).
+udev_temp="$(mktemp)"
+cat > "$udev_temp" <<'RULES'
+# Installed by MotionModule: Arduino GIGA R1 WiFi sensor firmware installs.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0266|0366", MODE="0660", GROUP="plugdev"
+RULES
+install_system_file 0644 "$udev_temp" /etc/udev/rules.d/motionmodule-giga.rules
+rm -f "$udev_temp"
+sudo udevadm control --reload-rules >/dev/null 2>&1 || true
+sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=2341 --action=change >/dev/null 2>&1 || true
+
+# Scripts, sudo rules, services, web server sites, and device rules that an
+# older install wrote but this version does not ship. Removing them means a
+# file one branch installs never lingers after switching to a branch without it.
 while IFS= read -r stale; do
     case "$stale" in
         /etc/systemd/system/*.service)
@@ -381,6 +397,7 @@ while IFS= read -r stale; do
     say "Removed $stale, left by an older MotionModule install."
 done < <(
     { sudo find /usr/local/sbin /etc/sudoers.d /etc/systemd/system /etc/nginx/sites-available /etc/nginx/sites-enabled \
+        /etc/udev/rules.d \
         -maxdepth 1 -name 'motionmodule*' \( -type f -o -type l \) 2>/dev/null || true; } \
         | unlisted_paths "${installed_system_files[@]}"
 )

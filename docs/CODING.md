@@ -22,9 +22,9 @@ the Pi runs.
 MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
+├── sensors.py     # optional: what is wired to the Arduino GIGA, by name
 ├── autonomous.py  # optional: the routine the robot runs by itself
 ├── dashboard.py   # optional: Driver Station cameras, sensors, key layout
-├── giga_sensor_bridge.ino # optional: reusable Arduino GIGA USB firmware
 └── helpers.py     # optional: any other Python files you want
 ```
 
@@ -94,9 +94,12 @@ one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
 sensor controller. MotionModule discovers it automatically; no import in
 `robot.py` is required, and deleting the file does not affect driving.
 
+Sensors are set up once, in `sensors.py`, and `robot.py` hands them to the
+drive object. `dashboard.py` shows that same object, so the console always
+displays what the robot code reads:
+
 ```python
-from motion_module.sensor_bridge import GigaPin, GigaR1Bridge
-from motion_module.telemetry import CameraFeed, IMUReading, SensorReading, TelemetryDashboard
+from motion_module.telemetry import CameraFeed, TelemetryDashboard
 
 
 FRONT_STREAM = ""  # e.g. http://motionmodule.local:1181/?action=stream
@@ -105,14 +108,7 @@ REAR_STREAM = ""   # e.g. http://motionmodule.local:1182/?action=stream
 
 class MyDashboard(TelemetryDashboard):
     def __init__(self, module, drive):
-        self.module = module
-        self.drive = drive
-        self.limit = module.digital_input(4, pull="up")
-        self.giga = GigaR1Bridge([
-            GigaPin("A0", "Arm potentiometer", kind="analog", unit="raw",
-                    minimum=0, maximum=4095),
-            GigaPin("D22", "Beam break", kind="digital", pull="up"),
-        ])
+        self.sensors = drive.sensors
 
     def cameras(self):
         return [
@@ -121,20 +117,10 @@ class MyDashboard(TelemetryDashboard):
         ]
 
     def imu(self):
-        # Replace this with yaw/pitch/roll/rate values from the installed IMU.
-        return IMUReading(name="Robot IMU", connected=False, calibrated=False)
-
-    def pi_inputs(self):
-        return [
-            SensorReading("Forward limit", self.limit.value, kind="digital",
-                          channel="GPIO4 · pin 7"),
-        ]
+        return self.sensors.imus[0].reading()
 
     def usb_controllers(self):
-        return [self.giga.snapshot()]
-
-    def close(self):
-        self.giga.close()
+        return [self.sensors.giga.snapshot()]
 
 
 def create_dashboard(module, drive):
@@ -147,17 +133,109 @@ both. Return live readings quickly from `snapshot()`/the group methods; the
 page polls them at 4 Hz. Mark missing hardware `connected=False` so it is shown
 as offline rather than as a valid zero.
 
-`module.digital_input()` accepts only BCM GPIO that remains unused after the
-active motor map and MotionModule's I2C, ID, and UART reservations. Raspberry
-Pi header GPIO is digital-only; connect analog sensors through an ADC or the
-GIGA instead.
+A sensor on a spare Raspberry Pi pin also works: `module.digital_input()`
+accepts only BCM GPIO that remains unused after the active motor map and
+MotionModule's I2C, ID, and UART reservations, and `pi_inputs()` returns its
+readings. Pi header GPIO is digital-only, which is one reason sensors normally
+go on the GIGA.
 
-For the GIGA, flash the sample `giga_sensor_bridge.ino` once. MotionModule then
-finds the board automatically as USB `2341:0266`, opens its CDC serial port,
-and sends the `GigaPin` modes above after every reconnect. The board streams
-only those configured readings. USB can identify the board, not the physical
-sensor attached to a pin, so names, units, ranges, and pin assignments remain
-explicit in `dashboard.py`.
+## Sensors on the Arduino GIGA
+
+An Arduino GIGA R1 WiFi on one of the Pi's USB ports works as the robot's
+sensor extender. It reads each digital pin as on or off and each analog pin
+as a number, does the IMU maths itself, and streams everything to the Pi. Its
+firmware installs from the Pi with no Arduino IDE (`motionmodule giga flash`,
+or **Debug → Checks & logs → Install firmware**); setup and wiring are in
+[SETUP.md](SETUP.md#5-add-sensors-with-the-arduino-giga-optional).
+
+The firmware is the same for every robot. `sensors.py` says what is wired to
+it, and MotionModule sends that list every time it connects:
+
+```python
+from motion_module.sensor_bridge import GigaIMU, GigaPin
+
+IMUS = [
+    GigaIMU("bno055", "Main IMU"),        # 9-axis, address 0x28
+    GigaIMU("ism330dhcx", "Backup IMU"),  # 6-axis, address 0x6A
+]
+
+PINS = [
+    GigaPin("A0", "Arm potentiometer", kind="analog", minimum=0, maximum=4095),
+    GigaPin("D22", "Intake beam", kind="digital", pull="up"),
+]
+
+
+class RobotSensors:
+    def __init__(self, module):
+        self.giga = module.giga(pins=PINS, imus=IMUS)
+        self.imu = self.giga.imu("Main IMU")
+
+    def heading(self):
+        return self.imu.heading()
+
+
+def create_sensors(module):
+    return RobotSensors(module)
+```
+
+and `robot.py` imports it:
+
+```python
+from sensors import create_sensors
+
+
+def create_drive(module):
+    return MecanumDrive(module, sensors=create_sensors(module))
+```
+
+`module.giga()` is called once per robot: calling it again with different
+declarations raises, because two readers would split the board's stream. In
+the laptop demo and in tests the robot is simulated, the board is never
+opened, and every reading is `None`.
+
+**Pins.** `GigaPin(pin, name, kind="digital"` or `"analog"`, `pull="none"`,
+`"up"`, or `"down"`, `unit, minimum, maximum, scale, offset)`. Digital pins
+D0-D75 read `True` or `False`. Analog pins A0-A7 read 0 (0 V) to 4095 (3.3 V),
+then `value * scale + offset`. Read one with `giga.value("Intake beam")` (or by
+its pin, `giga.value("D22")`); `None` means there is no fresh reading. The
+GIGA's pins take 3.3 V at most.
+
+**IMUs.** `GigaIMU(chip, name, address=None, compass=False)`, up to two, on
+SDA 20 and SCL 21:
+
+| `chip` | Board | Address | Notes |
+| --- | --- | --- | --- |
+| `"bno055"` | Adafruit BNO055, 9-axis | 0x28 (0x29) | Fuses its own readings. `compass=True` adds the magnetometer for a north heading, which motors disturb |
+| `"ism330dhcx"` | Adafruit ISM330DHCX, 6-axis | 0x6A (0x6B) | Fused on the GIGA. Keep the robot still for a second while it calibrates |
+| `"lsm6dsox"`, `"lsm6dso"`, `"lsm6ds3trc"` | Other ST 6-axis boards | 0x6A (0x6B) | The same driver as the ISM330DHCX |
+
+`giga.imu(name)` returns the live IMU:
+
+```python
+imu.heading()         # -180 to 180 degrees; None while it is not streaming
+imu.total_rotation()  # degrees since zero, counting whole turns
+imu.rate()            # degrees per second
+imu.pitch()           # degrees, front up is positive
+imu.roll()            # degrees, right side down is positive
+imu.zero()            # the way the robot faces now reads 0 (or zero(90) for 90)
+imu.connected         # True while it streams usable angles
+imu.calibrated
+imu.state             # ok, starting, calibrating, missing, wrong-chip, failed, ...
+imu.describe()        # one sentence for people: what it is doing, or what to check
+giga.calibrate()      # measure the 6-axis gyro again; keep the robot still
+```
+
+**Heading counts up turning left** (counter-clockwise seen from above), the
+same direction a positive `rotate` turns the robot, so steering toward a
+heading is just the remaining angle:
+
+```python
+error = (target - sensors.heading() + 180) % 360 - 180   # the short way round
+drive.drive(0, 0, max(-1, min(1, error / 30)))           # positive turns left
+```
+
+The sample `autonomous.py` uses this to turn exactly 90 degrees, and falls back
+to a timed turn when no IMU is streaming.
 
 ## Motor API
 

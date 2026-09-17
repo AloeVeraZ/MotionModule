@@ -44,9 +44,9 @@ Once the new release is active and its service has stayed up for a few
 seconds, the installer removes what older installs left behind:
 
 - every other release in `~/.local/share/motionmodule/releases`;
-- MotionModule scripts in `/usr/local/sbin`, sudo rules, systemd services, and
-  nginx sites that this version does not ship, disabling a stale service
-  before deleting it;
+- MotionModule scripts in `/usr/local/sbin`, sudo rules, systemd services,
+  nginx sites, and udev rules that this version does not ship, disabling a
+  stale service before deleting it;
 - leftover upload archives and any temporary web terminal access code.
 
 It never removes the robot's own files: the projects in
@@ -66,6 +66,12 @@ Two releases can remain after an install:
 `motionmodule install REF` downloads that ref's own bootstrap, falling back to
 `main`'s, so each branch installs with its own scripts even after they
 change.
+
+For the Arduino GIGA sensor controller, the installer also installs
+`dfu-util`, adds the user to the `dialout` group (its USB serial port) and the
+`plugdev` group, and writes `/etc/udev/rules.d/motionmodule-giga.rules`, which
+lets that user flash the GIGA's firmware with `motionmodule giga flash`
+without sudo. Reboot once after the first install so the groups apply.
 
 Bundled examples are copied once into `~/MotionModule/robots`; existing robot
 folders are never overwritten. The `active` symlink selects the project loaded

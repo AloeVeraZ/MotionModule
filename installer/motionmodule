@@ -165,6 +165,36 @@ case "$command" in
     hotspot)
         exec sudo /usr/local/sbin/motionmodule-hotspot "$@"
         ;;
+    giga)
+        giga_command="${1:-status}"
+        [ "$#" -eq 0 ] || shift
+        [ "$#" -eq 0 ] || fail "Usage: motionmodule giga [status|flash]"
+        case "$giga_command" in
+            status)
+                exec "$(runtime_python)" -m motion_module.giga_firmware status
+                ;;
+            flash)
+                python_bin="$(runtime_python)"
+                # The running dashboard holds the GIGA's serial port, so it
+                # pauses while the firmware is written and starts again after.
+                was_running=false
+                if systemctl is-active --quiet motionmodule.service 2>/dev/null; then
+                    was_running=true
+                    printf 'Pausing MotionModule while the GIGA is flashed (motors stop)...\n'
+                    sudo systemctl stop motionmodule.service
+                fi
+                flash_status=0
+                "$python_bin" -m motion_module.giga_firmware flash || flash_status=$?
+                if [ "$was_running" = true ]; then
+                    sudo systemctl start motionmodule.service
+                fi
+                exit "$flash_status"
+                ;;
+            *)
+                fail "Usage: motionmodule giga [status|flash]"
+                ;;
+        esac
+        ;;
     terminal)
         terminal_command="${1:-status}"
         [ "$#" -eq 0 ] || shift
@@ -238,6 +268,8 @@ MotionModule commands:
   project [list|PROJECT_NAME]      list or switch robot code folders
   hotspot on [SSID] [PASSWORD] | hotspot off | hotspot status
                                   off reconnects the saved preferred Wi-Fi
+  giga status | giga flash        install the sensor firmware on a plugged-in
+                                  Arduino GIGA R1 WiFi; no Arduino IDE needed
   terminal enable [MINUTES] | terminal disable | terminal status
                                   time-limited access to the Code-page Bash terminal
 EOF

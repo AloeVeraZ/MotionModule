@@ -518,6 +518,10 @@
 .usb-meta { display: grid; grid-template-columns: auto 1fr; gap: .1875rem .75rem; font-size: .75rem; }
 .usb-meta b { color: var(--faint); font-weight: 650; }
 .usb-meta span { color: var(--muted); text-align: right; word-break: break-all; }
+.giga-firmware { display: grid; gap: .5rem; margin-top: .625rem; padding-top: .625rem; border-top: 1px solid var(--line-soft); }
+.giga-firmware p { margin: 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
+.giga-firmware p.failed { color: var(--red); }
+.giga-firmware .button { justify-self: start; }
 
 /* --------------------------------------------------------------- tests */
 
@@ -1028,7 +1032,7 @@
           <p class="notice danger" id="servoBusNotice" hidden></p>
           <div id="servoBoardGuide" class="stack"></div>
           <div class="grid equal"><div><h3 class="subheading">Pi → servo-board logic</h3><div id="logicConnections" class="connection-list"></div></div><div><h3 class="subheading">Power &amp; other board terminals</h3><div id="servoConnections" class="connection-list"></div></div></div>
-          <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors are not implemented.</div>
+          <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors connect through an Arduino GIGA R1 WiFi on the Pi's USB.</div>
           <div class="wire" id="servoDetection"></div>
         </div></article>
 
@@ -1227,6 +1231,10 @@
               <code>motionmodule rollback</code>
               <p>Returns to the previous runtime release while preserving every robot project.</p>
             </div>
+            <div class="command-row">
+              <code>motionmodule giga flash</code>
+              <p>Installs the sensor firmware on the Arduino GIGA plugged into the Pi, the same as Install firmware below. No Arduino IDE.</p>
+            </div>
           </div>
         </article>
 
@@ -1245,7 +1253,9 @@
             <p class="muted small spaced">USB devices identify
               themselves, so MotionModule can list what is plugged in, its USB
               ID, driver, port, and access. Basic GPIO motor drivers send
-              nothing back to the Pi and stay marked configured but unverified.</p>
+              nothing back to the Pi and stay marked configured but unverified.
+              An Arduino GIGA R1 WiFi gets its sensor firmware from here, with
+              no Arduino IDE.</p>
           </div>
         </article>
       </div>
@@ -1632,9 +1642,9 @@ def control(self, name, value):
         self.module = module
 
     def drive(self, forward, strafe, rotate, speed=0.5):
-        # forward, strafe and rotate are -1.0 to 1.0
-        left = (forward + rotate) * speed
-        right = (forward - rotate) * speed
+        # forward, strafe and rotate are -1.0 to 1.0; rotate +1 turns left
+        left = (forward - rotate) * speed
+        right = (forward + rotate) * speed
         self.module.set_motors({
             "driver_1a": left,
             "driver_1b": left,
@@ -1737,11 +1747,13 @@ def create_drive(module):
      GET  /api/config        pin map and names from hardware.py (once)
      GET  /api/diagnostics   Doctor checks
      GET  /api/usb           attached USB devices
+     GET  /api/giga/firmware GIGA sensor firmware: bundled, running, install progress
      GET  /api/logs          service log
      GET  /api/projects/*    installed robot folders, sample download
      GET  /api/network/*     Wi-Fi status and scan
      POST /api/drive, /api/stop, /api/motors/test, /api/servos/*,
-          /api/terminal/*, /api/network/*, /api/projects/deploy
+          /api/terminal/*, /api/network/*, /api/projects/deploy,
+          /api/giga/firmware
 
    Writes carry the per-page dashboard token so another page in the browser
    cannot command the robot.
@@ -2956,7 +2968,7 @@ function renderStarterSnippet(data) {
   $('#starterSnippet').textContent = [
     'class MyRobot:', '    def __init__(self, module):', '        self.module = module', '',
     '    def drive(self, forward, strafe, rotate, speed=0.5):',
-    '        left, right = forward + rotate, forward - rotate',
+    '        left, right = forward - rotate, forward + rotate  # rotate +1 turns left',
     '        scale = max(1.0, abs(left), abs(right))',
     '        left, right = left / scale * speed, right / scale * speed',
     '        self.module.set_motors({', ...outputs, '        })',
@@ -3093,6 +3105,8 @@ async function refreshUsb() {
         : 'USB inventory is available when this dashboard runs on Raspberry Pi Linux.')]);
       return;
     }
+    const giga = data.devices.some(isGiga);
+    if (giga) await loadGigaFirmware();
     replaceWith($('#usbDevices'), data.devices.map(device => {
       const card = element('div', 'usb-device');
       const top = element('div', 'usb-device-top');
@@ -3117,6 +3131,7 @@ async function refreshUsb() {
         element('span', null, device.device_node || 'No raw device file'),
       );
       card.append(top, meta);
+      if (isGiga(device)) card.append(gigaFirmwarePanel(device));
       return card;
     }));
   } catch (error) {
@@ -3126,6 +3141,66 @@ async function refreshUsb() {
 }
 
 $('#refreshUsb')?.addEventListener('click', refreshUsb);
+
+/* The GIGA's sensor firmware is flashed by the Pi itself: a 1200-baud touch
+   restarts it into its bootloader, and dfu-util writes the bundled binary. */
+
+let gigaFirmware = null;
+let gigaFirmwareTimer = null;
+
+const isGiga = device => device.vendor_id === '2341' && ['0266', '0366'].includes(device.product_id);
+
+async function loadGigaFirmware() {
+  try {
+    gigaFirmware = await jsonFetch('/api/giga/firmware');
+  } catch (error) {
+    gigaFirmware = null;
+  }
+  clearTimeout(gigaFirmwareTimer);
+  if (gigaFirmware?.job?.state === 'running') gigaFirmwareTimer = setTimeout(refreshUsb, 1000);
+}
+
+function gigaFirmwarePanel(device) {
+  const info = gigaFirmware;
+  const job = info?.job || { state: 'idle', log: [] };
+  const busy = job.state === 'running';
+  const panel = element('div', 'giga-firmware');
+  let message;
+  if (busy) message = job.log[job.log.length - 1] || 'Installing the sensor firmware...';
+  else if (job.state === 'failed') message = `Install failed: ${job.error}`;
+  else if (job.state === 'done') message = `Installed sensor firmware ${job.version}.`;
+  else if (device.product_id === '0366') message = 'In its bootloader, waiting for firmware.';
+  else if (info?.running === '1') message = `Running the original bridge sketch, which cannot read IMUs. Sensor firmware ${info.bundled} is ready to install.`;
+  else if (info?.running) message = info.running === info.bundled
+    ? `Running MotionModule sensor firmware ${info.running}.`
+    : `Running sensor firmware ${info.running}. Version ${info.bundled} is ready to install.`;
+  else message = `MotionModule sensor firmware ${info?.bundled || ''} installs from here. It replaces any sketch on the GIGA.`;
+  const status = element('p', job.state === 'failed' ? 'failed' : null, message);
+  panel.append(status);
+  if (info && !info.installable) {
+    panel.append(element('p', null, 'Firmware installs run on the robot, not in this demo.'));
+    return panel;
+  }
+  if (info && !info.dfu_util) panel.append(element('p', 'failed', 'dfu-util is missing. Rerun the MotionModule installer.'));
+  if (info?.problem) panel.append(element('p', 'failed', info.problem));
+  const button = element('button', 'button', busy ? 'Installing...' : 'Install firmware');
+  button.type = 'button';
+  button.disabled = busy || !info || !info.bundled || !info.dfu_util;
+  button.addEventListener('click', installGigaFirmware);
+  panel.append(button);
+  return panel;
+}
+
+async function installGigaFirmware() {
+  if (!confirm('Install the MotionModule sensor firmware on the GIGA? Motors stop and the GIGA restarts; any other sketch on it is replaced.')) return;
+  try {
+    await jsonFetch('/api/giga/firmware', { method: 'POST', headers: apiHeaders, body: '{}' });
+    toast('Installing the GIGA sensor firmware. Leave it plugged in.');
+  } catch (error) {
+    toast(error.message, true);
+  }
+  refreshUsb();
+}
 
 /* ------------------------------------------------------- guarded tests */
 

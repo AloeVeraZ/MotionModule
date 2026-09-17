@@ -1,0 +1,10 @@
+{
+  "board": "arduino_giga_r1_wifi",
+  "fqbn": "arduino:mbed_giga:giga",
+  "core": "arduino:mbed_giga@4.6.0",
+  "version": "2.0.0",
+  "flash_address": "0x08040000",
+  "bytes": 140928,
+  "sha256": "dc732c750e1b0113b52d9f925d58863f32bbdccae52d044399ac62b9c743f5cd",
+  "source_sha256": "6be13ffbfd44fb42e2b5351d9cea641e94975180e39cc5e360c179d160d3ecc1"
+}

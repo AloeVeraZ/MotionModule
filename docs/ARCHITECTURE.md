@@ -10,7 +10,8 @@ active robot folder ───────┤
                            ├── GPIO PWM → four dual H-bridges → eight motors
                            ├── unused Pi GPIO → digital sensor inputs
                            ├── I2C → PCA9685 board(s) → servos
-                           ├── sysfs + USB CDC → GIGA sensor bridge
+                           ├── USB serial → Arduino GIGA → IMUs and sensor pins
+                           ├── dfu-util → GIGA bootloader (firmware installs)
                            └── time-limited PTY Bash terminal
 ```
 
@@ -34,8 +35,9 @@ fused power system and physical cutoff.
 │   ├── Mecanum/
 │   │   ├── robot.py
 │   │   ├── hardware.py
-│   │   ├── dashboard.py
-│   │   └── giga_sensor_bridge.ino
+│   │   ├── sensors.py
+│   │   ├── autonomous.py
+│   │   └── dashboard.py
 │   └── AnotherRobot/
 └── backups/
 
@@ -102,9 +104,41 @@ current boot; the next boot tries saved client Wi-Fi again.
 PCA9685 boards acknowledge on I2C. USB devices expose descriptors in Linux
 sysfs, so the dashboard can list identity, topology, driver binding, device
 node, and permission status. The Arduino GIGA R1 WiFi is matched by its
-official USB VID/PID. When the reusable bridge sketch is installed,
-MotionModule sends pin modes over CDC serial and reads the configured values.
+official USB VID/PID: 2341:0266 running a sketch, 2341:0366 in its bootloader.
 USB discovery alone cannot identify which physical sensor is wired to a pin.
+
+## Arduino GIGA sensor bridge
+
+```text
+firmware/giga_sensor_bridge/giga_sensor_bridge.ino   the sketch
+firmware/giga_sensor_bridge.bin                      prebuilt, flashed by the Pi
+firmware/giga_sensor_bridge.json                     version and checksums
+firmware/build.py                                    rebuilds the binary (arduino-cli)
+```
+
+The firmware is the same for every robot. The project's `sensors.py` declares
+pins and IMUs; `module.giga()` creates one `GigaR1Bridge` for the process
+(never opened in simulation), and its reader thread sends
+`MM2 CONFIG <id> <pins> <imus>` after every connection. The GIGA answers with
+one JSON line of readings every 20 ms, tagged with that id, so readings meant
+for another configuration are never used. Sending the same configuration again
+keeps the IMUs running, so a dashboard restart does not reset them. The
+original `MM1 CONFIG` pins-only protocol is still understood in both
+directions, so older MotionModule software and the original sketch keep working.
+
+On the GIGA, IMUs are read without Arduino libraries. A BNO055 fuses its own
+readings (IMU mode by default, NDOF when `compass=True`); an LSM6-family 6-axis
+IMU is fused on the GIGA: gyro bias measured while still and re-measured
+whenever the robot rests, and yaw integrated about the measured up direction so
+tilt never reads as turning. Yaw counts up counter-clockwise, as `rotate` does.
+
+`motionmodule giga flash` and Debug's Install firmware button run
+`motion_module.giga_firmware`: the reader releases the port, a 1200-baud touch
+restarts the board into its bootloader, `dfu-util` writes the bundled binary at
+0x08040000, and the board's version is checked once it restarts. The installer
+provides `dfu-util`, the `dialout` and `plugdev` groups, and a udev rule for the
+GIGA's USB IDs. `tests/firmware/harness.cpp` runs the real sketch against
+simulated IMUs on a development computer.
 
 The reference GPIO H-bridges and PWM servo signal have no return channel.
 MotionModule can validate their configured pins and safely pulse an output, but
