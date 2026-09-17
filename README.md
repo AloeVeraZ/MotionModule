@@ -1,5 +1,57 @@
 # MotionModule
 
+<!-- TESTING BRANCH NOTICE: delete this whole block when `testing` is merged into `main`. -->
+> [!WARNING]
+> **This is the `testing` branch. It is not the main line.**
+>
+> Every new change lands here first, before it is merged into `main`. Right
+> now that is the redesigned dashboard and Driver Station. Code on this branch
+> can be unfinished or broken at any time. **If something stops working after
+> you install from `testing`, assume it is because you are on the testing
+> branch**, and go back to `main` before reporting a bug.
+
+### Run the testing branch on a robot
+
+A Pi that already has MotionModule installed:
+
+```bash
+motionmodule install testing
+```
+
+A fresh Raspberry Pi:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/install.sh | bash -s -- --version testing
+```
+
+Keep `--version testing` on that second command. Without it the installer
+downloads `main`, even from this branch's link.
+
+Either command installs the testing code as a new runtime release, runs the
+test suite on the Pi, and reboots, like any other install. If the testing
+build fails its tests, the installer stops and the version you had stays
+active. Your robot folders in `~/MotionModule/robots` are never touched, so
+the same `robot.py` keeps running. While a Pi runs this branch, the
+dashboard's top bar shows a yellow **testing** badge.
+
+### Go back to the main line
+
+```bash
+motionmodule rollback        # back to the release you had before
+motionmodule install main    # or install the latest main
+```
+
+### Work on this branch from a computer
+
+```bash
+git clone -b testing https://github.com/AloeVeraZ/MotionModule.git
+# or, in an existing clone:
+git fetch origin
+git switch testing
+```
+
+<!-- END TESTING BRANCH NOTICE -->
+
 MotionModule is a Raspberry Pi robot controller for eight brushed motors and
 PCA9685 servo boards. It is an independent, FTC-style system inspired by the
 idea of combining a Control Hub and Expansion Hub, but it does not use or
@@ -103,6 +155,13 @@ Three pages, each split into tabs:
   cameras, IMU, Pi inputs, and USB sensor controllers.
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
+
+The dashboard and Driver Station share one look: condensed Barlow Condensed
+headings over Inter text on a dark blueprint grid, with green, yellow, and red
+status lights. A light theme is one click away in the top bar. The fonts ship
+inside MotionModule, so the pages look the same on the robot hotspot with no
+internet. The pages use no background animation or blur effects, so they stay
+responsive when opened on a Raspberry Pi 3 with 1 GB of memory.
 
 ## Deploy robot code from the browser
 

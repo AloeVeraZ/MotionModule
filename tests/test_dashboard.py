@@ -1,4 +1,5 @@
 import io
+import re
 import threading
 import tempfile
 import unittest
@@ -9,7 +10,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import hardware_source, load_hardware_file, load_project_config
-from motion_module.dashboard import create_app, load_dashboard_telemetry, load_drive
+from motion_module.dashboard import (
+    STATIC_MAX_AGE_SECONDS,
+    create_app,
+    install_ref,
+    load_dashboard_telemetry,
+    load_drive,
+    static_asset_version,
+)
 from motion_module.servo import MockServoController, Servo
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
@@ -230,6 +238,50 @@ class DashboardTests(unittest.TestCase):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertIn(active, response.data)
+
+    def test_pages_load_only_self_hosted_design_assets(self):
+        version = static_asset_version()
+        for path in ("/", "/drive", "/driver-station"):
+            with self.subTest(path=path):
+                page = self.client.get(path).data.decode("utf-8")
+                self.assertIn(f'href="/static/motionmodule.css?v={version}"', page)
+                self.assertIn(f'src="/static/motionmodule.js?v={version}"', page)
+                # A robot on its own hotspot has no internet, so no stylesheet,
+                # script, or font may come from another origin.
+                self.assertIsNone(re.search(r'<(?:link|script)[^>]+(?:href|src)="(?:https?:)?//', page))
+
+        stylesheet = self.client.get("/static/motionmodule.css")
+        css = stylesheet.data
+        stylesheet.close()
+        self.assertEqual(stylesheet.status_code, 200)
+        fonts = re.findall(rb'url\("(fonts/[^"]+\.woff2)"\)', css)
+        self.assertEqual(len(fonts), 2)
+        for font in fonts:
+            with self.subTest(font=font):
+                response = self.client.get("/static/" + font.decode("ascii"))
+                body = response.data
+                response.close()
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(body.startswith(b"wOF2"))
+
+    def test_static_assets_are_cacheable_but_downloads_are_not(self):
+        response = self.client.get("/static/motionmodule.js")
+        response.close()
+        self.assertTrue(response.cache_control.public)
+        self.assertEqual(response.cache_control.max_age, STATIC_MAX_AGE_SECONDS)
+        download = self.client.get("/api/hardware-file")
+        download.close()
+        self.assertNotEqual(download.cache_control.max_age, STATIC_MAX_AGE_SECONDS)
+
+    def test_a_branch_install_is_labelled_in_the_bar(self):
+        with patch("motion_module.dashboard.install_ref", return_value="testing"):
+            app = create_app(self.module, MecanumDrive(self.module), self.network)
+        page = app.test_client().get("/").data
+        self.assertIn(b'class="build-pill"', page)
+        self.assertIn(b">testing</span>", page)
+        with patch("motion_module.dashboard.install_ref", return_value="main"):
+            app = create_app(self.module, MecanumDrive(self.module), self.network)
+        self.assertNotIn(b'class="build-pill"', app.test_client().get("/").data)
 
     def test_config_api_matches_driver_harness_and_complete_header(self):
         data = self.client.get("/api/config").get_json()
@@ -780,6 +832,28 @@ class DashboardTests(unittest.TestCase):
                     "/api/network/hostname", headers=self.headers, json={"hostname": hostname}
                 )
                 self.assertEqual(response.status_code, 400)
+
+
+class DashboardAssetHelperTests(unittest.TestCase):
+    def test_asset_version_changes_when_any_static_file_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            static = Path(directory)
+            (static / "fonts").mkdir()
+            (static / "site.css").write_text("body {}", encoding="utf-8")
+            (static / "fonts" / "face.woff2").write_bytes(b"font")
+            first = static_asset_version(static)
+            self.assertEqual(first, static_asset_version(static))
+            (static / "fonts" / "face.woff2").write_bytes(b"another font")
+            self.assertNotEqual(first, static_asset_version(static))
+
+    def test_install_ref_reads_the_release_marker_and_rejects_anything_else(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(install_ref(root), "")
+            (root / "INSTALL_REF").write_text("testing\n", encoding="utf-8")
+            self.assertEqual(install_ref(root), "testing")
+            (root / "INSTALL_REF").write_text("<script>alert(1)</script>\n", encoding="utf-8")
+            self.assertEqual(install_ref(root), "")
 
 
 if __name__ == "__main__":

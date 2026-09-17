@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import io
 import math
 import os
@@ -52,6 +53,37 @@ DASHBOARD_PAGES = {"overview", "diagnostics", "code", "drive"}
 PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics"}
 # Older links land on the matching tab inside the page that replaced them.
 ALIAS_TABS = {"hardware": "wiring", "network": "network"}
+STATIC_DIRECTORY = Path(__file__).with_name("static")
+# Stylesheets, scripts and fonts are requested on every page change. Browsers
+# may keep them for a week; the page links them with a content hash, so an
+# update is fetched the moment its files differ.
+STATIC_MAX_AGE_SECONDS = 7 * 24 * 60 * 60
+
+
+def static_asset_version(directory: Path = STATIC_DIRECTORY) -> str:
+    """Short hash of every shared asset, used to bust browser caches."""
+
+    digest = hashlib.sha256()
+    if directory.is_dir():
+        for path in sorted(item for item in directory.rglob("*") if item.is_file()):
+            digest.update(path.relative_to(directory).as_posix().encode("utf-8"))
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def install_ref(release_root: Path | None = None) -> str:
+    """The Git branch or tag this release was installed from, if recorded.
+
+    The installer writes INSTALL_REF at the release root. A development
+    checkout has none, which reads as an empty string.
+    """
+
+    root = release_root or Path(__file__).resolve().parents[2]
+    try:
+        ref = (root / "INSTALL_REF").read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+    return ref if re.fullmatch(r"[A-Za-z0-9._/-]{1,80}", ref) else ""
 
 
 def servo_profiles(config) -> list[dict]:
@@ -272,8 +304,14 @@ def create_app(
     autonomous_routine=None,
     autonomous_error: str = "",
 ) -> Flask:
-    app = Flask(__name__, template_folder=str(Path(__file__).with_name("templates")))
+    app = Flask(
+        __name__,
+        template_folder=str(Path(__file__).with_name("templates")),
+        static_folder=str(STATIC_DIRECTORY),
+    )
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+    asset_version = static_asset_version()
+    build_ref = install_ref()
     active_drive = drive or IdleDrive(module)
     network = network_client or NetworkClient()
     terminal = terminal_manager or TerminalManager()
@@ -321,6 +359,14 @@ def create_app(
                 usb_sensor_cache["checked"] = now
             return list(usb_sensor_cache["controllers"])
 
+    @app.after_request
+    def cache_static_assets(response):
+        if request.path.startswith("/static/") and response.status_code == 200:
+            response.cache_control.no_cache = None
+            response.cache_control.public = True
+            response.cache_control.max_age = STATIC_MAX_AGE_SECONDS
+        return response
+
     @app.get("/driver-station")
     def standalone_driver_station():
         """Serve the focused competition console outside the workspace UI."""
@@ -329,6 +375,8 @@ def create_app(
             "driver_station.html",
             dashboard_token=dashboard_token,
             project_name=project_name,
+            asset_version=asset_version,
+            install_ref=build_ref,
         )
 
     @app.get("/")
@@ -344,6 +392,8 @@ def create_app(
             active_page=page,
             active_tab=ALIAS_TABS.get(requested, ""),
             project_name=project_name,
+            asset_version=asset_version,
+            install_ref=build_ref,
         )
 
     @app.get("/healthz")

@@ -1,552 +1,241 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#f3f4f6" media="(prefers-color-scheme: light)" data-scheme="light">
-<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" data-scheme="dark">
-<script id="theme-boot">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#080808">
+<script id="appearance-boot">
 /* Runs before the page paints so a chosen theme never flashes the other one.
-   No stored choice means no attribute, which leaves the CSS following the
-   browser's own light/dark setting. */
+   Dark is the default; a stored "light" or "system" choice wins. */
 (function () {
-  try {
-    var saved = localStorage.getItem('motionmodule-theme');
-    if (saved === 'light' || saved === 'dark') {
-      document.documentElement.setAttribute('data-theme', saved);
-    }
-  } catch (error) { /* private mode or blocked storage: follow the browser */ }
+  var root = document.documentElement;
+  var theme = null;
+  try { theme = localStorage.getItem('motionmodule-theme'); } catch (error) { /* blocked storage: dark */ }
+  if (theme === 'system') {
+    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  root.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
 })();
 </script>
 <title>MotionModule</title>
+<link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
+<script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
 <style>
 /* ==========================================================================
    MotionModule dashboard
 
-   Layout   fixed left rail + scrolling main column.
-            Each page is one <section class="view">; the sections inside a
-            page are switched by the .tabs row at the top of that page.
+   Tokens, panels, controls and the grid live in /static/motionmodule.css.
+   This sheet only arranges the four pages.
 
-   Theming  every colour below is a token. :root carries the light palette,
-            and the two blocks after it restate only the tokens that change
-            for dark. The page follows the browser/OS setting by default;
-            [data-theme] on <html> overrides it when the reader picks a side.
+   Layout   a floating control bar over one scrolling column. Each page is
+            one <section class="view">; the sections inside a page are
+            switched by the .tabs row at the top of that page.
    ========================================================================== */
 
-:root {
-  color-scheme: light;
-
-  /* Surfaces, furthest back to closest to the reader */
-  --bg: #f3f4f6;
-  --bg-tint: none;
-  --rail: #fbfbfc;
-  --topbar: rgba(243, 244, 246, .86);
-  --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --surface-3: #eceff3;
-  --line: #dfe3e8;
-  --line-soft: #eceff2;
-
-  /* Text */
-  --text: #15171c;
-  --muted: #505762;
-  --faint: #666d78;   /* 5.2:1 on a white card, 4.7:1 on the page ground */
-
-  /* Brand */
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-ink: #ffffff;
-  --accent-soft: #eef4ff;
-  --accent-line: #cddcff;
-  --accent-text: #1d4ed8;
-
-  /* Semantic */
-  --blue: #2f6fc4;
-  --blue-soft: #ecf3fc;
-  --blue-line: #cfe0f5;
-  --green: #0f6d59;
-  --green-soft: #ecf8f3;
-  --green-line: #c7e5d7;
-  --amber: #91600c;
-  --amber-soft: #fdf4e3;
-  --amber-line: #f0dcb4;
-  --red: #b93a49;
-  --red-soft: #fdf1f2;
-  --red-line: #f0ced2;
-
-  /* Stop control */
-  --stop-bg: #fff3f3;
-  --stop-hover: #ffe6e7;
-  --stop-line: #eeccd0;
-  --stop-text: #a83643;
-
-  /* Pin map categories */
-  --motor: #275ca4;
-  --motor-soft: #eaf2fd;
-  --motor-line: #c3d9f4;
-  --servo: #6f4cb8;
-  --servo-soft: #f2eefc;
-  --servo-line: #d9cef1;
-  --ground: #566a7a;
-  --power: #b93a49;
-  --power-line: #f0ced2;
-  --reserved: #91600c;
-
-  /* Console surfaces: code, logs, terminal, the servo board diagram */
-  --code-bg: #0e1a26;
-  --code-text: #d3e2ee;
-  --code-line: #24374a;
-  --board-bg: #213c41;
-  --board-2: #2a484c;
-  --board-line: #4e6b6f;
-  --board-text: #eff9f6;
-  --board-muted: #b5d3cc;
-
-  --chip-ink: #ffffff;
-  --focus: #2a86c4;
-  --radius: 18px;
-  --radius-sm: 12px;
-  --radius-xs: 9px;
-  --shadow: 0 1px 2px rgba(17, 24, 39, .025), 0 8px 24px -24px rgba(17, 24, 39, .25);
-  --shadow-lg: 0 18px 48px -24px rgba(17, 24, 39, .28);
-  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --ease: cubic-bezier(.2, .7, .3, 1);
-}
-
-/* Dark, when the browser asks for it and the reader has not chosen light. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-
-    --bg: #0b0d12;
-    --bg-tint: none;
-    --rail: #0f1218;
-    --topbar: rgba(11, 13, 18, .86);
-    --surface: #12151c;
-    --surface-2: #171b23;
-    --surface-3: #202631;
-    --line: #282e39;
-    --line-soft: #202630;
-
-    --text: #f4f6f8;
-    --muted: #a6adb8;
-    --faint: #8a929e;
-
-    --accent: #7aa2ff;
-    --accent-hover: #91b2ff;
-    --accent-ink: #0b1020;
-    --accent-soft: #192747;
-    --accent-line: #304c82;
-    --accent-text: #9ab8ff;
-
-    --blue: #6ba5f5;
-    --blue-soft: #16283e;
-    --blue-line: #274566;
-    --green: #45cf9a;
-    --green-soft: #12302a;
-    --green-line: #235244;
-    --amber: #f0c063;
-    --amber-soft: #322a15;
-    --amber-line: #574823;
-    --red: #ff8189;
-    --red-soft: #351b20;
-    --red-line: #5c3038;
-
-    --stop-bg: #3a171d;
-    --stop-hover: #4a1d25;
-    --stop-line: #6d323b;
-    --stop-text: #ffd9dc;
-
-    --motor: #6ba5f5;
-    --motor-soft: #16273c;
-    --motor-line: #2b4568;
-    --servo: #b592f7;
-    --servo-soft: #241d3c;
-    --servo-line: #413566;
-    --ground: #97abbb;
-    --power: #ff8189;
-    --power-line: #5c3038;
-    --reserved: #f0c063;
-
-    --code-bg: #0a121c;
-    --code-text: #cfe0ee;
-    --code-line: #22344a;
-    --board-bg: #16272c;
-    --board-2: #1e363a;
-    --board-line: #3b585c;
-    --board-text: #eaf6f2;
-    --board-muted: #9dc0b9;
-
-    --chip-ink: #0d1520;
-    --focus: #6cc2f0;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
-    --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, .6);
-  }
-}
-
-/* Dark, chosen deliberately, whatever the browser prefers. */
-:root[data-theme="dark"] {
-  color-scheme: dark;
-
-  --bg: #0b0d12;
-  --bg-tint: none;
-  --rail: #0f1218;
-  --topbar: rgba(11, 13, 18, .86);
-  --surface: #12151c;
-  --surface-2: #171b23;
-  --surface-3: #202631;
-  --line: #282e39;
-  --line-soft: #202630;
-
-  --text: #f4f6f8;
-  --muted: #a6adb8;
-  --faint: #8a929e;
-
-  --accent: #7aa2ff;
-  --accent-hover: #91b2ff;
-  --accent-ink: #0b1020;
-  --accent-soft: #192747;
-  --accent-line: #304c82;
-  --accent-text: #9ab8ff;
-
-  --blue: #6ba5f5;
-  --blue-soft: #16283e;
-  --blue-line: #274566;
-  --green: #45cf9a;
-  --green-soft: #12302a;
-  --green-line: #235244;
-  --amber: #f0c063;
-  --amber-soft: #322a15;
-  --amber-line: #574823;
-  --red: #ff8189;
-  --red-soft: #351b20;
-  --red-line: #5c3038;
-
-  --stop-bg: #3a171d;
-  --stop-hover: #4a1d25;
-  --stop-line: #6d323b;
-  --stop-text: #ffd9dc;
-
-  --motor: #6ba5f5;
-  --motor-soft: #16273c;
-  --motor-line: #2b4568;
-  --servo: #b592f7;
-  --servo-soft: #241d3c;
-  --servo-line: #413566;
-  --ground: #97abbb;
-  --power: #ff8189;
-  --power-line: #5c3038;
-  --reserved: #f0c063;
-
-  --code-bg: #0a121c;
-  --code-text: #cfe0ee;
-  --code-line: #22344a;
-  --board-bg: #16272c;
-  --board-2: #1e363a;
-  --board-line: #3b585c;
-  --board-text: #eaf6f2;
-  --board-muted: #9dc0b9;
-
-  --chip-ink: #0d1520;
-  --focus: #6cc2f0;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px rgba(0, 0, 0, .22);
-  --shadow-lg: 0 16px 40px -16px rgba(0, 0, 0, .6);
-}
-
-/* --------------------------------------------------------------- baseline */
-
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-
-body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.5;
-  color: var(--text);
-  background-color: var(--bg);
-  background-image: var(--bg-tint);
-  background-attachment: fixed;
-  -webkit-font-smoothing: antialiased;
-}
-
-button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; }
-h1, h2, h3 { margin: 0; letter-spacing: -.015em; }
-p { margin: 0; }
-code { font-family: var(--mono); font-size: .92em; }
-a { color: var(--accent-text); text-underline-offset: 3px; }
-[hidden] { display: none !important; }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-
-.skip-link {
-  position: fixed; top: -80px; left: 20px; z-index: 100;
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  background: var(--surface); color: var(--text);
-  box-shadow: var(--shadow-lg);
-}
-.skip-link:focus { top: 12px; }
-
-.app { min-height: 100vh; display: grid; grid-template-columns: 216px minmax(0, 1fr); }
-
-/* Motion. Everything here is switched off under prefers-reduced-motion. */
-@keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
-@keyframes ring {
-  0%, 100% { box-shadow: 0 0 0 4px var(--green-soft); }
-  55% { box-shadow: 0 0 0 8px transparent; }
-}
-
-/* ------------------------------------------------------------------- rail */
-
-.rail {
-  position: sticky; top: 0;
-  height: 100vh;
-  display: flex; flex-direction: column; gap: 22px;
-  padding: 22px 16px 18px;
-  border-right: 1px solid var(--line);
-  background: var(--rail);
-}
-
-.brand { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
-.brand .mark {
-  width: 38px; height: 38px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 900; font-size: 18px;
-  box-shadow: var(--shadow);
-}
-.brand strong { display: block; font-size: 16px; letter-spacing: -.4px; }
-.brand small { display: block; color: var(--faint); font-size: 8px; font-weight: 750; letter-spacing: 1.1px; }
-
-.nav-label {
-  margin: 9px 12px -14px;
-  color: var(--faint);
-  font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
-}
-nav { display: grid; gap: 8px; }
-nav a {
-  display: grid; grid-template-columns: 26px 1fr;
-  align-items: center; column-gap: 7px; row-gap: 2px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 13px; font-weight: 650;
-  transition: background .16s var(--ease), color .16s var(--ease);
-}
-nav a small { grid-column: 2; font-size: 10px; font-weight: 500; color: var(--faint); }
-nav a:hover { background: var(--surface-2); color: var(--text); }
-nav a { position: relative; }
-nav a.active { background: var(--accent-soft); color: var(--accent-text); }
-nav a.active::before {
-  content: ""; position: absolute; left: -18px; top: 50%;
-  width: 3px; height: 24px;
-  transform: translateY(-50%);
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
-}
-nav a.active small { color: var(--accent-text); opacity: .8; }
-nav a.active .nav-icon { color: var(--accent-text); }
-.nav-icon { grid-row: span 2; text-align: center; color: var(--muted); font-size: 20px; }
-
-.rail-guide {
-  margin-top: auto;
-  padding: 17px 13px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.rail-guide strong { display: block; margin: 9px 0 6px; font-size: 12px; }
-.rail-guide p { color: var(--muted); font-size: 11px; line-height: 1.7; }
-.rail-guide a {
-  display: flex; justify-content: space-between;
-  margin-top: 14px;
-  font-size: 11px; font-weight: 700; text-decoration: none;
-}
-.mini-icon {
-  display: grid; place-items: center;
-  width: 23px; height: 23px;
-  border: 1px solid var(--accent-line); border-radius: 50%;
-  color: var(--accent); font-size: 13px;
-}
-
-.rail-foot { display: grid; gap: 10px; }
-.stop-button {
-  width: 100%;
-  min-height: 43px;
-  border: 1px solid var(--stop-line);
-  border-radius: 8px;
-  background: var(--stop-bg);
-  color: var(--stop-text);
-  font-size: 11px; font-weight: 800; letter-spacing: .02em;
-  transition: background .16s var(--ease);
-}
-.stop-button:hover { background: var(--stop-hover); }
-.rail-note { padding: 0 6px; color: var(--faint); font-size: 10px; line-height: 1.65; }
-
-.mobile-stop {
-  position: fixed; right: 16px; bottom: 16px; z-index: 40;
-  display: none;
-  padding: 12px 16px;
-  border: 1px solid var(--stop-line); border-radius: 999px;
-  background: var(--stop-bg); color: var(--stop-text);
-  font-size: 11px; font-weight: 800;
-  box-shadow: var(--shadow-lg);
-}
-
-/* ------------------------------------------------------------------- main */
-
-.main { min-width: 0; }
+/* ------------------------------------------------------------------- bar */
 
 .topbar {
-  position: sticky; top: 0; z-index: 20;
-  min-height: 68px;
-  display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  padding: 12px 36px;
-  border-bottom: 1px solid var(--line);
-  background: var(--topbar);
-  backdrop-filter: saturate(180%) blur(12px);
-  transition: box-shadow .22s var(--ease);
+  position: sticky; top: .625rem; z-index: 60;
+  margin-top: .625rem;
+  padding: 0 var(--gutter);
 }
-.topbar.scrolled { box-shadow: 0 10px 24px -20px rgba(0, 0, 0, .55); }
-.crumb { color: var(--muted); font-size: 12px; }
-.crumb strong { color: var(--text); }
-.topbar-tools { display: flex; align-items: center; gap: 14px; }
-.live { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--muted); }
-.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); transition: background .2s var(--ease); }
-.dot.online { background: var(--green); box-shadow: 0 0 0 4px var(--green-soft); animation: ring 2.8s var(--ease) infinite; }
-.dot.offline { background: var(--red); box-shadow: 0 0 0 4px var(--red-soft); }
-
-/* Light / dark / follow-the-browser switch */
-.theme-switch {
-  display: inline-flex; gap: 2px;
-  padding: 3px;
+.topbar-inner {
+  position: relative;
+  display: flex; align-items: center; gap: 1rem;
+  max-width: 1600px; min-height: 3.5rem;
+  margin: 0 auto;
+  padding: .375rem .5rem .375rem .875rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-top-color: var(--edge-top);
+  border-radius: var(--radius);
   background: var(--surface-2);
+  transition: box-shadow .25s ease;
 }
-.theme-switch button {
+.topbar.scrolled .topbar-inner { box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .8); }
+
+.brand {
+  display: inline-flex; align-items: center; gap: .625rem;
+  min-height: 2.75rem;
+  color: var(--ink);
+  font: 700 1.125rem/1 var(--font-display);
+  letter-spacing: .06em;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: color .15s ease;
+}
+.brand:hover, .brand:focus-visible { color: var(--accent); }
+.brand-mark {
   display: grid; place-items: center;
-  width: 30px; height: 26px;
-  border: 0; border-radius: 999px;
-  background: transparent; color: var(--muted);
-  transition: background .16s var(--ease), color .16s var(--ease);
+  width: 2rem; height: 2rem; flex: none;
+  border-radius: .5625rem;
+  background: var(--accent-fill);
+  color: var(--accent-ink);
 }
-.theme-switch svg {
-  width: 14px; height: 14px;
-  fill: none; stroke: currentColor; stroke-width: 1.4;
-  stroke-linecap: round; stroke-linejoin: round;
+.brand-mark svg { width: 1.0625rem; height: 1.0625rem; }
+.build-pill {
+  padding: .1875rem .4375rem;
+  border: 1px solid var(--amber-line);
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font: 700 .75rem/1 var(--font-display);
+  letter-spacing: .1em;
 }
-.theme-switch button:hover { color: var(--text); }
-.theme-switch button[aria-pressed="true"] {
-  background: var(--surface);
-  color: var(--accent-text);
-  box-shadow: var(--shadow);
+.page-name { display: none; color: var(--muted); font-size: .875rem; white-space: nowrap; }
+
+.nav-panel { display: flex; flex: 1; align-items: center; gap: 1rem; min-width: 0; }
+.nav-links { display: flex; align-items: center; gap: .25rem; margin: 0 auto; }
+.nav-links a {
+  position: relative;
+  display: inline-flex; align-items: center;
+  min-height: 2.5rem;
+  padding: 0 .9375rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .875rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color .15s ease, background-color .15s ease;
+}
+.nav-links a:hover, .nav-links a:focus-visible { color: var(--ink); background: var(--control); }
+.nav-links a.active { color: var(--ink); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.nav-links small, .nav-note, .display-label { display: none; }
+.display-controls { display: flex; align-items: center; gap: .75rem; }
+
+.topbar-tools { display: flex; align-items: center; gap: .75rem; }
+.live { display: inline-flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.bar-stop { min-height: 2.5rem; padding: 0 1rem; }
+.nav-toggle {
+  display: none; place-items: center;
+  width: 2.75rem; height: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--control);
+  color: var(--ink);
+}
+.nav-toggle span, .nav-toggle span::before, .nav-toggle span::after {
+  display: block;
+  width: 1rem; height: 1.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transition: transform .25s var(--ease);
+}
+.nav-toggle span { position: relative; }
+.nav-toggle span::before, .nav-toggle span::after { content: ""; position: absolute; left: 0; }
+.nav-toggle span::before { top: -5px; }
+.nav-toggle span::after { top: 5px; }
+.topbar[data-nav-open] .nav-toggle span { background: transparent; }
+.topbar[data-nav-open] .nav-toggle span::before { transform: translateY(5px) rotate(45deg); }
+.topbar[data-nav-open] .nav-toggle span::after { transform: translateY(-5px) rotate(-45deg); }
+
+.mobile-stop {
+  position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 70;
+  display: none;
+  min-height: 3.25rem;
+  padding: 0 1.375rem;
+  font-size: 1.0625rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 14px 30px -12px rgba(226, 85, 76, .8);
 }
 
-.content { max-width: 1760px; margin: auto; padding: 28px 34px 64px; animation: rise .3s var(--ease) both; }
-[data-panel]:not([hidden]) { animation: rise .24s var(--ease) both; }
+/* ------------------------------------------------------------------ page */
 
-/* ------------------------------------------------------------------- hero */
+.main { min-width: 0; }
+.content { max-width: 1600px; margin: 0 auto; padding: clamp(1.5rem, 3.5vw, 2.5rem) var(--gutter) 4rem; }
+
+.view:not([hidden]), [data-panel]:not([hidden]) { animation: mm-rise .26s var(--ease) backwards; }
 
 .hero {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 20px; flex-wrap: wrap;
-  margin-bottom: 22px;
+  display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap;
+  gap: 1rem 2rem;
+  margin-bottom: 1.5rem;
 }
-.hero h1 { font-size: clamp(27px, 2.5vw, 36px); font-weight: 720; letter-spacing: -1.25px; }
-.hero p:not(.eyebrow) { max-width: 68ch; margin-top: 6px; color: var(--muted); font-size: 13px; }
-.eyebrow {
-  margin-bottom: 9px;
-  color: var(--accent-text);
-  font-size: 9px; font-weight: 750; letter-spacing: 1.35px; text-transform: uppercase;
+.hero > div:first-child { flex: 1 1 30rem; min-width: 0; }
+.hero h1 {
+  font: 700 clamp(2.125rem, 1.5rem + 2vw, 3.25rem)/.92 var(--font-display);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
 }
-.eyebrow-divider { padding: 0 8px; color: var(--line); }
+.hero p:not(.eyebrow) { max-width: 64ch; margin-top: .625rem; color: var(--muted); font-size: .9375rem; }
+.hero-side { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.hero.compact { margin-bottom: 1rem; }
+.hero.compact h1 { font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.375rem); }
 
 .section-heading {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 20px; margin: 28px 0 19px;
+  display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap;
+  gap: .75rem 2rem;
+  margin: 2.25rem 0 1rem;
 }
-.section-heading h2 { font-size: 22px; font-weight: 650; letter-spacing: -.6px; }
-.section-heading p:not(.eyebrow) {
-  max-width: 83ch; margin-top: 7px;
-  color: var(--muted); font-size: 12px; line-height: 1.75;
+.section-heading:first-child { margin-top: 0; }
+.section-heading > div { flex: 1 1 34rem; min-width: 0; }
+.section-heading h2 {
+  font: 700 clamp(1.5rem, 1.15rem + 1.1vw, 2.125rem)/.95 var(--font-display);
+  letter-spacing: var(--tracking-display);
+  text-transform: uppercase;
 }
-.subheading { font-size: 13px; margin-bottom: 14px; }
+.section-heading p:not(.eyebrow) { max-width: 82ch; margin-top: .5rem; color: var(--muted); font-size: .875rem; }
+.subheading { margin-bottom: .75rem; font: 700 1.0625rem/1.1 var(--font-display); letter-spacing: var(--tracking-title); text-transform: uppercase; }
 
-.pill {
-  padding: 7px 11px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 9px; font-weight: 750; letter-spacing: .7px;
-  white-space: nowrap;
-}
-.pill.good { background: var(--green-soft); border-color: var(--green-line); color: var(--green); }
-.pill.busy { background: var(--amber-soft); border-color: var(--amber-line); color: var(--amber); }
+.grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+.grid.equal { grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); }
+.stack { display: grid; gap: 1rem; align-content: start; }
+.spaced { margin-top: 1rem; }
+.page-notice { margin-bottom: 1rem; }
+.message { color: var(--muted); font-size: .8125rem; }
+.message.error { color: var(--red); }
 
-/* ------------------------------------------------------------------- tabs */
+/* ---------------------------------------------------------------- panels */
 
-.tabs {
-  display: inline-flex; gap: 3px; flex-wrap: wrap;
-  margin-bottom: 22px; padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface-2);
-}
-.tabs button {
-  padding: 8px 15px;
-  border: 0; border-radius: 999px;
-  background: transparent; color: var(--muted);
-  font-size: 12px; font-weight: 650;
-  transition: color .16s var(--ease), background .16s var(--ease), box-shadow .16s var(--ease);
-}
-.tabs button:hover { color: var(--text); }
-.tabs button.active { color: var(--text); background: var(--surface); box-shadow: var(--shadow); }
-
-/* ------------------------------------------------------------------ cards */
-
-.card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
 .panel-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 14px; flex-wrap: wrap;
-  padding: 18px 20px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: .5rem 1rem;
+  min-height: 3.375rem;
+  padding: .75rem 1.125rem;
   border-bottom: 1px solid var(--line-soft);
 }
-.panel-head h2 { font-size: 14px; font-weight: 680; }
-.panel-head > span, .panel-head .hint { color: var(--faint); font-size: 10px; }
-.panel-body { padding: 20px; }
-.panel-body.stack { display: grid; gap: 14px; }
-.lead { padding: 14px 20px 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
-
-.grid { display: grid; gap: 20px; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
-.grid.equal { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
-.stack { display: grid; gap: 18px; }
-.spaced { margin-top: 16px; }
-
-.stats { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 24px; }
-.stat { padding: 17px 16px; transition: border-color .18s var(--ease), transform .18s var(--ease); }
-.stat:hover { border-color: var(--accent-line); transform: translateY(-1px); }
-.stat-label {
-  display: flex; align-items: center; justify-content: space-between;
-  color: var(--faint);
-  font-size: 9px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+.panel-head h2 {
+  font: 700 1.1875rem/1.05 var(--font-display);
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
-.stat-label span { font-size: 17px; font-weight: 400; color: var(--faint); opacity: .7; }
-.stat-value { margin-top: 8px; font-size: 25px; font-weight: 650; letter-spacing: -.02em; }
-.stat-note { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.panel-head > span, .panel-head .hint { color: var(--faint); font-size: .75rem; }
+.panel-head a.hint { color: var(--accent-text); text-decoration: none; }
+.panel-head a.hint:hover { color: var(--ink); text-decoration: underline; }
+.panel-body { padding: 1rem 1.125rem 1.125rem; }
+.panel-body.stack { gap: .875rem; }
+.lead { padding: .875rem 1.125rem 0; color: var(--muted); font-size: .8125rem; line-height: 1.65; }
+
+.live-tag {
+  display: inline-flex; align-items: center; gap: .4375rem;
+  color: var(--accent-text) !important;
+  font: 700 .8125rem/1 var(--font-display) !important;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.live-tag i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* ----------------------------------------------------------------- stats */
+
+.stats { display: grid; gap: .75rem; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-bottom: 1rem; }
+.stat { padding: .875rem 1rem 1rem; }
+.stat-label {
+  display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  color: var(--faint);
+  font: 700 .8125rem/1.2 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.stat-label span { color: var(--faint); font: 400 1rem/1 var(--font-text); letter-spacing: 0; opacity: .7; }
+.stat-value {
+  margin-top: .5rem;
+  font: 700 clamp(1.75rem, 1.4rem + .9vw, 2.25rem)/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.stat-note { margin-top: .375rem; color: var(--muted); font-size: .75rem; line-height: 1.5; }
 /* A stat can carry a verdict. Used for the servo bus, where "0 / 1" alone
    does not say loudly enough that nothing is plugged in. */
 .stat.alert-bad { border-color: var(--red-line); }
@@ -555,201 +244,117 @@ nav a.active .nav-icon { color: var(--accent-text); }
 .stat.alert-warn .stat-value, .stat.alert-warn .stat-note { color: var(--amber); }
 .stat.alert-ok .stat-value { color: var(--green); }
 
-/* ---------------------------------------------------------------- buttons */
-
-.button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 9px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-xs);
-  background: var(--surface-2);
-  color: var(--text);
-  font-size: 12px; font-weight: 650;
-  text-decoration: none;
-  transition: background .16s var(--ease), border-color .16s var(--ease), transform .12s var(--ease);
-}
-.button:hover { border-color: var(--faint); background: var(--surface-3); }
-.button:active { transform: translateY(1px); }
-.button:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-.button.primary {
-  border-color: transparent;
-  background: var(--accent); color: var(--accent-ink);
-  font-weight: 750;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
-}
-.button.primary:hover { background: var(--accent-hover); }
-.button.danger { border-color: var(--stop-line); background: var(--stop-bg); color: var(--stop-text); }
-.button.danger:hover { background: var(--stop-hover); }
-.button.hold { min-width: 92px; }
-.button-row { display: flex; gap: 9px; flex-wrap: wrap; align-items: center; }
-
-/* ----------------------------------------------------------------- pieces */
-
-.muted { color: var(--muted); }
-.small { font-size: 12.5px; }
-.message { color: var(--muted); font-size: 13px; }
-.message.error { color: var(--red); }
-.live-tag { color: var(--accent-text) !important; font-size: 9px !important; letter-spacing: .6px; }
-
-.notice {
-  padding: 12px 14px;
-  border: 1px solid var(--blue-line);
-  border-left: 3px solid var(--blue);
-  border-radius: var(--radius-sm);
-  background: var(--blue-soft);
-  color: var(--muted);
-  font-size: 12px; line-height: 1.7;
-}
-.notice strong { color: var(--text); }
-.notice.danger { border-color: var(--red-line); border-left-color: var(--red); background: var(--red-soft); }
-.notice.warn { border-color: var(--amber-line); border-left-color: var(--amber); background: var(--amber-soft); }
-.simulation-notice {
-  display: flex; gap: 14px;
-  margin-bottom: 20px;
-  border-color: var(--blue-line);
-  background: var(--blue-soft);
-}
-#connectionNotice { margin-bottom: 20px; }
-
-.kv-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.kv {
-  padding: 11px 13px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.kv small { display: block; color: var(--faint); font-size: 11.5px; }
-.kv strong { display: block; margin-top: 3px; font-size: 14px; word-break: break-word; }
-
-.check { display: flex; gap: 11px; align-items: flex-start; color: var(--muted); font-size: 13px; }
-.check input { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--accent); flex: 0 0 auto; }
-
-.fields { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-.field { display: grid; gap: 6px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
-.field.full { grid-column: 1 / -1; }
-.field input, .field select {
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 500;
-  transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
-}
-.field input:focus, .field select:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-input[type="range"] { accent-color: var(--accent); }
-output { color: var(--text); font-weight: 700; }
-
-.steps { display: grid; }
-.step {
-  display: grid; grid-template-columns: 26px 1fr; gap: 12px;
-  padding: 6px 0 15px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.step:last-child { border-bottom: 0; padding-bottom: 0; }
-.step i {
-  width: 26px; height: 26px;
-  display: grid; place-items: center;
-  border-radius: var(--radius-xs);
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-style: normal; font-weight: 800; font-size: 12.5px;
-}
-.step strong { display: block; margin: 2px 0 5px; font-size: 12px; }
-.step p { color: var(--muted); font-size: 11px; line-height: 1.75; }
-.step a { text-decoration: none; font-weight: 650; }
-
-/* ----------------------------------------------------------- motor output */
+/* ------------------------------------------------------------- overview */
 
 .motor-grid { display: grid; }
-.motor-card {
-  position: relative;
-  padding: 15px 2px 15px 43px;
-  border-bottom: 1px solid var(--line-soft);
-}
-.motor-card:last-child { border-bottom: 0; }
+.motor-card { position: relative; padding: .75rem 0 .75rem 2.875rem; border-bottom: 1px solid var(--line-soft); }
+.motor-card:first-child { padding-top: 0; }
+.motor-card:last-child { padding-bottom: 0; border-bottom: 0; }
 .motor-card::before {
   content: attr(data-channel);
-  position: absolute; left: 0; top: 17px;
-  width: 28px; height: 28px;
+  position: absolute; left: 0; top: .875rem;
   display: grid; place-items: center;
-  border-radius: var(--radius-xs);
-  background: var(--surface-3);
-  color: var(--faint);
-  font: 650 10px var(--mono);
+  width: 2rem; height: 2rem;
+  border: 1px solid var(--line-soft);
+  border-radius: .5rem;
+  background: var(--well);
+  color: var(--accent-text);
+  font: 700 .875rem/1 var(--font-display);
+  letter-spacing: .04em;
 }
-.motor-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.motor-top strong { font-size: 12px; font-family: var(--mono); }
-.motor-top span { font-size: 12px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; }
-.motor-card small { display: block; margin-top: 4px; color: var(--faint); font-size: 10px; }
-.track { margin-top: 11px; height: 4px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
-.track i {
-  display: block; height: 100%; width: 0;
-  border-radius: 999px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 72%, var(--accent)), var(--blue));
-  transition: width .12s linear;
-}
+.motor-card:first-child::before { top: .125rem; }
+.motor-card:not([data-channel]) { padding-left: 0; }
+.motor-card:not([data-channel])::before { display: none; }
+.motor-top { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.motor-top strong { font: 600 .8125rem/1.3 var(--font-mono); overflow-wrap: anywhere; }
+.motor-top span { font: 700 1.25rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.motor-card small { display: block; margin-top: .1875rem; color: var(--faint); font-size: .75rem; }
+.track { margin-top: .5rem; height: 5px; overflow: hidden; border-radius: 999px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.track i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); }
 .motor-card.reverse .track i { background: var(--amber); }
 .stale #motorGrid, .stale #servoActivity { opacity: .45; }
 
+.steps { display: grid; }
+.step { display: grid; grid-template-columns: 2rem 1fr; gap: .75rem; padding-bottom: .875rem; }
+.step + .step { padding-top: .875rem; border-top: 1px solid var(--line-soft); }
+.step:last-child { padding-bottom: 0; }
+.step i {
+  display: grid; place-items: center;
+  width: 2rem; height: 2rem;
+  border: 1px solid var(--accent-line);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: 700 1rem/1 var(--font-display);
+  font-style: normal;
+}
+.step strong { display: block; margin: .125rem 0 .25rem; font: 700 1rem/1.15 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.step p { color: var(--muted); font-size: .8125rem; line-height: 1.65; }
+.step a { font-weight: 600; text-decoration: none; }
+.step a:hover { text-decoration: underline; }
+
 .health { display: grid; }
 .health-row {
-  display: grid; grid-template-columns: 9px 1fr auto;
-  align-items: center; gap: 11px;
-  padding: 12px 0;
+  display: grid; grid-template-columns: .5rem minmax(0, 1fr) auto; align-items: center;
+  gap: .75rem;
+  padding: .625rem 0;
   border-bottom: 1px solid var(--line-soft);
-  font-size: 12px;
+  font-size: .8125rem;
 }
-.health-row:last-child { border-bottom: 0; }
-.health-row i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.health-row:first-child { padding-top: 0; }
+.health-row:last-child { padding-bottom: 0; border-bottom: 0; }
+.health-row i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
 .health-row span { color: var(--muted); }
-.health-row strong { font-weight: 650; }
+.health-row strong { font-weight: 600; text-align: right; }
 
-/* ---------------------------------------------------------------- pin map */
+/* ------------------------------------------------------------- pin map */
 
-.pin-layout { display: grid; gap: 20px; grid-template-columns: minmax(0, .92fr) minmax(0, 1.45fr); align-items: start; }
-.pi-board { padding: 20px; }
-.pi-label { margin-bottom: 12px; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .09em; text-align: center; }
-.pin-help { margin-bottom: 15px; font-size: 10px; text-align: center; }
-.header-grid { display: grid; gap: 4px; }
-.pin-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.pin {
-  display: grid; grid-template-columns: 26px 1fr;
-  align-items: center; gap: 7px;
-  width: 100%; min-height: 42px;
-  padding: 6px 8px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-xs);
-  background: var(--surface-2);
-  text-align: left; cursor: pointer;
-  transition: border-color .14s var(--ease), background .14s var(--ease);
+.pin-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, .92fr) minmax(0, 1.45fr); align-items: start; }
+.pi-board { padding: 1.125rem; }
+.pi-label {
+  margin-bottom: .25rem;
+  color: var(--accent-text);
+  font: 700 .875rem/1.2 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-align: center;
+  text-transform: uppercase;
 }
-.pin:hover { border-color: var(--faint); }
+.pin-help { margin-bottom: .875rem; text-align: center; }
+.header-grid { display: grid; gap: .25rem; }
+.pin-row { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem; }
+.pin {
+  display: grid; grid-template-columns: 1.75rem 1fr; align-items: center;
+  gap: .5rem;
+  width: 100%; min-height: 2.625rem;
+  padding: .3125rem .5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: .5625rem;
+  background: var(--well);
+  text-align: left;
+  transition: border-color .12s ease;
+}
+.pin:hover { border-color: var(--line); }
 .pin.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* The right-hand column mirrors the connector. Order the grid explicitly
    rather than flipping `direction`, which would drag bidi reordering into
    labels like "GPIO14 / TXD". */
-.pin.even { grid-template-columns: 1fr 26px; }
+.pin.even { grid-template-columns: 1fr 1.75rem; }
 .pin.even .pin-number { order: 2; }
 .pin.even .pin-copy { order: 1; text-align: right; }
 /* The physical pin number is what you count along the connector, so it is
    the loudest thing in the row: a filled badge in its category colour. */
 .pin-number {
-  width: 26px; height: 26px;
   display: grid; place-items: center;
-  border-radius: 7px;
-  background: var(--surface-3);
-  color: var(--text);
-  font-family: var(--mono); font-weight: 800; font-size: 12px;
+  width: 1.75rem; height: 1.75rem;
+  border-radius: .4375rem;
+  background: var(--control);
+  color: var(--ink);
+  font: 700 .9375rem/1 var(--font-display);
   font-variant-numeric: tabular-nums;
 }
 .pin-copy { min-width: 0; }
-.pin-copy strong { display: block; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pin-copy small { display: block; color: var(--faint); font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-copy strong { display: block; overflow: hidden; font-size: .75rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.pin-copy small { display: block; overflow: hidden; color: var(--faint); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .pin.motor { border-color: var(--motor-line); background: var(--motor-soft); }
 .pin.motor .pin-number { background: var(--motor); color: var(--chip-ink); }
 .pin.servo { border-color: var(--servo-line); background: var(--servo-soft); }
@@ -759,80 +364,62 @@ output { color: var(--text); font-weight: 700; }
 .pin.power .pin-number { background: var(--power); color: var(--chip-ink); }
 .pin.reserved .pin-number { background: var(--reserved); color: var(--chip-ink); }
 
-/* Reported hardware state. Green means the board answered the last I2C probe,
-   red means it did not, amber means it answered but refused a command. Only a
-   device that can talk back ever shows green. */
-.io-status {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px;
-  border: 1px solid var(--line); border-radius: 999px;
-  background: var(--surface-2); color: var(--muted);
-  font-size: 10px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase;
-  white-space: nowrap;
-}
-.io-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.io-status.ok { border-color: var(--green-line); background: var(--green-soft); color: var(--green); }
-.io-status.bad { border-color: var(--red-line); background: var(--red-soft); color: var(--red); }
-.io-status.sim,
-.io-status.warn { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber); }
+.pin-inspector { border-color: var(--accent-line); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); }
+.pin-inspector h2 { margin: .25rem 0 .375rem; font: 700 clamp(1.375rem, 1.1rem + .8vw, 1.75rem)/1 var(--font-display); text-transform: uppercase; }
+.pin-inspector p { margin-top: .375rem; font-size: .8125rem; line-height: 1.65; }
+.pin-inspector .eyebrow { margin-bottom: 0; }
 
-.pin-inspector { border-color: var(--accent-line); background: var(--accent-soft); }
-.pin-inspector h2 { margin: 6px 0; font-size: 18px; }
-.pin-inspector p { margin-top: 8px; font-size: 12px; line-height: 1.65; }
+.legend { display: flex; flex-wrap: wrap; gap: .375rem .875rem; margin-top: .875rem; color: var(--muted); font-size: .75rem; }
+.legend span { display: inline-flex; align-items: center; gap: .375rem; }
+.legend i { width: .625rem; height: .625rem; border-radius: 3px; }
 
-.legend { display: flex; gap: 9px 12px; flex-wrap: wrap; margin-top: 14px; color: var(--muted); font-size: 10px; }
-.legend span { display: flex; align-items: center; gap: 6px; }
-.legend i { width: 9px; height: 9px; border-radius: 3px; }
-
-.driver-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.driver-card {
-  padding: 15px 12px;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.driver-card h3 { margin-bottom: 9px; color: var(--accent-text); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
-.wire { display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; font-size: 10px; }
-.wire b { color: var(--faint); font-family: var(--mono); font-size: 10px; font-weight: 650; }
+.driver-grid { display: grid; gap: .625rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.driver-card { padding: .875rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
+.driver-card h3 { margin-bottom: .5rem; color: var(--accent-text); font: 700 .9375rem/1.1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.wire { display: grid; grid-template-columns: auto 1fr; gap: .25rem .625rem; font-size: .75rem; }
+.wire b { color: var(--faint); font: 600 .75rem/1.45 var(--font-mono); }
 .wire span { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
-.wire + .wire { margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line); }
+.wire + .wire { margin-top: .625rem; padding-top: .625rem; border-top: 1px dashed var(--line); }
 
 .signal-flow {
-  display: flex; align-items: center; justify-content: space-around; gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: space-around;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--well);
 }
-.signal-flow div { display: grid; gap: 7px; }
-.signal-flow small { color: var(--faint); font-size: 8px; letter-spacing: 1px; }
-.signal-flow strong { font-size: 15px; font-weight: 650; }
-.signal-flow span { color: var(--muted); font-size: 10px; }
-.signal-flow > b { color: var(--accent); }
+.signal-flow div { display: grid; gap: .25rem; }
+.signal-flow small { color: var(--accent-text); font: 700 .75rem/1 var(--font-display); letter-spacing: var(--tracking-label); }
+.signal-flow strong { font: 700 1.25rem/1 var(--font-display); letter-spacing: .02em; text-transform: uppercase; }
+.signal-flow span { color: var(--muted); font-size: .75rem; }
+.signal-flow > b { color: var(--accent); font-size: 1.125rem; }
 
-/* ---------------------------------------------------------- servo diagram */
+/* ------------------------------------------------------- servo drawing */
 
-.servo-board { padding: 23px; border-radius: var(--radius-sm); background: var(--board-bg); color: var(--board-text); }
-.servo-board-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-.servo-board-head strong { font-size: 14px; }
-.servo-board-head span { font: 11px var(--mono); color: var(--board-muted); }
+.servo-board { padding: 1.125rem; border: 1px solid var(--board-line); border-radius: var(--radius-sm); background: var(--board-bg); color: var(--board-text); }
+.servo-board-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem .75rem; margin-bottom: 1rem; }
+.servo-board-head strong { font: 700 1.125rem/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.servo-board-head > span { color: var(--board-muted); font: .75rem var(--font-mono); }
 .servo-board-head .io-status { border-color: var(--board-line); background: rgba(255, 255, 255, .06); color: var(--board-muted); }
 .servo-board-head .io-status.ok { border-color: #2f6d58; background: rgba(69, 207, 154, .16); color: #74e2b8; }
 .servo-board-head .io-status.bad { border-color: #7a3a42; background: rgba(255, 129, 137, .16); color: #ff9ba2; }
 .servo-board-head .io-status.sim,
 .servo-board-head .io-status.warn { border-color: #6b5628; background: rgba(240, 192, 99, .16); color: #f3d083; }
-
 /* A board that is not answering is still worth reading as a wiring diagram,
    so its outputs stay legible and clickable - just clearly not live. */
 .servo-board.offline { box-shadow: inset 0 0 0 1px var(--red-line); }
 .servo-board.offline .servo-outputs { opacity: .55; }
 .servo-board.offline .servo-port { border-style: dashed; }
-.servo-outputs { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 5px; }
+.servo-outputs { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: .3125rem; }
 .servo-port {
-  display: grid; gap: 7px; place-items: center;
-  padding: 10px 2px;
-  border: 1px solid var(--board-line); border-radius: 4px;
-  background: var(--board-2); color: var(--board-muted);
-  font: 10px var(--mono);
+  display: grid; place-items: center; gap: .4375rem;
+  padding: .625rem .125rem;
+  border: 1px solid var(--board-line);
+  border-radius: .3125rem;
+  background: var(--board-2);
+  color: var(--board-muted);
+  font: .75rem var(--font-mono);
 }
 .servo-port:hover, .servo-port.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Fixed colours: these three dots stand for the physical signal / V+ / GND
@@ -840,430 +427,381 @@ output { color: var(--text); font-weight: 700; }
 .servo-port i { width: 9px; height: 9px; border-radius: 2px; background: #e9c977; box-shadow: inset 0 0 0 2px #c7a760; }
 .servo-port i:nth-of-type(2) { background: #cf8586; box-shadow: inset 0 0 0 2px #b77274; }
 .servo-port i:nth-of-type(3) { background: #8b9ca2; box-shadow: inset 0 0 0 2px #71838a; }
-.servo-board-note { margin-top: 16px; color: var(--board-muted); font-size: 10px; line-height: 1.8; }
-.servo-channel-detail { margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--board-line); font-size: 12px; }
+.servo-board-note { margin-top: .875rem; color: var(--board-muted); font-size: .75rem; line-height: 1.75; }
+.servo-channel-detail { margin-top: .875rem; padding-top: .75rem; border-top: 1px solid var(--board-line); font-size: .8125rem; }
 
 .connection-list { display: grid; }
-.connection-item { padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.connection-item { padding: .625rem 0; border-bottom: 1px solid var(--line-soft); }
 .connection-item:first-child { padding-top: 0; }
 .connection-item:last-child { border-bottom: 0; }
-.connection-item strong { display: block; font-size: 12px; }
-.connection-item p { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.7; }
+.connection-item strong { display: block; font: 700 .9375rem/1.2 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.connection-item p { margin-top: .1875rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 
-/* -------------------------------------------------------------- name list */
+/* ----------------------------------------------------------- name list */
 
-.name-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.name-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
 .name-table th {
   position: sticky; top: 0;
-  padding: 8px 10px;
+  padding: .5rem .625rem;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
   color: var(--faint);
-  font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; text-align: left;
+  font: 700 .75rem/1.2 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-align: left;
+  text-transform: uppercase;
 }
-.name-table td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.name-table td { padding: .4375rem .625rem; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
 .name-table tr:last-child td { border-bottom: 0; }
-.name-table code { color: var(--text); font-weight: 650; }
-.table-scroll { max-height: 360px; overflow: auto; }
+.name-table code { color: var(--ink); font-weight: 650; }
+.table-scroll { max-height: 22.5rem; overflow: auto; }
 
-/* ------------------------------------------------------------------ parts */
+/* --------------------------------------------------------------- parts */
 
-.parts-toolbar { display: flex; gap: 20px; align-items: end; justify-content: space-between; margin: 20px 0; }
-.parts-toolbar .field { width: min(420px, 100%); }
+.parts-toolbar { display: flex; align-items: end; justify-content: space-between; gap: .75rem 1rem; margin: 1rem 0; }
+.parts-toolbar .field { width: min(26rem, 100%); }
 .parts-scroll { overflow-x: auto; }
-.parts-group + .parts-group { margin-top: 16px; }
 .parts-table { width: 100%; border-collapse: collapse; }
 .parts-table th {
-  padding: 12px 20px;
-  background: var(--surface-2);
+  padding: .625rem 1.125rem;
+  background: var(--well);
   color: var(--faint);
-  font-size: 9px; letter-spacing: 1px; text-align: left;
+  font: 700 .75rem/1.2 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-align: left;
 }
-.parts-table td { padding: 17px 20px; border-top: 1px solid var(--line-soft); font-size: 12px; vertical-align: top; }
-.parts-table td:first-child { width: 100px; color: var(--faint); font: 11px var(--mono); }
-.parts-table strong { display: block; font-size: 12px; }
-.parts-table p { max-width: 70ch; margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.7; }
-.parts-table a { display: inline-block; margin-top: 7px; font-size: 10px; font-weight: 650; text-decoration: none; }
+.parts-table td { padding: .875rem 1.125rem; border-top: 1px solid var(--line-soft); font-size: .8125rem; vertical-align: top; }
+.parts-table td:first-child { width: 6rem; font: 700 1.0625rem/1.15 var(--font-display); }
+.parts-table strong { display: block; font-size: .875rem; font-weight: 650; }
+.parts-table p { max-width: 70ch; margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.parts-table a { display: inline-block; margin-top: .375rem; font-size: .75rem; font-weight: 650; text-decoration: none; }
 .part-status {
   display: inline-block;
-  padding: 4px 8px;
-  border-radius: 5px;
-  background: var(--surface-3); color: var(--muted);
-  font-size: 9px;
+  padding: .1875rem .5rem;
+  border-radius: .375rem;
+  background: var(--control);
+  color: var(--muted);
+  font: 700 .75rem/1.15 var(--font-display);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 .part-status.needed { background: var(--amber-soft); color: var(--amber); }
 .part-status.pending { background: var(--red-soft); color: var(--red); }
-.part-status.optional { background: var(--surface-2); color: var(--faint); }
-.parts-note { padding: 14px 20px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; line-height: 1.7; }
+.part-status.optional { background: var(--well); color: var(--faint); }
+.parts-note { padding: .75rem 1.125rem; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: .8125rem; line-height: 1.65; }
 .group-flag {
-  padding: 4px 9px;
-  border: 1px solid var(--line); border-radius: 999px;
-  font-size: 9px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase;
+  padding: .1875rem .5625rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font: 700 .75rem/1.15 var(--font-display);
+  letter-spacing: .1em;
+  text-transform: uppercase;
 }
 .group-flag.required { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
-.group-flag.recommended { border-color: var(--line); background: var(--surface-2); color: var(--faint); }
+.group-flag.recommended { background: var(--well); color: var(--faint); }
 
-.spec-grid, .glossary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.spec-grid strong, .glossary dt { font-size: 12px; font-weight: 650; }
-.spec-grid p, .glossary dd { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.spec-grid, .glossary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+.spec-grid strong, .glossary dt { font-size: .875rem; font-weight: 650; }
+.spec-grid p, .glossary dd { margin: .25rem 0 0; color: var(--muted); font-size: .8125rem; line-height: 1.7; }
 .glossary dl { margin: 0; }
 
-/* ---------------------------------------------------------------- devices */
+/* ------------------------------------------------------------- devices */
 
-.usb-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.usb-device { padding: 13px 14px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
-.usb-device-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
-.usb-device h3 { font-size: 13.5px; }
-.device-state { color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .05em; }
+.usb-grid { display: grid; gap: .625rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5rem), 1fr)); }
+.usb-device { padding: .75rem .875rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
+.usb-device-top { display: flex; align-items: center; justify-content: space-between; gap: .625rem; margin-bottom: .5rem; }
+.usb-device h3 { font-size: .875rem; font-weight: 650; }
+.device-state { color: var(--green); font: 700 .75rem/1.1 var(--font-display); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
 .device-state.limited { color: var(--amber); }
-.usb-meta { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 12px; }
+.usb-meta { display: grid; grid-template-columns: auto 1fr; gap: .1875rem .75rem; font-size: .75rem; }
 .usb-meta b { color: var(--faint); font-weight: 650; }
 .usb-meta span { color: var(--muted); text-align: right; word-break: break-all; }
 
-/* ------------------------------------------------------------------ tests */
+/* --------------------------------------------------------------- tests */
 
 .test-row {
-  display: grid; grid-template-columns: 1fr auto auto;
-  align-items: center; gap: 10px;
-  padding: 9px 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center;
+  gap: .5rem;
+  padding: .5rem 0;
   border-bottom: 1px solid var(--line-soft);
 }
 .test-row:last-child { border-bottom: 0; }
-.test-row strong { font-family: var(--mono); font-size: 13px; }
-.test-row small { display: block; color: var(--faint); font-size: 11.5px; }
+.test-row strong { font: 600 .8125rem/1.35 var(--font-mono); }
+.test-row small { display: block; color: var(--faint); font-size: .75rem; }
+.test-row input[type="range"] { width: min(12rem, 40vw); }
+.button.hold { min-width: 6rem; touch-action: none; user-select: none; -webkit-user-select: none; }
 
-.check-list { display: grid; gap: 10px; }
+.check-list { display: grid; gap: .5rem; }
 .doctor-check {
-  display: grid; grid-template-columns: 24px 1fr; gap: 12px;
-  padding: 12px 13px;
+  display: grid; grid-template-columns: 1.625rem 1fr; gap: .75rem;
+  padding: .6875rem .8125rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--well);
 }
 .doctor-check .badge {
-  width: 24px; height: 24px;
   display: grid; place-items: center;
+  width: 1.625rem; height: 1.625rem;
   border-radius: 50%;
-  background: var(--green-soft); color: var(--green);
-  font-weight: 800; font-size: 12px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: .75rem; font-weight: 800;
 }
 .doctor-check.warn .badge { background: var(--amber-soft); color: var(--amber); }
-.doctor-check.info .badge { background: var(--blue-soft); color: var(--motor); }
-.doctor-check strong { font-size: 13.5px; }
-.doctor-check p { margin-top: 3px; color: var(--muted); font-size: 12.5px; }
+.doctor-check.info .badge { background: var(--blue-soft); color: var(--blue); }
+.doctor-check strong { font-size: .875rem; font-weight: 650; }
+.doctor-check p { margin-top: .125rem; color: var(--muted); font-size: .8125rem; }
 
-.logs {
-  margin: 0; padding: 16px 18px;
-  max-height: 380px; overflow: auto;
+.logs, .terminal-screen, .snippet pre {
+  margin: 0;
   background: var(--code-bg);
   color: var(--code-text);
-  font-family: var(--mono); font-size: 12px; line-height: 1.65;
+  font: .8125rem/1.6 var(--font-mono);
+}
+.logs {
+  max-height: 23.75rem; overflow: auto;
+  margin-top: .875rem;
+  padding: .875rem 1.125rem;
+  border-top: 1px solid var(--code-line);
   white-space: pre-wrap; word-break: break-word;
 }
 
-.command-list { display: grid; gap: 9px; }
+.command-list { display: grid; gap: .375rem; }
 .command-row {
-  display: grid; grid-template-columns: minmax(190px, auto) 1fr; gap: 6px 16px;
-  padding: 10px 12px;
+  display: grid; grid-template-columns: minmax(12rem, auto) 1fr; align-items: baseline;
+  gap: .25rem 1rem;
+  padding: .5625rem .8125rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--well);
 }
 .command-row code { color: var(--accent-text); }
-.command-row p { color: var(--muted); font-size: 12.5px; }
+.command-row p { color: var(--muted); font-size: .8125rem; }
 
-/* ---------------------------------------------------------------- network */
+/* ------------------------------------------------------------- network */
 
-.networks { display: grid; gap: 8px; max-height: 320px; overflow: auto; }
+.networks { display: grid; gap: .375rem; max-height: 20rem; overflow: auto; }
 .network-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
   width: 100%;
-  padding: 11px 13px;
+  padding: .625rem .8125rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  background: var(--well);
   text-align: left;
-  transition: border-color .14s var(--ease);
+  transition: border-color .12s ease;
 }
 .network-item:hover:not(:disabled) { border-color: var(--accent); }
 .network-item:disabled { opacity: .5; cursor: not-allowed; }
-.network-item span { display: block; font-size: 13.5px; }
-.network-item small { display: block; color: var(--faint); font-size: 11.5px; }
-.network-item .signal { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.network-item span { display: block; font-size: .875rem; font-weight: 600; }
+.network-item small { display: block; color: var(--faint); font-size: .75rem; font-weight: 400; }
+.network-item .signal { color: var(--accent-text); font: 700 1.0625rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
 
-/* --------------------------------------------------------- driver station */
+/* ------------------------------------------------------ status signals */
 
-.driver-status { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 18px; }
+.driver-status { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); margin-bottom: 1rem; }
 .driver-signal {
-  display: grid; grid-template-columns: 11px 1fr; align-items: center; gap: 12px;
-  padding: 13px 15px;
+  display: grid; grid-template-columns: .625rem 1fr; align-items: center;
+  gap: .75rem;
+  padding: .75rem .9375rem;
   border: 1px solid var(--line);
+  border-top-color: var(--edge-top);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow);
 }
-.driver-signal i { width: 11px; height: 11px; border-radius: 50%; background: var(--faint); transition: background .2s var(--ease); }
-.driver-signal.good i { background: var(--green); }
-.driver-signal.bad i { background: var(--red); }
-.driver-signal small { display: block; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
-.driver-signal strong { display: block; margin-top: 2px; font-size: 14px; }
+.driver-signal i { width: .625rem; height: .625rem; border-radius: 50%; background: var(--faint); transition: background-color .2s ease; }
+.driver-signal.good i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+.driver-signal.bad i { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.driver-signal small { display: block; color: var(--faint); font: 700 .75rem/1.2 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.driver-signal strong { display: block; margin-top: .0625rem; overflow: hidden; font: 700 1.125rem/1.15 var(--font-display); letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ----------------------------------------------------------------- deploy */
+/* -------------------------------------------------------------- deploy */
 
 .deploy-drop {
   position: relative;
-  display: grid; gap: 5px; place-items: center;
-  padding: 40px 18px;
+  display: grid; place-items: center; gap: .3125rem;
+  padding: 2rem 1.25rem;
   border: 1px dashed var(--accent-line);
   border-radius: var(--radius);
-  background: var(--accent-soft);
-  text-align: center; cursor: pointer;
-  transition: border-color .16s var(--ease), background .16s var(--ease);
+  background: var(--well);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s ease, background-color .15s ease;
 }
-.deploy-drop:hover { border-color: var(--accent); transform: translateY(-1px); }
+.deploy-drop:hover { border-color: var(--accent); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--well); }
 .deploy-drop:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
-.deploy-drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.deploy-drop strong { font-size: 15px; }
-.deploy-drop span { color: var(--muted); font-size: 12.5px; }
+.deploy-drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.deploy-drop strong { font: 700 1.25rem/1 var(--font-display); letter-spacing: .04em; text-transform: uppercase; }
+.deploy-drop span { color: var(--muted); font-size: .8125rem; }
+.deploy-drop svg { width: 1.625rem; height: 1.625rem; margin-bottom: .25rem; color: var(--accent-text); }
 
 .file-list {
-  display: grid; gap: 2px;
-  max-height: 190px; overflow: auto;
-  padding: 10px 12px;
-  border: 1px solid var(--line-soft); border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-.file-row { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; color: var(--muted); font-family: var(--mono); font-size: 12px; }
-.file-row strong { color: var(--text); font-weight: 500; }
-
-.format-file { padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--surface-2); }
-.format-file code { color: var(--accent-text); font-size: 13px; }
-.format-file p { margin-top: 4px; color: var(--muted); font-size: 12.5px; }
-.format-file .tag { float: right; color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-
-.project-list { display: grid; gap: 8px; }
-.project-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 11px 13px;
+  display: grid; gap: .125rem;
+  max-height: 12rem; overflow: auto;
+  padding: .5625rem .75rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  font-size: 13.5px;
+  background: var(--well);
 }
-.project-row span { color: var(--faint); font-size: 11px; font-weight: 700; letter-spacing: .06em; }
-.project-row.active { border-color: var(--accent-line); background: var(--accent-soft); }
+.file-row { display: flex; justify-content: space-between; gap: .75rem; padding: .125rem 0; color: var(--muted); font: .75rem/1.5 var(--font-mono); }
+.file-row strong { color: var(--ink); font-weight: 500; }
+
+.format-file { padding: .6875rem .8125rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
+.format-file code { color: var(--accent-text); font-size: .8125rem; }
+.format-file p { margin-top: .1875rem; color: var(--muted); font-size: .8125rem; }
+.format-file .tag { float: right; color: var(--faint); font: 700 .75rem/1.3 var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
+
+.project-list { display: grid; gap: .375rem; }
+.project-row {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  padding: .625rem .8125rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--well);
+  font-size: .875rem;
+}
+.project-row span { color: var(--faint); font: 700 .75rem/1 var(--font-display); letter-spacing: .12em; }
+.project-row.active { border-color: var(--accent-line); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--well); }
 .project-row.active span { color: var(--accent-text); }
 
-/* ------------------------------------------------------------ code sample */
+/* ----------------------------------------------------------- code blocks */
 
 .snippet { position: relative; }
-.snippet pre {
-  margin: 0; padding: 15px 16px;
-  border: 1px solid var(--code-line); border-radius: var(--radius-sm);
-  background: var(--code-bg); color: var(--code-text);
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.65;
-  overflow-x: auto;
-}
-.snippet .copy {
-  position: absolute; top: 9px; right: 9px;
-  padding: 5px 10px;
-  border: 1px solid var(--code-line); border-radius: 7px;
-  background: var(--code-bg); color: var(--code-text);
-  font-size: 11.5px; font-weight: 650;
-  opacity: .75;
-  transition: opacity .16s var(--ease);
-}
-.snippet .copy:hover { opacity: 1; }
+.snippet pre { padding: .875rem 1rem; overflow-x: auto; border: 1px solid var(--code-line); border-radius: var(--radius-sm); }
+.snippet .copy { position: absolute; top: .4375rem; right: .4375rem; min-height: 2rem; padding: 0 .75rem; font-size: .6875rem; }
 
-/* ------------------------------------------------------------------ drive */
+/* --------------------------------------------------------------- drive */
 
-.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; max-width: 340px; margin: 4px auto 0; }
-kbd {
-  display: grid; place-content: center;
-  min-height: 62px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--muted);
-  font-family: var(--font); font-size: 12px; font-weight: 700; text-align: center;
-  transition: background .12s var(--ease), border-color .12s var(--ease), transform .12s var(--ease);
-}
-kbd b { display: block; color: var(--text); font-size: 15px; }
-kbd.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); transform: translateY(1px); }
-kbd:empty { border: 0; background: transparent; }
-.speed { display: grid; gap: 7px; margin-top: 16px; color: var(--muted); font-size: 13px; }
+.keys { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4375rem; width: 100%; max-width: 21rem; margin: .25rem auto 0; }
+.speed { display: grid; gap: .375rem; color: var(--muted); font-size: .8125rem; }
+.speed output { float: right; font: 700 1.125rem/1 var(--font-display); }
 
-/* --------------------------------------------------------------- terminal */
+/* ------------------------------------------------------------ terminal */
 
-.terminal-unlock { display: grid; gap: 12px; grid-template-columns: minmax(200px, 1fr) auto; align-items: end; }
-.terminal-status { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
-.terminal-status strong { color: var(--text); }
+.terminal-unlock { display: grid; grid-template-columns: minmax(12.5rem, 1fr) auto; align-items: end; gap: .625rem; }
+.terminal-status { grid-column: 1 / -1; color: var(--muted); font-size: .8125rem; }
+.terminal-status strong { color: var(--ink); }
 .terminal-screen {
-  margin: 0; padding: 15px 16px;
-  min-height: 250px; max-height: 430px; overflow: auto;
-  border: 1px solid var(--code-line); border-radius: var(--radius-sm);
-  background: var(--code-bg); color: var(--code-text);
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.55;
+  min-height: 15.625rem; max-height: 26.875rem; overflow: auto;
+  padding: .875rem 1rem;
+  border: 1px solid var(--code-line);
+  border-radius: var(--radius-sm);
+  line-height: 1.55;
   white-space: pre-wrap; word-break: break-word;
 }
-.terminal-form { display: grid; grid-template-columns: 1fr auto; gap: 9px; }
+.terminal-form { display: grid; grid-template-columns: 1fr auto; gap: .5rem; }
 .terminal-form input {
-  padding: 11px 13px;
-  border: 1px solid var(--line); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text);
-  font-family: var(--mono); font-size: 13px;
-}
-
-/* ------------------------------------------------------------------ toast */
-
-.toast {
-  position: fixed; left: 50%; bottom: 26px; z-index: 60;
-  transform: translateX(-50%);
-  max-width: min(560px, 92vw);
-  padding: 12px 18px;
+  min-height: 2.75rem;
+  padding: .5625rem .8125rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow-lg);
-  font-size: 13.5px;
+  border-radius: var(--radius-sm);
+  background: var(--well);
+  color: var(--ink);
+  font: .8125rem var(--font-mono);
 }
-.toast.error { border-color: var(--stop-line); background: var(--stop-bg); color: var(--stop-text); }
+.terminal-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* ------------------------------------------------------------- responsive */
+/* ----------------------------------------------------------- responsive */
 
-@media (max-width: 1180px) {
-  .content { padding-inline: 24px; }
+@media (max-width: 1279px) {
   .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pin-layout { grid-template-columns: minmax(0, 1fr); }
   .grid { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .stop-long { display: none; }
+  .live #liveText {
+    position: absolute; width: 1px; height: 1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
 }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 190px minmax(0, 1fr); }
-  .rail { padding-inline: 12px; }
-  .brand strong { font-size: 13px; }
-  .brand small { font-size: 6px; }
+  .page-name { display: inline; }
+  .topbar-tools { margin-left: auto; }
+  .nav-toggle { display: grid; }
+  .nav-panel {
+    position: absolute; top: calc(100% + .5rem); left: 0; right: 0;
+    display: none; flex-direction: column; align-items: stretch;
+    gap: .625rem;
+    padding: .5rem;
+    border: 1px solid var(--line);
+    border-top-color: var(--edge-top);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    box-shadow: 0 24px 48px -24px rgba(0, 0, 0, .9);
+  }
+  .topbar[data-nav-open] .nav-panel { display: flex; animation: mm-rise .22s var(--ease) both; }
+  .nav-links { flex-direction: column; align-items: stretch; gap: .125rem; margin: 0; }
+  .nav-links a { display: grid; gap: .0625rem; min-height: 0; padding: .5rem .75rem; border-radius: var(--radius-sm); color: var(--ink); font-size: 1rem; }
+  .nav-links a small { display: block; color: var(--faint); font-size: .75rem; font-weight: 400; }
+  .display-controls { justify-content: space-between; padding: .5rem .75rem 0; border-top: 1px solid var(--line-soft); }
+  .display-label { display: block; color: var(--muted); font-size: .8125rem; }
+  .nav-note { display: block; padding: 0 .75rem .25rem; color: var(--faint); font-size: .75rem; line-height: 1.5; }
+
   .grid { grid-template-columns: minmax(0, 1fr); }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .servo-outputs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 9px; }
+  .servo-outputs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .5rem; }
   .signal-flow { flex-wrap: wrap; }
   .driver-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 640px) {
-  .app { grid-template-columns: minmax(0, 1fr); }
-  .rail {
-    position: static; height: auto;
-    display: grid; grid-template-columns: 1fr; gap: 15px;
-    padding: 18px 20px 0;
-    border-right: 0; border-bottom: 1px solid var(--line);
-  }
-  .brand strong { font-size: 16px; }
-  .brand small { font-size: 8px; }
-  .rail nav { grid-template-columns: repeat(3, 1fr); grid-auto-flow: column; gap: 7px; }
-  nav a { padding: 9px; font-size: 12px; grid-template-columns: 19px 1fr; }
-  /* The edge marker belongs to the vertical rail, not this row of tabs. */
-  nav a.active::before { display: none; }
-  nav a small { display: none; }
-  .nav-icon { grid-row: 1; font-size: 16px; }
-  .nav-label, .rail-guide, .rail-foot { display: none; }
-  .mobile-stop { display: block; }
-  .topbar { padding: 12px 20px; min-height: 53px; }
-  .topbar-tools { gap: 10px; }
-  .content { padding: 24px 18px 90px; }
-  .hero { gap: 14px; }
-  .hero h1 { font-size: 28px; }
-  .hero p:not(.eyebrow) { font-size: 12px; }
-  .stats { gap: 9px; }
-  .stat { padding: 13px; }
-  .stat-value { font-size: 22px; }
-  .tabs { gap: 3px; flex-wrap: nowrap; overflow-x: auto; }
-  .tabs button { white-space: nowrap; font-size: 11px; }
+  .topbar { top: .5rem; margin-top: .5rem; }
+  .topbar-inner { gap: .625rem; padding-left: .625rem; }
+  .bar-stop { display: none; }
+  .mobile-stop { display: inline-flex; }
+  .content { padding: 1.25rem var(--gutter) 6.5rem; }
+  .stats { gap: .5rem; }
+  .stat { padding: .75rem .875rem; }
   .grid.equal, .spec-grid, .glossary { grid-template-columns: minmax(0, 1fr); }
-  .panel-head, .panel-body { padding: 16px; }
-  .lead { padding-inline: 16px; }
-  .parts-toolbar { align-items: stretch; flex-direction: column; }
-  .parts-table td, .parts-table th { padding: 12px 10px; }
-  .parts-table th:last-child, .parts-table td:last-child { width: 80px; }
-  .parts-table td:first-child { width: 55px; font-size: 9px; }
-  .signal-flow { gap: 12px; justify-content: start; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .panel-head, .panel-body { padding-inline: .875rem; }
+  .lead { padding-inline: .875rem; }
+  .parts-toolbar { flex-direction: column; align-items: stretch; }
+  .parts-table td, .parts-table th { padding: .625rem .5rem; }
+  .parts-table td:first-child { width: 3.5rem; font-size: .9375rem; }
+  .signal-flow { justify-content: start; gap: .625rem; }
   .signal-flow > b { display: none; }
-  .signal-flow div { width: 100%; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
-  .signal-flow div:last-child { border-bottom: 0; padding-bottom: 0; }
-  .servo-board { padding: 15px; }
-  .servo-outputs { gap: 7px; }
-  .section-heading { align-items: start; }
-  .section-heading .pill { display: none; }
-  .section-heading h2 { font-size: 20px; }
-  .simulation-notice { flex-direction: column; gap: 3px; }
-  .command-row { grid-template-columns: minmax(0, 1fr); }
-  .terminal-form, .terminal-unlock { grid-template-columns: minmax(0, 1fr); }
-  .usb-grid { grid-template-columns: minmax(0, 1fr); }
-  .test-row { gap: 6px; }
+  .signal-flow div { width: 100%; padding-bottom: .625rem; border-bottom: 1px solid var(--line-soft); }
+  .signal-flow div:last-child { padding-bottom: 0; border-bottom: 0; }
+  .servo-board { padding: .875rem; }
+  .command-row, .terminal-form, .terminal-unlock { grid-template-columns: minmax(0, 1fr); }
+  .test-row { gap: .375rem; }
   .test-row strong { overflow-wrap: anywhere; }
-  .button.hold { min-width: 64px; padding-inline: 8px; }
-  .pin { gap: 4px; padding-inline: 4px; }
+  .button.hold { min-width: 4.5rem; padding-inline: .75rem; }
+  .pin { gap: .25rem; padding-inline: .25rem; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { transition: none !important; animation: none !important; }
+@media (max-width: 420px) {
+  .page-name { display: none; }
 }
 </style>
 </head>
 <body>
 <a class="skip-link" href="#mainContent">Skip to content</a>
-<div class="app">
 
-  <!-- =================================================================== -->
-  <!-- Left rail: the three pages, and the stop button that is always here -->
-  <!-- =================================================================== -->
-  <aside class="rail">
-    <div class="brand">
-      <div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7l6 10 6-10v10M21 7v10"/></svg></div>
-      <div>
-        <strong>MotionModule</strong>
-        <small>YOUR ROBOT WORKSPACE</small>
-      </div>
-    </div>
+<!-- ===================================================================== -->
+<!-- The bar: pages, display settings, and the stop button that is always  -->
+<!-- in reach                                                              -->
+<!-- ===================================================================== -->
+<header class="topbar" data-bar>
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7l6 10 6-10v10M21 7v10"/></svg></span>
+      <span class="brand-name">MotionModule</span>
+      {% if install_ref and install_ref != 'main' %}<span class="build-pill" title="Installed from the {{ install_ref }} branch. Expect unfinished work.">{{ install_ref }}</span>{% endif %}
+    </a>
+    <span class="page-name" id="pageName">Overview</span>
 
-    <div class="nav-label">WORKSPACE</div>
-    <nav aria-label="Main navigation">
-      <a href="/" data-page="overview">
-        <span class="nav-icon" aria-hidden="true">▦</span>Overview
-        <small>Status &amp; activity</small>
-      </a>
-      <a href="/diagnostics" data-page="diagnostics">
-        <span class="nav-icon" aria-hidden="true">⌘</span>Debug
-        <small>Understand your hardware</small>
-      </a>
-      <a href="/drive" data-page="drive">
-        <span class="nav-icon">&#9678;</span>Drive
-        <small>Keys, controller, tests</small>
-      </a>
-      <a href="/code" data-page="code">
-        <span class="nav-icon">{ }</span>Code
-        <small>Build &amp; control</small>
-      </a>
-    </nav>
-
-    <div class="rail-guide">
-      <span class="mini-icon" aria-hidden="true">?</span>
-      <strong>Building your first robot?</strong>
-      <p>Get to know the parts, then follow each connection.</p>
-      <a href="/diagnostics#parts">Open the hardware guide <span aria-hidden="true">↗</span></a>
-    </div>
-    <div class="rail-foot">
-      <button class="stop-button" data-stop type="button">■ &nbsp; STOP ALL OUTPUTS</button>
-      <p class="rail-note">Sends a stop command to motors and servos. Keep a physical power cutoff in reach.</p>
-    </div>
-  </aside>
-
-  <main class="main" id="mainContent">
-    <header class="topbar">
-      <div class="crumb">MotionModule / <strong id="pageName">Overview</strong></div>
-      <div class="topbar-tools">
+    <div class="nav-panel" id="navPanel">
+      <nav class="nav-links" aria-label="Main navigation">
+        <a href="/" data-page="overview">Overview<small>Status &amp; activity</small></a>
+        <a href="/diagnostics" data-page="diagnostics">Debug<small>Understand your hardware</small></a>
+        <a href="/drive" data-page="drive">Drive<small>Keys, controller, tests</small></a>
+        <a href="/code" data-page="code">Code<small>Build &amp; control</small></a>
+      </nav>
+      <div class="display-controls">
+        <span class="display-label">Theme</span>
         <div class="theme-switch" id="themeSwitch" role="group" aria-label="Colour theme">
           <button type="button" data-theme-choice="system" title="Match the browser setting" aria-label="Match the browser setting">
             <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor" stroke="none"></path></svg>
@@ -1275,666 +813,673 @@ kbd:empty { border: 0; background: transparent; }
             <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"></path></svg>
           </button>
         </div>
-        <div class="live">
-          <span class="dot" id="liveDot"></span>
-          <span id="liveText">Connecting&hellip;</span>
-        </div>
       </div>
-    </header>
+      <p class="nav-note">Stop sends a stop command to motors and servos. Keep a physical power cutoff in reach.</p>
+    </div>
 
-    <div class="content">
+    <div class="topbar-tools">
+      <div class="live">
+        <span class="dot" id="liveDot"></span>
+        <span id="liveText">Connecting&hellip;</span>
+      </div>
+      <button class="stop-button bar-stop" data-stop type="button" title="Sends a stop command to motors and servos. Keep a physical power cutoff in reach.">Stop<span class="stop-long">&nbsp;all outputs</span></button>
+      <button class="nav-toggle" type="button" data-nav-toggle aria-controls="navPanel" aria-expanded="false" aria-label="Menu"><span></span></button>
+    </div>
+  </div>
+</header>
 
-      <!-- =============================================================== -->
-      <!-- OVERVIEW                                                        -->
-      <!-- =============================================================== -->
-      <section class="view" data-view="overview">
-        <div class="hero">
-          <div>
-            <p class="eyebrow">CONTROL CENTER <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
-            <h1>System overview</h1>
-            <p>Live outputs, connections, and controller health without the noise.</p>
+<main class="main" id="mainContent">
+  <div class="content">
+
+    <!-- =============================================================== -->
+    <!-- OVERVIEW                                                        -->
+    <!-- =============================================================== -->
+    <section class="view" data-view="overview">
+      <div class="hero">
+        <div>
+          <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/></svg>Control center <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
+          <h1>System overview</h1>
+          <p>Live outputs, connections, and controller health without the noise.</p>
+        </div>
+        <div class="hero-side"><span class="pill good" id="safetyPill">OUTPUTS IDLE</span></div>
+      </div>
+
+      <div class="notice page-notice" id="simulationNotice" hidden><strong>Simulation mode.</strong> Explore the dashboard without moving hardware. Device responses below are simulated.</div>
+      <div class="notice danger page-notice" id="connectionNotice" role="alert" hidden><strong>Connection lost.</strong> Live values are unavailable. Controls are disabled until you reconnect and enable them again.</div>
+
+      <div class="stats">
+        <article class="card stat">
+          <div class="stat-label">Controller <span aria-hidden="true">◈</span></div>
+          <div class="stat-value" id="controllerState">Starting</div>
+          <div class="stat-note" id="controllerNote">Waiting for status</div>
+        </article>
+        <article class="card stat">
+          <div class="stat-label">Motor activity <span aria-hidden="true">↔</span></div>
+          <div class="stat-value" id="activeMotors">0 / 8</div>
+          <div class="stat-note">Watchdog stops stale commands</div>
+        </article>
+        <article class="card stat" id="servoStat">
+          <div class="stat-label">Servo boards <span aria-hidden="true">▤</span></div>
+          <div class="stat-value" id="servoBoards">&mdash;</div>
+          <div class="stat-note" id="servoNote">Checking I&sup2;C</div>
+        </article>
+        <article class="card stat">
+          <div class="stat-label">CPU temperature <span aria-hidden="true">◴</span></div>
+          <div class="stat-value" id="temperature">&mdash;</div>
+          <div class="stat-note">Raspberry Pi processor</div>
+        </article>
+        <article class="card stat">
+          <div class="stat-label">Uptime <span aria-hidden="true">◷</span></div>
+          <div class="stat-value" id="uptime">&mdash;</div>
+          <div class="stat-note" id="version">MotionModule</div>
+        </article>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <div class="panel-head">
+            <h2>Motor outputs</h2>
+            <span class="live-tag"><i aria-hidden="true"></i>Live commands</span>
           </div>
-          <span class="pill good" id="safetyPill">OUTPUTS IDLE</span>
-        </div>
+          <p class="lead">Eight outputs. Your names. Power is the command sent to each motor; physical movement is not measured.</p>
+          <div class="panel-body">
+            <div class="motor-grid" id="motorGrid"></div>
+          </div>
+        </article>
 
-        <div class="notice simulation-notice" id="simulationNotice" hidden><strong>Simulation mode</strong><span>Explore the dashboard without moving hardware. Device responses below are simulated.</span></div>
-        <div class="notice danger" id="connectionNotice" role="alert" hidden><strong>Connection lost.</strong> Live values are unavailable. Controls are disabled until you reconnect and enable them again.</div>
-        <div class="stats">
-          <article class="card stat">
-            <div class="stat-label">Controller <span aria-hidden="true">◈</span></div>
-            <div class="stat-value" id="controllerState">Starting</div>
-            <div class="stat-note" id="controllerNote">Waiting for status</div>
-          </article>
-          <article class="card stat">
-            <div class="stat-label">Motor activity <span aria-hidden="true">↔</span></div>
-            <div class="stat-value" id="activeMotors">0 / 8</div>
-            <div class="stat-note">Watchdog stops stale commands</div>
-          </article>
-          <article class="card stat" id="servoStat">
-            <div class="stat-label">Servo boards <span aria-hidden="true">▤</span></div>
-            <div class="stat-value" id="servoBoards">&mdash;</div>
-            <div class="stat-note" id="servoNote">Checking I&sup2;C</div>
-          </article>
-          <article class="card stat">
-            <div class="stat-label">CPU temperature <span aria-hidden="true">◴</span></div>
-            <div class="stat-value" id="temperature">&mdash;</div>
-            <div class="stat-note">Raspberry Pi processor</div>
-          </article>
-          <article class="card stat">
-            <div class="stat-label">Uptime <span aria-hidden="true">◷</span></div>
-            <div class="stat-value" id="uptime">&mdash;</div>
-            <div class="stat-note" id="version">MotionModule</div>
-          </article>
-        </div>
-
-        <div class="grid">
+        <div class="stack">
           <article class="card">
             <div class="panel-head">
-              <h2>Motor outputs</h2>
-              <span class="live-tag">● LIVE COMMANDS</span>
+              <h2>From first wire to first drive</h2>
+              <a class="hint" href="/diagnostics#parts">Hardware guide &nearr;</a>
             </div>
-            <p class="lead">Eight outputs. Your names. Power is the command sent to each motor; physical movement is not measured.</p>
             <div class="panel-body">
-              <div class="motor-grid" id="motorGrid"></div>
+              <div class="steps">
+                <div class="step">
+                  <i>1</i>
+                  <div>
+                    <strong>Check every wire</strong>
+                    <p>Open <a href="/diagnostics#wiring">Debug &rarr; Wiring</a> and
+                      compare the colored pin map to your robot, one pin at a
+                      time, with motor power switched off.</p>
+                  </div>
+                </div>
+                <div class="step">
+                  <i>2</i>
+                  <div>
+                    <strong>Test one motor</strong>
+                    <p>Raise the robot so no wheel touches the ground, then
+                      use <a href="/diagnostics#tests">Debug &rarr; Tests</a> to hold
+                      one motor at low power and watch which way it turns.</p>
+                  </div>
+                </div>
+                <div class="step">
+                  <i>3</i>
+                  <div>
+                    <strong>Send your code</strong>
+                    <p>Write a <code>robot.py</code> on your computer and send
+                      it from <a href="/code#deploy">Code &rarr; Deploy</a>. Start from
+                      the sample if this is your first robot.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
+              <h2>Servo activity</h2>
+              <span id="overviewServoSummary">Checking I&sup2;C</span>
+            </div>
+            <div class="panel-body">
+              <div class="health" id="servoActivity"></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
+              <h2>System health</h2>
+              <span class="live-tag"><i aria-hidden="true"></i>Live</span>
+            </div>
+            <div class="panel-body">
+              <div class="health" id="healthList"></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
+              <h2>Connection</h2>
+              <a class="hint" href="/network">Change in Debug &rarr; Network</a>
+            </div>
+            <div class="panel-body">
+              <div class="kv-grid" id="overviewNetwork">
+                <div class="kv"><small>Network</small><strong>Loading&hellip;</strong></div>
+                <div class="kv"><small>Open dashboard</small><strong>&mdash;</strong></div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============================================================== -->
+    <!-- DEBUG                                                           -->
+    <!-- =============================================================== -->
+    <section class="view" data-view="diagnostics" hidden>
+      <div class="hero">
+        <div>
+          <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>Hardware workbench</p>
+          <h1>Hardware diagnostics</h1>
+          <p>Every part, every connection, and the tools to make it work.</p>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="wiring" class="active">Wiring guide</button>
+        <button type="button" data-tab="parts">Parts list</button>
+        <button type="button" data-tab="tests">Test outputs</button>
+        <button type="button" data-tab="checks">Checks &amp; logs</button>
+        <button type="button" data-tab="network">Network</button>
+      </div>
+
+      <!-- ---------------------------------------------------- wiring -->
+      <div data-panel="wiring">
+        <div class="notice danger page-notice">
+          <strong>Before you connect anything:</strong> never run the 12&nbsp;V
+          battery rail or the servo V+ rail into a Raspberry Pi header pin. Keep
+          the power rails fused and separate, join every supply negative at one
+          common ground, and keep a physical cutoff in reach. Leave motor power
+          switched off through boot until you have watched the outputs stay still.
+        </div>
+
+        <div class="section-heading"><div><p class="eyebrow">01 / Controller &amp; motor drivers</p><h2>Follow the signal.</h2><p>Choose any header pin to see its full connection. Pin numbers are physical positions; GPIO numbers are the names used by Python.</p></div><span class="pill">40 HEADER PINS</span></div>
+        <div class="pin-layout">
+          <article class="card pi-board">
+            <div class="pi-label">Raspberry Pi · physical header positions</div>
+            <p class="small muted pin-help">Find the board’s pin 1 marker before wiring. Select a pin for details.</p><div class="header-grid" id="headerGrid"></div>
+            <div class="legend">
+              <span><i style="background:var(--motor)"></i>Motor signal</span>
+              <span><i style="background:var(--servo)"></i>Servo-board logic</span>
+              <span><i style="background:var(--ground)"></i>Ground</span>
+              <span><i style="background:var(--power)"></i>Pi power</span>
+              <span><i style="background:var(--reserved)"></i>Reserved · inspect why</span>
             </div>
           </article>
 
           <div class="stack">
+            <article class="card pin-inspector" aria-live="polite"><div class="panel-body"><span class="eyebrow" id="pinInspectorLabel">SELECTED CONNECTION</span><h2 id="pinInspectorTitle">Physical pin 1 · 3.3 V</h2><p id="pinInspectorRole">PCA9685 logic supply</p><p class="muted small" id="pinInspectorDetail">Select a pin in the diagram to see where it goes and what it does.</p></div></article>
             <article class="card">
               <div class="panel-head">
-                <h2>From first wire to first drive</h2>
-                <span>GETTING STARTED</span>
+                <h2>Four dual H-bridge drivers</h2>
+                <span>Configured &middot; physical connection unverified</span>
               </div>
+              <p class="lead">Each board controls two motors. IN1 and IN2 control direction and power. Driver 1 holds motor channels 1 and 2, driver 2 holds 3 and 4, and so on, with each driver&rsquo;s four signal pins and its ground sitting together on the header.</p>
               <div class="panel-body">
-                <div class="steps">
-                  <div class="step">
-                    <i>1</i>
-                    <div>
-                      <strong>Check every wire</strong>
-                      <p>Open <a href="/diagnostics#wiring">Debug &rarr; Wiring</a> and
-                        compare the colored pin map to your robot, one pin at a
-                        time, with motor power switched off.</p>
-                    </div>
-                  </div>
-                  <div class="step">
-                    <i>2</i>
-                    <div>
-                      <strong>Test one motor</strong>
-                      <p>Raise the robot so no wheel touches the ground, then
-                        use <a href="/diagnostics#tests">Debug &rarr; Tests</a> to hold
-                        one motor at low power and watch which way it turns.</p>
-                    </div>
-                  </div>
-                  <div class="step">
-                    <i>3</i>
-                    <div>
-                      <strong>Send your code</strong>
-                      <p>Write a <code>robot.py</code> on your computer and send
-                        it from <a href="/code#deploy">Code &rarr; Deploy</a>. Start from
-                        the sample if this is your first robot.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="panel-head">
-                <h2>Servo activity</h2>
-                <span id="overviewServoSummary">Checking I&sup2;C</span>
-              </div>
-              <div class="panel-body">
-                <div class="health" id="servoActivity"></div>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="panel-head">
-                <h2>System health</h2>
-                <span>Live</span>
-              </div>
-              <div class="panel-body">
-                <div class="health" id="healthList"></div>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="panel-head">
-                <h2>Connection</h2>
-                <a class="hint" href="/network">Change in Debug &rarr; Network</a>
-              </div>
-              <div class="panel-body">
-                <div class="kv-grid" id="overviewNetwork">
-                  <div class="kv"><small>Network</small><strong>Loading&hellip;</strong></div>
-                  <div class="kv"><small>Open dashboard</small><strong>&mdash;</strong></div>
-                </div>
+                <div class="driver-grid" id="driverGrid"></div>
               </div>
             </article>
           </div>
         </div>
-      </section>
 
-      <!-- =============================================================== -->
-      <!-- DEBUG                                                           -->
-      <!-- =============================================================== -->
-      <section class="view" data-view="diagnostics" hidden>
-        <div class="hero">
-          <div>
-            <p class="eyebrow">HARDWARE WORKBENCH</p>
-            <h1>Hardware diagnostics</h1>
-            <p>Every part, every connection, and the tools to make it work.</p>
-          </div>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">02 / Servo controller</p><h2>Five wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C and holds its output-enable pin. All five wires sit in one run on header pins 1–9, leaving pins 8 and 10 free for the serial console. Each servo plugs into a separate three-pin output on the board.</p></div></div>
+        <article class="card"><div class="panel-head"><h2>PCA9685 servo bus</h2><span id="servoSummary">Loading…</span></div><div class="panel-body stack">
+          <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>3.3 V · SDA · SCL · OE · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
+          <p class="notice danger" id="servoBusNotice" hidden></p>
+          <div id="servoBoardGuide" class="stack"></div>
+          <div class="grid equal"><div><h3 class="subheading">Pi → servo-board logic</h3><div id="logicConnections" class="connection-list"></div></div><div><h3 class="subheading">Power &amp; other board terminals</h3><div id="servoConnections" class="connection-list"></div></div></div>
+          <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors are not implemented.</div>
+          <div class="wire" id="servoDetection"></div>
+        </div></article>
 
-        <div class="tabs" role="tablist">
-          <button type="button" data-tab="wiring" class="active">Wiring guide</button>
-          <button type="button" data-tab="parts">Parts list</button>
-          <button type="button" data-tab="tests">Test outputs</button>
-          <button type="button" data-tab="checks">Checks &amp; logs</button>
-          <button type="button" data-tab="network">Network</button>
-        </div>
+        <div class="section-heading"><div><p class="eyebrow">03 / Power</p><h2>Give each rail the right supply.</h2></div></div>
+        <div class="stack"><article class="card"><div class="panel-head"><h2>Power connections</h2><span>Separate rails · common ground</span></div><div class="panel-body stack" id="powerDomains"></div></article></div>
 
-        <!-- ---------------------------------------------------- wiring -->
-        <div data-panel="wiring">
-          <div class="notice danger" style="margin-bottom:16px">
-            <strong>Before you connect anything:</strong> never run the 12&nbsp;V
-            battery rail or the servo V+ rail into a Raspberry Pi header pin. Keep
-            the power rails fused and separate, join every supply negative at one
-            common ground, and keep a physical cutoff in reach. Leave motor power
-            switched off through boot until you have watched the outputs stay still.
-          </div>
-
-          <div class="section-heading"><div><p class="eyebrow">01 / CONTROLLER &amp; MOTOR DRIVERS</p><h2>Follow the signal.</h2><p>Choose any header pin to see its full connection. Pin numbers are physical positions; GPIO numbers are the names used by Python.</p></div><span class="pill">40 HEADER PINS</span></div>
-          <div class="pin-layout">
-            <article class="card pi-board">
-              <div class="pi-label">RASPBERRY PI · PHYSICAL HEADER POSITIONS</div>
-              <p class="small muted pin-help">Find the board’s pin 1 marker before wiring. Select a pin for details.</p><div class="header-grid" id="headerGrid"></div>
-              <div class="legend">
-                <span><i style="background:var(--motor)"></i>Motor signal</span>
-                <span><i style="background:var(--servo)"></i>Servo-board logic</span>
-                <span><i style="background:var(--ground)"></i>Ground</span>
-                <span><i style="background:var(--power)"></i>Pi power</span>
-                <span><i style="background:var(--reserved)"></i>Reserved · inspect why</span>
-              </div>
-            </article>
-
-            <div class="stack">
-              <article class="card pin-inspector" aria-live="polite"><div class="panel-body"><span class="eyebrow" id="pinInspectorLabel">SELECTED CONNECTION</span><h2 id="pinInspectorTitle">Physical pin 1 · 3.3 V</h2><p id="pinInspectorRole">PCA9685 logic supply</p><p class="muted small" id="pinInspectorDetail">Select a pin in the diagram to see where it goes and what it does.</p></div></article>
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Four dual H-bridge drivers</h2>
-                  <span>Configured &middot; physical connection unverified</span>
-                </div>
-                <p class="lead">Each board controls two motors. IN1 and IN2 control direction and power. Driver 1 holds motor channels 1 and 2, driver 2 holds 3 and 4, and so on, with each driver&rsquo;s four signal pins and its ground sitting together on the header.</p>
-                <div class="panel-body">
-                  <div class="driver-grid" id="driverGrid"></div>
-                </div>
-              </article>
-
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>Names you can use in code</h2>
+            <div class="button-row">
+              <span class="hint" id="hardwareFileState">Loading&hellip;</span>
+              <a class="button" id="hardwareFileLink" href="/api/hardware-file" download>Download hardware.py</a>
             </div>
           </div>
+          <p class="lead">One installed <code>hardware.py</code> gives every output a name. Use these names in <code>robot.py</code>, or copy the file into your project to customize them.</p>
+          <div class="panel-body">
+            <div class="grid equal">
+              <div class="table-scroll">
+                <table class="name-table">
+                  <thead>
+                    <tr><th>Motor name</th><th>Channel</th><th>Driver</th><th>Pins (BCM)</th></tr>
+                  </thead>
+                  <tbody id="motorNameRows"></tbody>
+                </table>
+              </div>
+              <div class="table-scroll">
+                <table class="name-table">
+                  <thead>
+                    <tr><th>Servo name</th><th>Board</th><th>Channel</th></tr>
+                  </thead>
+                  <tbody id="servoNameRows"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="snippet spaced">
+              <button class="button copy" type="button" data-copy="#namesSnippet">Copy</button>
+              <pre id="namesSnippet">Loading&hellip;</pre>
+            </div>
+          </div>
+        </article>
+      </div>
 
-          <div class="section-heading spaced"><div><p class="eyebrow">02 / SERVO CONTROLLER</p><h2>Five wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C and holds its output-enable pin. All five wires sit in one run on header pins 1–9, leaving pins 8 and 10 free for the serial console. Each servo plugs into a separate three-pin output on the board.</p></div></div>
-          <article class="card"><div class="panel-head"><h2>PCA9685 servo bus</h2><span id="servoSummary">Loading…</span></div><div class="panel-body stack">
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>3.3 V · SDA · SCL · OE · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
-            <p class="notice danger" id="servoBusNotice" hidden></p>
-            <div id="servoBoardGuide" class="stack"></div>
-            <div class="grid equal"><div><h3 class="subheading">Pi → servo-board logic</h3><div id="logicConnections" class="connection-list"></div></div><div><h3 class="subheading">Power &amp; other board terminals</h3><div id="servoConnections" class="connection-list"></div></div></div>
-            <div class="notice"><strong>Board detection only.</strong> An I²C response confirms the controller chip responds. It does not detect a plugged-in servo or measure its position. Sensors are not implemented.</div>
-            <div class="wire" id="servoDetection"></div>
-          </div></article>
-          <div class="section-heading spaced"><div><p class="eyebrow">03 / POWER</p><h2>Give each rail the right supply.</h2></div></div>
-          <div class="stack"><article class="card"><div class="panel-head"><h2>Power connections</h2><span>Separate rails · common ground</span></div><div class="panel-body stack" id="powerDomains"></div></article></div>
+      <!-- ----------------------------------------------------- parts -->
+      <div data-panel="parts" hidden>
+        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>The parts behind your robot.</h2><p>The repository’s bill of materials, available here without leaving the dashboard. Reference parts are not a live inventory.</p></div><span class="pill">8 MOTORS · 16 SERVOS</span></div>
+        <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects &rarr;</a></div>
+        <div id="partsGroups" class="stack"></div>
+        <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
+        <article class="card spaced"><div class="panel-head"><h2>Build details still needed</h2><span>Not specified in BOM.md</span></div><div class="panel-body"><p class="muted small">The driver boards are identified. These remaining selections depend on your actual robot.</p><div id="missingSpecs" class="spec-grid spaced"></div></div></article>
+        <article class="card spaced"><div class="panel-head"><h2>A little robotics vocabulary</h2><span>Plain-language reference</span></div><div id="hardwareGlossary" class="panel-body glossary"></div></article>
+      </div>
 
-          <article class="card spaced">
+      <!-- ----------------------------------------------------- tests -->
+      <div data-panel="tests" hidden>
+        <div class="notice danger page-notice">
+          <strong>Raise the robot first.</strong> Both tools below move real
+          hardware. Every wheel must be off the ground, the mechanism path must
+          be clear, and the physical cutoff must be within reach.
+        </div>
+
+        <div class="grid equal">
+          <article class="card">
             <div class="panel-head">
-              <h2>Names you can use in code</h2>
-              <div class="button-row">
-                <span class="hint" id="hardwareFileState">Loading&hellip;</span>
-                <a class="button" id="hardwareFileLink" href="/api/hardware-file" download>Download hardware.py</a>
-              </div>
+              <h2>Motor bench test</h2>
+              <span>Hold to run &middot; max 20% power</span>
             </div>
-            <p class="lead">One installed <code>hardware.py</code> gives every output a name. Use these names in <code>robot.py</code>, or copy the file into your project to customize them.</p>
+            <p class="lead">Press and hold to run one motor at 20% for as long
+              as you hold it. This talks straight to the driver pins on the
+              installed hardware map, so deployed robot code cannot change or
+              disable it. Watch which way the wheel turns, then write it down.</p>
             <div class="panel-body">
-              <div class="grid equal">
-                <div class="table-scroll">
-                  <table class="name-table">
-                    <thead>
-                      <tr><th>Motor name</th><th>Channel</th><th>Driver</th><th>Pins (BCM)</th></tr>
-                    </thead>
-                    <tbody id="motorNameRows"></tbody>
-                  </table>
-                </div>
-                <div class="table-scroll">
-                  <table class="name-table">
-                    <thead>
-                      <tr><th>Servo name</th><th>Board</th><th>Channel</th></tr>
-                    </thead>
-                    <tbody id="servoNameRows"></tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="snippet spaced">
-                <button class="copy" type="button" data-copy="#namesSnippet">Copy</button>
-                <pre id="namesSnippet">Loading&hellip;</pre>
-              </div>
+              <label class="check">
+                <input id="motorSafe" type="checkbox">
+                <span>The chassis is stable, every wheel is off the ground, the
+                  area is clear, and the physical cutoff is in reach.</span>
+              </label>
+              <div id="motorTests" class="spaced"></div>
             </div>
           </article>
 
-          
+          <article class="card">
+            <div class="panel-head">
+              <h2>Servo pulse test</h2>
+              <span>Releases by itself after 1.5 s</span>
+            </div>
+            <p class="lead">Pick the servo by name, choose the kind of servo it
+              is, then send one position.</p>
+            <div class="panel-body stack">
+              <p class="notice warn" id="servoTestMissing" hidden>Checking for a servo board&hellip;</p>
+              <div class="test-row" id="servoOutputEnable" hidden>
+                <span>
+                  <strong>Servo outputs</strong>
+                  <small id="servoOutputEnableDetail">Checking the OE pin&hellip;</small>
+                </span>
+                <span id="servoOutputEnableState"></span>
+                <button class="button" id="servoOutputEnableToggle" type="button">Disable</button>
+              </div>
+              <div id="servoTestControls" class="stack">
+              <label class="check">
+                <input id="servoSafe" type="checkbox">
+                <span>Servo voltage and the selected profile are correct, the
+                  mechanism can move through the commanded range, and nobody is
+                  in its path.</span>
+              </label>
+              <div class="fields">
+                <label class="field">Board
+                  <select id="servoBoard"></select>
+                </label>
+                <label class="field">Servo
+                  <select id="servoChannel" aria-label="Servo channel"></select>
+                </label>
+                <label class="field full">What kind of servo is it?
+                  <select id="servoProfile" aria-label="Servo behavior"></select>
+                </label>
+                <label class="field full">
+                  <span id="servoValueName">Target angle</span>
+                  <output id="servoValueLabel">150&deg;</output>
+                  <input id="servoValue" type="range" min="0" max="300" step="1" value="150">
+                </label>
+              </div>
+              <div class="notice" id="servoProfileHelp">Choose the exact servo
+                behavior before sending a pulse.</div>
+              <div class="button-row">
+                <button class="button primary" id="servoSet" type="button">Send this position</button>
+                <button class="button" id="servoZero" type="button">Zero servo</button>
+                <button class="button" id="servoRelease" type="button">Release now</button>
+              </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------- checks -->
+      <div data-panel="checks" hidden>
+        <div class="grid equal">
+          <article class="card">
+            <div class="panel-head">
+              <h2>MotionModule Doctor</h2>
+              <div class="button-row">
+                <span class="hint" id="doctorSummary">Loading&hellip;</span>
+                <button class="button" id="refreshDoctor" type="button">Run checks</button>
+              </div>
+            </div>
+            <p class="lead">These checks never intentionally move a motor or
+              servo. Run them again after changing wiring or code.</p>
+            <div class="panel-body check-list" id="doctorChecks"></div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
+              <h2>Service log</h2>
+              <button class="button" id="refreshLogs" type="button">Refresh</button>
+            </div>
+            <p class="lead">If your robot code failed to start, the Python error
+              is in here.</p>
+            <pre class="logs" id="serviceLogs">Loading service log&hellip;</pre>
+          </article>
         </div>
 
-        <div data-panel="parts" hidden>
-          <div class="section-heading"><div><p class="eyebrow">REFERENCE BUILD</p><h2>The parts behind your robot.</h2><p>The repository’s bill of materials, available here without leaving the dashboard. Reference parts are not a live inventory.</p></div><span class="pill">8 MOTORS · 16 SERVOS</span></div>
-          <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects →</a></div>
-          <div id="partsGroups" class="stack"></div>
-          <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
-          <article class="card spaced"><div class="panel-head"><h2>Build details still needed</h2><span>Not specified in BOM.md</span></div><div class="panel-body"><p class="muted small">The driver boards are identified. These remaining selections depend on your actual robot.</p><div id="missingSpecs" class="spec-grid spaced"></div></div></article>
-          <article class="card spaced"><div class="panel-head"><h2>A little robotics vocabulary</h2><span>Plain-language reference</span></div><div id="hardwareGlossary" class="panel-body glossary"></div></article>
-        </div>
-
-        <!-- ----------------------------------------------------- tests -->
-        <div data-panel="tests" hidden>
-          <div class="notice danger" style="margin-bottom:16px">
-            <strong>Raise the robot first.</strong> Both tools below move real
-            hardware. Every wheel must be off the ground, the mechanism path must
-            be clear, and the physical cutoff must be within reach.
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>Useful commands</h2>
+            <span>Run from the web terminal or an admin SSH session</span>
           </div>
+          <div class="panel-body command-list">
+            <div class="command-row">
+              <code>motionmodule doctor</code>
+              <p>Checks the runtime, GPIO setup, I&sup2;C servo boards, and services without intentionally moving hardware.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule pinout</code>
+              <p>Prints every motor name with its physical pin and GPIO wiring in the terminal.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule restart</code>
+              <p>Stops outputs, reloads the active robot project, and starts it again.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule logs</code>
+              <p>Follows the live service log so Python errors and startup messages are visible.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule project list</code>
+              <p>Lists every robot project on the Pi; the active project has an asterisk.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule project NAME</code>
+              <p>Activates another project folder and restarts MotionModule with that code.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule versions</code>
+              <p>Lists installed MotionModule runtime versions without changing your robot code.</p>
+            </div>
+            <div class="command-row">
+              <code>motionmodule rollback</code>
+              <p>Returns to the previous runtime release while preserving every robot project.</p>
+            </div>
+          </div>
+        </article>
 
-          <div class="grid equal">
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>Connected USB devices</h2>
+            <div class="button-row">
+              <span class="hint" id="usbSummary">Scanning&hellip;</span>
+              <button class="button" id="refreshUsb" type="button">Refresh USB</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="usb-grid" id="usbDevices">
+              <p class="muted">Reading the Pi USB bus&hellip;</p>
+            </div>
+            <p class="muted small spaced">USB devices identify
+              themselves, so MotionModule can list what is plugged in, its USB
+              ID, driver, port, and access. Basic GPIO motor drivers send
+              nothing back to the Pi and stay marked configured but unverified.</p>
+          </div>
+        </article>
+      </div>
+
+      <!-- --------------------------------------------------- network -->
+      <div data-panel="network" hidden>
+        <div class="grid equal">
+          <div class="stack">
             <article class="card">
               <div class="panel-head">
-                <h2>Motor bench test</h2>
-                <span>Hold to run &middot; max 20% power</span>
+                <h2>Current connection</h2>
+                <div class="button-row">
+                  <span class="pill" id="networkMode">Loading&hellip;</span>
+                  <button class="button" id="networkRefresh" type="button">Refresh</button>
+                </div>
               </div>
-              <p class="lead">Press and hold to run one motor at 20% for as long
-                as you hold it. This talks straight to the driver pins on the
-                installed hardware map, so deployed robot code cannot change or
-                disable it. Watch which way the wheel turns, then write it down.</p>
-              <div class="panel-body">
-                <label class="check">
-                  <input id="motorSafe" type="checkbox">
-                  <span>The chassis is stable, every wheel is off the ground, the
-                    area is clear, and the physical cutoff is in reach.</span>
-                </label>
-                <div id="motorTests" style="margin-top:14px"></div>
+              <div class="panel-body stack">
+                <div class="kv-grid" id="networkSummary"></div>
+                <p class="message" id="networkMessage"></p>
+                <div class="button-row">
+                  <button class="button primary" id="preferredButton" type="button">Reconnect preferred Wi&#8209;Fi</button>
+                </div>
               </div>
             </article>
 
             <article class="card">
               <div class="panel-head">
-                <h2>Servo pulse test</h2>
-                <span>Releases by itself after 1.5 s</span>
+                <h2>Robot name</h2>
+                <span>Used by the browser address</span>
               </div>
-              <p class="lead">Pick the servo by name, choose the kind of servo it
-                is, then send one position.</p>
-              <div class="panel-body stack">
-                <p class="notice warn" id="servoTestMissing" hidden>Checking for a servo board&hellip;</p>
-                <div class="test-row" id="servoOutputEnable" hidden>
-                  <span>
-                    <strong>Servo outputs</strong>
-                    <small id="servoOutputEnableDetail">Checking the OE pin&hellip;</small>
-                  </span>
-                  <span id="servoOutputEnableState"></span>
-                  <button class="button" id="servoOutputEnableToggle" type="button">Disable</button>
+              <form class="panel-body stack" id="hostnameForm">
+                <div class="notice">
+                  <strong>The hostname is this robot's network name.</strong>
+                  Open <code>http://hostname.local</code> in a browser. If a
+                  school network blocks <strong>.local</strong> discovery, use
+                  the IP address shown above.
                 </div>
-                <div id="servoTestControls" class="stack">
-                <label class="check">
-                  <input id="servoSafe" type="checkbox">
-                  <span>Servo voltage and the selected profile are correct, the
-                    mechanism can move through the commanded range, and nobody is
-                    in its path.</span>
+                <label class="field">New hostname
+                  <input id="hostnameInput" maxlength="69" placeholder="motionmodule" autocomplete="off" required>
                 </label>
+                <div class="button-row"><button class="button primary" type="submit">Change hostname</button></div>
+                <p class="muted small">Letters, numbers, and hyphens only &mdash;
+                  no spaces and no <strong>.local</strong>. The default is
+                  <strong>motionmodule</strong>; a changed name survives reboot.</p>
+              </form>
+            </article>
+
+            <article class="card">
+              <div class="panel-head">
+                <h2>Nearby Wi&#8209;Fi</h2>
+                <button class="button" id="scanButton" type="button">Scan</button>
+              </div>
+              <div class="panel-body networks" id="networkList">
+                <p class="muted">Press Scan to look for networks.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="stack">
+            <article class="card">
+              <div class="panel-head">
+                <h2>Connect to Wi&#8209;Fi</h2>
+                <span>Saved as preferred</span>
+              </div>
+              <form class="panel-body stack" id="connectForm">
                 <div class="fields">
-                  <label class="field">Board
-                    <select id="servoBoard"></select>
+                  <label class="field full">Network name (SSID)
+                    <input id="wifiSsid" maxlength="32" required>
                   </label>
-                  <label class="field">Servo
-                    <select id="servoChannel" aria-label="Servo channel"></select>
+                  <label class="field full">Security
+                    <select id="wifiSecurity">
+                      <option value="personal">WPA/WPA2 personal</option>
+                      <option value="open">Open network</option>
+                      <option value="enterprise">WPA2 enterprise (PEAP)</option>
+                    </select>
                   </label>
-                  <label class="field full">What kind of servo is it?
-                    <select id="servoProfile" aria-label="Servo behavior"></select>
+                  <label class="field full" data-personal>Wi&#8209;Fi password
+                    <input id="wifiPassword" type="password" autocomplete="new-password">
                   </label>
-                  <label class="field full">
-                    <span id="servoValueName">Target angle</span>
-                    <output id="servoValueLabel">150&deg;</output>
-                    <input id="servoValue" type="range" min="0" max="300" step="1" value="150">
+                  <label class="field full" data-enterprise hidden>Username
+                    <input id="wifiUsername" autocomplete="username">
+                  </label>
+                  <label class="field full" data-enterprise hidden>Authentication domain
+                    <input id="wifiDomain" placeholder="example.edu">
                   </label>
                 </div>
-                <div class="notice" id="servoProfileHelp">Choose the exact servo
-                  behavior before sending a pulse.</div>
-                <div class="button-row">
-                  <button class="button primary" id="servoSet" type="button">Send this position</button>
-                  <button class="button" id="servoZero" type="button">Zero servo</button>
-                  <button class="button" id="servoRelease" type="button">Release now</button>
-                </div>
-                </div>
+                <div class="button-row"><button class="button primary" type="submit">Connect and save</button></div>
+                <p class="muted small">The dashboard disconnects briefly while
+                  the Pi changes networks. Rejoin the chosen Wi&#8209;Fi and open
+                  the displayed .local address or IP.</p>
+              </form>
+            </article>
+
+            <article class="card">
+              <div class="panel-head">
+                <h2>Robot hotspot</h2>
+                <span>Manual, for this boot only</span>
               </div>
+              <form class="panel-body stack" id="hotspotForm">
+                <div class="fields">
+                  <label class="field">Hotspot name
+                    <input id="hotspotSsid" maxlength="32" value="MotionModule" required>
+                  </label>
+                  <label class="field">New password (optional)
+                    <input id="hotspotPassword" type="password" minlength="8" maxlength="63" placeholder="Keep saved password">
+                  </label>
+                </div>
+                <div class="button-row"><button class="button danger" type="submit">Switch to robot hotspot</button></div>
+                <p class="muted small">Motor output stops before the switch. Join
+                  the hotspot, then open <strong>http://10.42.0.1</strong>. The
+                  next boot tries preferred Wi&#8209;Fi first again.</p>
+              </form>
             </article>
           </div>
         </div>
+      </div>
+    </section>
 
-        <!-- ---------------------------------------------------- checks -->
-        <div data-panel="checks" hidden>
-          
 
-          <div class="grid equal">
-            <article class="card">
-              <div class="panel-head">
-                <h2>MotionModule Doctor</h2>
-                <div class="button-row">
-                  <span id="doctorSummary">Loading&hellip;</span>
-                  <button class="button" id="refreshDoctor" type="button">Run checks</button>
-                </div>
-              </div>
-              <p class="lead">These checks never intentionally move a motor or
-                servo. Run them again after changing wiring or code.</p>
-              <div class="panel-body check-list" id="doctorChecks"></div>
-            </article>
+    <!-- =============================================================== -->
+    <!-- DRIVE                                                           -->
+    <!-- =============================================================== -->
+    <section class="view" data-view="drive" hidden>
+      <div class="hero">
+        <div>
+          <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5h11a4 4 0 0 1 3.9 4.9l-.8 3.6a2 2 0 0 1-3.4.9L14.8 15.5H9.2l-2.4 2.4a2 2 0 0 1-3.4-.9l-.8-3.6a4 4 0 0 1 3.9-4.9z"/><path d="M8.5 11v3M7 12.5h3"/></svg>Driver station</p>
+          <h1>Drive it.</h1>
+          <p>Keyboard or game controller, straight to the robot code you
+            deployed. Every control here stops the moment you let go, leave the
+            page, or lose connection.</p>
+        </div>
+        <div class="hero-side">
+          <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
+          <a class="button primary" id="openDriverStation" href="/driver-station">Open full Driver Station&nbsp;&nearr;</a>
+        </div>
+      </div>
 
-            <article class="card">
-              <div class="panel-head">
-                <h2>Service log</h2>
-                <button class="button" id="refreshLogs" type="button">Refresh</button>
-              </div>
-              <p class="lead">If your robot code failed to start, the Python error
-                is in here.</p>
-              <pre class="logs" id="serviceLogs">Loading service log&hellip;</pre>
-            </article>
-          </div>
+      <div class="driver-status">
+        <div class="driver-signal" id="driveSignalLink"><i></i>
+          <div><small>Connection</small><strong>Checking</strong></div></div>
+        <div class="driver-signal" id="driveSignalInput"><i></i>
+          <div><small>Input</small><strong>None</strong></div></div>
+        <div class="driver-signal" id="driveSignalArmed"><i></i>
+          <div><small>Control</small><strong>Disarmed</strong></div></div>
+        <div class="driver-signal good" id="driveSignalOutputs"><i></i>
+          <div><small>Outputs</small><strong>Idle</strong></div></div>
+      </div>
 
-          <article class="card spaced">
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="pilot" class="active">Pilot</button>
+        <button type="button" data-tab="bindings">Controls</button>
+      </div>
+
+      <!-- ----------------------------------------------------- pilot -->
+      <div data-panel="pilot">
+        <div class="notice danger page-notice">
+          <strong>Clear the area first.</strong> This moves the real robot
+          through your own <code>drive()</code> code. Keep a hand on the
+          physical cutoff.
+        </div>
+
+        <div class="grid equal">
+          <article class="card">
             <div class="panel-head">
-              <h2>Useful commands</h2>
-              <span>Run from the web terminal or an admin SSH session</span>
+              <h2>Arm control</h2>
+              <span>Hold-to-move · releases stop</span>
             </div>
-            <div class="panel-body command-list">
-              <div class="command-row">
-                <code>motionmodule doctor</code>
-                <p>Checks the runtime, GPIO setup, I&sup2;C servo boards, and services without intentionally moving hardware.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule pinout</code>
-                <p>Prints every motor name with its physical pin and GPIO wiring in the terminal.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule restart</code>
-                <p>Stops outputs, reloads the active robot project, and starts it again.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule logs</code>
-                <p>Follows the live service log so Python errors and startup messages are visible.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule project list</code>
-                <p>Lists every robot project on the Pi; the active project has an asterisk.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule project NAME</code>
-                <p>Activates another project folder and restarts MotionModule with that code.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule versions</code>
-                <p>Lists installed MotionModule runtime versions without changing your robot code.</p>
-              </div>
-              <div class="command-row">
-                <code>motionmodule rollback</code>
-                <p>Returns to the previous runtime release while preserving every robot project.</p>
-              </div>
+            <div class="panel-body stack">
+              <label class="check">
+                <input id="driveEnable" type="checkbox">
+                <span>I am deliberately enabling drive, the area is clear, and
+                  the physical cutoff is in reach.</span>
+              </label>
+              <label class="speed">Maximum speed <output id="speedLabel">40%</output>
+                <input id="speed" type="range" min="10" max="100" step="5" value="40">
+              </label>
+              <div class="keys" id="driveKeys"></div>
+              <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
             </div>
           </article>
-        
-          <article class="card spaced">
+
+          <article class="card">
             <div class="panel-head">
-              <h2>Connected USB devices</h2>
-              <div class="button-row">
-                <span id="usbSummary">Scanning&hellip;</span>
-                <button class="button" id="refreshUsb" type="button">Refresh USB</button>
-              </div>
+              <h2>Game controller</h2>
+              <span id="padSummary">No controller detected</span>
             </div>
-            <div class="panel-body">
-              <div class="usb-grid" id="usbDevices">
-                <p class="muted">Reading the Pi USB bus&hellip;</p>
+            <p class="lead">Plug in or pair any gamepad, then press a button on
+              it so the browser can see it. Left stick drives and strafes;
+              right stick turns.</p>
+            <div class="panel-body stack">
+              <div class="kv-grid" id="padIdentity">
+                <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
               </div>
-              <p class="muted small" style="margin-top:12px">USB devices identify
-                themselves, so MotionModule can list what is plugged in, its USB
-                ID, driver, port, and access. Basic GPIO motor drivers send
-                nothing back to the Pi and stay marked configured but unverified.</p>
+              <div id="padAxes" class="stack"></div>
+              <p class="muted small">Detected from the browser's gamepad list.
+                A controller reporting the standard layout is mapped
+                automatically; anything else still shows its raw sticks so you
+                can check it is alive.</p>
             </div>
-          </article>
-        </div>
-
-        <!-- --------------------------------------------------- network -->
-        <div data-panel="network" hidden>
-          <div class="grid equal">
-            <div class="stack">
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Current connection</h2>
-                  <div class="button-row">
-                    <span id="networkMode">Loading&hellip;</span>
-                    <button class="button" id="networkRefresh" type="button">Refresh</button>
-                  </div>
-                </div>
-                <div class="panel-body stack">
-                  <div class="kv-grid" id="networkSummary"></div>
-                  <p class="message" id="networkMessage"></p>
-                  <div class="button-row">
-                    <button class="button primary" id="preferredButton" type="button">Reconnect preferred Wi&#8209;Fi</button>
-                  </div>
-                </div>
-              </article>
-
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Robot name</h2>
-                  <span>Used by the browser address</span>
-                </div>
-                <form class="panel-body stack" id="hostnameForm">
-                  <div class="notice">
-                    <strong>The hostname is this robot's network name.</strong>
-                    Open <code>http://hostname.local</code> in a browser. If a
-                    school network blocks <strong>.local</strong> discovery, use
-                    the IP address shown above.
-                  </div>
-                  <label class="field">New hostname
-                    <input id="hostnameInput" maxlength="69" placeholder="motionmodule" autocomplete="off" required>
-                  </label>
-                  <button class="button primary" type="submit">Change hostname</button>
-                  <p class="muted small">Letters, numbers, and hyphens only &mdash;
-                    no spaces and no <strong>.local</strong>. The default is
-                    <strong>motionmodule</strong>; a changed name survives reboot.</p>
-                </form>
-              </article>
-
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Nearby Wi&#8209;Fi</h2>
-                  <button class="button" id="scanButton" type="button">Scan</button>
-                </div>
-                <div class="panel-body networks" id="networkList">
-                  <p class="muted">Press Scan to look for networks.</p>
-                </div>
-              </article>
-            </div>
-
-            <div class="stack">
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Connect to Wi&#8209;Fi</h2>
-                  <span>Saved as preferred</span>
-                </div>
-                <form class="panel-body stack" id="connectForm">
-                  <div class="fields">
-                    <label class="field full">Network name (SSID)
-                      <input id="wifiSsid" maxlength="32" required>
-                    </label>
-                    <label class="field full">Security
-                      <select id="wifiSecurity">
-                        <option value="personal">WPA/WPA2 personal</option>
-                        <option value="open">Open network</option>
-                        <option value="enterprise">WPA2 enterprise (PEAP)</option>
-                      </select>
-                    </label>
-                    <label class="field full" data-personal>Wi&#8209;Fi password
-                      <input id="wifiPassword" type="password" autocomplete="new-password">
-                    </label>
-                    <label class="field full" data-enterprise hidden>Username
-                      <input id="wifiUsername" autocomplete="username">
-                    </label>
-                    <label class="field full" data-enterprise hidden>Authentication domain
-                      <input id="wifiDomain" placeholder="example.edu">
-                    </label>
-                  </div>
-                  <button class="button primary" type="submit">Connect and save</button>
-                  <p class="muted small">The dashboard disconnects briefly while
-                    the Pi changes networks. Rejoin the chosen Wi&#8209;Fi and open
-                    the displayed .local address or IP.</p>
-                </form>
-              </article>
-
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Robot hotspot</h2>
-                  <span>Manual, for this boot only</span>
-                </div>
-                <form class="panel-body stack" id="hotspotForm">
-                  <div class="fields">
-                    <label class="field">Hotspot name
-                      <input id="hotspotSsid" maxlength="32" value="MotionModule" required>
-                    </label>
-                    <label class="field">New password (optional)
-                      <input id="hotspotPassword" type="password" minlength="8" maxlength="63" placeholder="Keep saved password">
-                    </label>
-                  </div>
-                  <button class="button danger" type="submit">Switch to robot hotspot</button>
-                  <p class="muted small">Motor output stops before the switch. Join
-                    the hotspot, then open <strong>http://10.42.0.1</strong>. The
-                    next boot tries preferred Wi&#8209;Fi first again.</p>
-                </form>
-              </article>
-            </div>
-          </div>
-        </div>
-      </section>
-
-
-      <!-- =============================================================== -->
-      <!-- DRIVE                                                           -->
-      <!-- =============================================================== -->
-      <section class="view" data-view="drive" hidden>
-        <div class="hero">
-          <div>
-            <p class="eyebrow">Driver station</p>
-            <h1>Drive it.</h1>
-            <p>Keyboard or game controller, straight to the robot code you
-              deployed. Every control here stops the moment you let go, leave the
-              page, or lose connection.</p>
-          </div>
-          <div class="button-row">
-            <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
-            <a class="button primary" id="openDriverStation" href="/driver-station">Open full Driver Station&nbsp; ↗</a>
-          </div>
-        </div>
-
-        <div class="driver-status">
-          <div class="driver-signal" id="driveSignalLink"><i></i>
-            <div><small>Connection</small><strong>Checking</strong></div></div>
-          <div class="driver-signal" id="driveSignalInput"><i></i>
-            <div><small>Input</small><strong>None</strong></div></div>
-          <div class="driver-signal" id="driveSignalArmed"><i></i>
-            <div><small>Control</small><strong>Disarmed</strong></div></div>
-          <div class="driver-signal good" id="driveSignalOutputs"><i></i>
-            <div><small>Outputs</small><strong>Idle</strong></div></div>
-        </div>
-
-        <div class="tabs" role="tablist">
-          <button type="button" data-tab="pilot" class="active">Pilot</button>
-          <button type="button" data-tab="bindings">Controls</button>
-        </div>
-
-        <!-- ----------------------------------------------------- pilot -->
-        <div data-panel="pilot">
-          <div class="notice danger" style="margin-bottom:16px">
-            <strong>Clear the area first.</strong> This moves the real robot
-            through your own <code>drive()</code> code. Keep a hand on the
-            physical cutoff.
-          </div>
-
-          <div class="grid equal">
-            <article class="card">
-              <div class="panel-head">
-                <h2>Arm control</h2>
-                <span>Hold-to-move · releases stop</span>
-              </div>
-              <div class="panel-body stack">
-                <label class="check">
-                  <input id="driveEnable" type="checkbox">
-                  <span>I am deliberately enabling drive, the area is clear, and
-                    the physical cutoff is in reach.</span>
-                </label>
-                <label class="speed">Maximum speed <output id="speedLabel">40%</output>
-                  <input id="speed" type="range" min="10" max="100" step="5" value="40">
-                </label>
-                <div class="keys" id="driveKeys"></div>
-                <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
-              </div>
-            </article>
-
-            <article class="card">
-              <div class="panel-head">
-                <h2>Game controller</h2>
-                <span id="padSummary">No controller detected</span>
-              </div>
-              <p class="lead">Plug in or pair any gamepad, then press a button on
-                it so the browser can see it. Left stick drives and strafes;
-                right stick turns.</p>
-              <div class="panel-body stack">
-                <div class="kv-grid" id="padIdentity">
-                  <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
-                </div>
-                <div id="padAxes" class="stack"></div>
-                <p class="muted small">Detected from the browser's gamepad list.
-                  A controller reporting the standard layout is mapped
-                  automatically; anything else still shows its raw sticks so you
-                  can check it is alive.</p>
-              </div>
-            </article>
-          </div>
-
-          <article class="card spaced">
-            <div class="panel-head">
-              <h2>Project controls</h2>
-              <span id="customControlSummary">Checking the robot project&hellip;</span>
-            </div>
-            <p class="lead">Extra buttons and sliders this robot's own code asks
-              for. Define <code>controls()</code> and <code>control(name, value)</code>
-              in your drive object and they appear here.</p>
-            <div class="panel-body" id="customControls"></div>
           </article>
         </div>
 
-        <!-- -------------------------------------------------- bindings -->
-        <div data-panel="bindings" hidden>
-          <div class="grid equal">
-            <article class="card">
-              <div class="panel-head">
-                <h2>Key bindings</h2>
-                <button class="button" id="resetBindings" type="button">Reset to defaults</button>
-              </div>
-              <p class="lead">Click a key, then press the one you want. Bindings
-                are saved in this browser.</p>
-              <div class="panel-body" id="bindingList"></div>
-            </article>
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>Project controls</h2>
+            <span id="customControlSummary">Checking the robot project&hellip;</span>
+          </div>
+          <p class="lead">Extra buttons and sliders this robot's own code asks
+            for. Define <code>controls()</code> and <code>control(name, value)</code>
+            in your drive object and they appear here.</p>
+          <div class="panel-body" id="customControls"></div>
+        </article>
+      </div>
 
-            <article class="card">
-              <div class="panel-head">
-                <h2>How a command is built</h2>
-                <span>Same shape for keys and sticks</span>
-              </div>
-              <div class="panel-body stack">
-                <div class="snippet">
-                  <button class="copy" type="button" data-copy="#driveSnippet">Copy</button>
+      <!-- -------------------------------------------------- bindings -->
+      <div data-panel="bindings" hidden>
+        <div class="grid equal">
+          <article class="card">
+            <div class="panel-head">
+              <h2>Key bindings</h2>
+              <button class="button" id="resetBindings" type="button">Reset to defaults</button>
+            </div>
+            <p class="lead">Click a key, then press the one you want. Bindings
+              are saved in this browser.</p>
+            <div class="panel-body" id="bindingList"></div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
+              <h2>How a command is built</h2>
+              <span>Same shape for keys and sticks</span>
+            </div>
+            <div class="panel-body stack">
+              <div class="snippet">
+                <button class="button copy" type="button" data-copy="#driveSnippet">Copy</button>
 <pre id="driveSnippet">def drive(self, forward, strafe, rotate, speed=0.5):
     # forward  +1 ahead, -1 back      (left stick Y / W and S)
     # strafe   +1 right, -1 left      (left stick X / D and A)
@@ -1949,137 +1494,138 @@ def controls(self):
 def control(self, name, value):
     if name == "intake":
         self.module.motor("driver_3a").set(value)</pre>
-                </div>
-                <p class="muted small">Both input methods call the same
-                  <code>drive()</code>, so code written for the keyboard works
-                  with a controller without changes.</p>
               </div>
-            </article>
-          </div>
+              <p class="muted small">Both input methods call the same
+                <code>drive()</code>, so code written for the keyboard works
+                with a controller without changes.</p>
+            </div>
+          </article>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <!-- =============================================================== -->
-      <!-- CODE                                                            -->
-      <!-- =============================================================== -->
-      <section class="view" data-view="code" hidden>
-        <div class="hero">
-          <div>
-            <p class="eyebrow">Driver Station</p>
-            <h1>Code</h1>
-            <p>Write Python on your computer, send the folder to the robot over
-              Wi&#8209;Fi, then drive it. No editor plugin and no SSH needed.</p>
-          </div>
-          <span class="pill" id="activeProjectPill">ACTIVE · {{ project_name }}</span>
+    <!-- =============================================================== -->
+    <!-- CODE                                                            -->
+    <!-- =============================================================== -->
+    <section class="view" data-view="code" hidden>
+      <div class="hero">
+        <div>
+          <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 5l-3 14"/></svg>Driver Station</p>
+          <h1>Code</h1>
+          <p>Write Python on your computer, send the folder to the robot over
+            Wi&#8209;Fi, then drive it. No editor plugin and no SSH needed.</p>
         </div>
+        <div class="hero-side"><span class="pill" id="activeProjectPill">ACTIVE · {{ project_name }}</span></div>
+      </div>
 
-        <div class="driver-status">
-          <div class="driver-signal" id="signalComms">
-            <i></i>
-            <div><small>Communications</small><strong>Connecting</strong></div>
-          </div>
-          <div class="driver-signal" id="signalCode">
-            <i></i>
-            <div><small>Robot code</small><strong>Checking</strong></div>
-          </div>
-          <div class="driver-signal" id="signalNetwork">
-            <i></i>
-            <div><small>Network link</small><strong>Checking</strong></div>
-          </div>
-          <div class="driver-signal" id="signalOutputs">
-            <i></i>
-            <div><small>Outputs</small><strong>Checking</strong></div>
-          </div>
+      <div class="driver-status">
+        <div class="driver-signal" id="signalComms">
+          <i></i>
+          <div><small>Communications</small><strong>Connecting</strong></div>
         </div>
-
-        <div class="tabs" role="tablist">
-          <button type="button" data-tab="deploy" class="active">Deploy</button>
-          <button type="button" data-tab="terminal">Terminal</button>
+        <div class="driver-signal" id="signalCode">
+          <i></i>
+          <div><small>Robot code</small><strong>Checking</strong></div>
         </div>
+        <div class="driver-signal" id="signalNetwork">
+          <i></i>
+          <div><small>Network link</small><strong>Checking</strong></div>
+        </div>
+        <div class="driver-signal" id="signalOutputs">
+          <i></i>
+          <div><small>Outputs</small><strong>Checking</strong></div>
+        </div>
+      </div>
 
-        <!-- ---------------------------------------------------- deploy -->
-        <div data-panel="deploy">
-          <div class="grid equal">
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="deploy" class="active">Deploy</button>
+        <button type="button" data-tab="terminal">Terminal</button>
+      </div>
+
+      <!-- ---------------------------------------------------- deploy -->
+      <div data-panel="deploy">
+        <div class="grid equal">
+          <article class="card">
+            <div class="panel-head">
+              <h2>Send your robot folder</h2>
+              <span>Uploads, checks, activates, restarts</span>
+            </div>
+            <div class="panel-body stack">
+              <label class="deploy-drop">
+                <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt,.ino">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2h9A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M12 16.5v-5M9.5 14l2.5-2.5 2.5 2.5"/></svg>
+                <strong>Choose your robot folder</strong>
+                <span>Click here, then pick the folder that contains robot.py</span>
+              </label>
+              <div class="kv-grid">
+                <div class="kv"><small>Selected project</small><strong id="selectedProject">None</strong></div>
+                <div class="kv"><small>Upload</small><strong id="selectedFileCount">0 files</strong></div>
+              </div>
+              <div class="file-list" id="selectedFiles">
+                <div class="file-row"><span>No folder selected</span><span>&mdash;</span></div>
+              </div>
+              <label class="check">
+                <input id="deployConfirm" type="checkbox">
+                <span>I understand this stops every output, backs up an older
+                  folder with the same name, makes this folder active, and
+                  restarts the robot software.</span>
+              </label>
+              <div class="button-row"><button class="button primary" id="deployProject" type="button" disabled>Deploy and run</button></div>
+              <p class="message" id="deployMessage">Choose a folder to begin.
+                Nothing is sent until you press Deploy and run.</p>
+            </div>
+          </article>
+
+          <div class="stack">
             <article class="card">
               <div class="panel-head">
-                <h2>Send your robot folder</h2>
-                <span>Uploads, checks, activates, restarts</span>
+                <h2>What goes in the folder</h2>
+                <a class="button" href="/api/projects/sample" download>Download Mecanum sample</a>
               </div>
               <div class="panel-body stack">
-                <label class="deploy-drop">
-                  <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt,.ino">
-                  <strong>Choose your robot folder</strong>
-                  <span>Click here, then pick the folder that contains robot.py</span>
-                </label>
-                <div class="kv-grid">
-                  <div class="kv"><small>Selected project</small><strong id="selectedProject">None</strong></div>
-                  <div class="kv"><small>Upload</small><strong id="selectedFileCount">0 files</strong></div>
+                <div class="format-file">
+                  <span class="tag">Required</span>
+                  <code>MyRobot/robot.py</code>
+                  <p>The only file you must write. It defines
+                    <code>create_drive(module)</code> and returns your robot
+                    object.</p>
                 </div>
-                <div class="file-list" id="selectedFiles">
-                  <div class="file-row"><span>No folder selected</span><span>&mdash;</span></div>
+                <div class="format-file">
+                  <span class="tag">Optional</span>
+                  <code>MyRobot/hardware.py</code>
+                  <p>A copy of the pin file, with your own names. Leave it out
+                    and the robot uses the names that ship with MotionModule
+                    (<code>driver_1a</code>&hellip;<code>driver_4b</code>,
+                    <code>servo_0</code>&hellip;<code>servo_15</code>).</p>
                 </div>
-                <label class="check">
-                  <input id="deployConfirm" type="checkbox">
-                  <span>I understand this stops every output, backs up an older
-                    folder with the same name, makes this folder active, and
-                    restarts the robot software.</span>
-                </label>
-                <button class="button primary" id="deployProject" type="button" disabled>Deploy and run</button>
-                <p class="message" id="deployMessage">Choose a folder to begin.
-                  Nothing is sent until you press Deploy and run.</p>
+                <div class="format-file">
+                  <span class="tag">Optional</span>
+                  <code>MyRobot/dashboard.py</code>
+                  <p>Declares up to two camera feeds, one gyro/IMU, and up to
+                    20 analog, digital, or text sensor readings. MotionModule
+                    discovers it automatically.</p>
+                </div>
+                <div class="format-file">
+                  <span class="tag">Optional</span>
+                  <code>MyRobot/anything_else.py</code>
+                  <p>More Python files for mechanisms, autonomous routines, and
+                    helpers.</p>
+                </div>
+                <div class="notice">Only <strong>.py</strong>, <strong>.md</strong>,
+                  <strong>.txt</strong>, and Arduino <strong>.ino</strong> files are accepted. MotionModule
+                  checks every Python file and every pin before it replaces the
+                  running project.</div>
               </div>
             </article>
 
-            <div class="stack">
-              <article class="card">
-                <div class="panel-head">
-                  <h2>What goes in the folder</h2>
-                  <a class="button" href="/api/projects/sample" download>Download Mecanum sample</a>
-                </div>
-                <div class="panel-body stack">
-                  <div class="format-file">
-                    <span class="tag">Required</span>
-                    <code>MyRobot/robot.py</code>
-                    <p>The only file you must write. It defines
-                      <code>create_drive(module)</code> and returns your robot
-                      object.</p>
-                  </div>
-                  <div class="format-file">
-                    <span class="tag">Optional</span>
-                    <code>MyRobot/hardware.py</code>
-                    <p>A copy of the pin file, with your own names. Leave it out
-                      and the robot uses the names that ship with MotionModule
-                      (<code>driver_1a</code>&hellip;<code>driver_4b</code>,
-                      <code>servo_0</code>&hellip;<code>servo_15</code>).</p>
-                  </div>
-                  <div class="format-file">
-                    <span class="tag">Optional</span>
-                    <code>MyRobot/dashboard.py</code>
-                    <p>Declares up to two camera feeds, one gyro/IMU, and up to
-                      20 analog, digital, or text sensor readings. MotionModule
-                      discovers it automatically.</p>
-                  </div>
-                  <div class="format-file">
-                    <span class="tag">Optional</span>
-                    <code>MyRobot/anything_else.py</code>
-                    <p>More Python files for mechanisms, autonomous routines, and
-                      helpers.</p>
-                  </div>
-                  <div class="notice">Only <strong>.py</strong>, <strong>.md</strong>,
-                    <strong>.txt</strong>, and Arduino <strong>.ino</strong> files are accepted. MotionModule
-                    checks every Python file and every pin before it replaces the
-                    running project.</div>
-                </div>
-              </article>
-
-              <article class="card">
-                <div class="panel-head">
-                  <h2>The shortest robot.py that works</h2>
-                  <a class="hint" href="/api/hardware-file" download>Download hardware.py</a>
-                </div>
-                <div class="panel-body">
-                  <div class="snippet">
-                    <button class="copy" type="button" data-copy="#starterSnippet">Copy</button>
+            <article class="card">
+              <div class="panel-head">
+                <h2>The shortest robot.py that works</h2>
+                <a class="hint" href="/api/hardware-file" download>Download hardware.py</a>
+              </div>
+              <div class="panel-body">
+                <div class="snippet">
+                  <button class="button copy" type="button" data-copy="#starterSnippet">Copy</button>
 <pre id="starterSnippet">class MyRobot:
     def __init__(self, module):
         self.module = module
@@ -2102,83 +1648,81 @@ def control(self, name, value):
 
 def create_drive(module):
     return MyRobot(module)</pre>
-                  </div>
-                  <p class="muted small" style="margin-top:12px">Save that as
-                    <code>robot.py</code> inside a folder, choose the folder on
-                    the left, and press Deploy and run. Names such as
-                    <code>driver_1a</code> come from <code>hardware.py</code>; see
-                    them all in <a href="/hardware">Debug &rarr; Wiring</a>.</p>
                 </div>
-              </article>
+                <p class="muted small spaced">Save that as
+                  <code>robot.py</code> inside a folder, choose the folder on
+                  the left, and press Deploy and run. Names such as
+                  <code>driver_1a</code> come from <code>hardware.py</code>; see
+                  them all in <a href="/hardware">Debug &rarr; Wiring</a>.</p>
+              </div>
+            </article>
 
-              <article class="card">
-                <div class="panel-head">
-                  <h2>Installed projects</h2>
-                  <span id="projectCount">Loading&hellip;</span>
-                </div>
-                <div class="panel-body project-list" id="projectList">
-                  <p class="muted">Reading robot folders&hellip;</p>
-                </div>
-              </article>
-            </div>
+            <article class="card">
+              <div class="panel-head">
+                <h2>Installed projects</h2>
+                <span id="projectCount">Loading&hellip;</span>
+              </div>
+              <div class="panel-body project-list" id="projectList">
+                <p class="muted">Reading robot folders&hellip;</p>
+              </div>
+            </article>
           </div>
         </div>
+      </div>
 
-        <!-- ----------------------------------------------------- drive -->
-        <!-- -------------------------------------------------- terminal -->
-        <div data-panel="terminal" hidden>
-          <div class="hero" style="margin-bottom:16px">
-            <div>
-              <p class="eyebrow">Time-limited robot shell</p>
-              <h1 style="font-size:21px">Terminal</h1>
-              <p>A real Bash shell on the Pi, running as the normal MotionModule
-                service user inside the active robot project.</p>
-            </div>
-            <span class="pill" id="terminalPill">LOCKED</span>
+      <!-- -------------------------------------------------- terminal -->
+      <div data-panel="terminal" hidden>
+        <div class="hero compact">
+          <div>
+            <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l6 6-6 6M12 18h8"/></svg>Time-limited robot shell</p>
+            <h1>Terminal</h1>
+            <p>A real Bash shell on the Pi, running as the normal MotionModule
+              service user inside the active robot project.</p>
           </div>
-
-          <article class="card">
-            <div class="panel-head">
-              <h2>Bash session</h2>
-              <span id="terminalSessionState">Checking access&hellip;</span>
-            </div>
-            <div class="panel-body stack">
-              <div class="notice">For security, enable access from SSH with
-                <code>motionmodule terminal enable</code>, then enter the
-                temporary code below. Access expires by itself, is invalid after
-                reboot, and an idle shell closes after five minutes.</div>
-              <div class="terminal-unlock">
-                <label class="field">Temporary access code
-                  <input id="terminalCode" type="password" autocomplete="off" spellcheck="false" placeholder="Run terminal enable over SSH">
-                </label>
-                <button class="button primary" id="terminalStart" type="button">Unlock Bash</button>
-                <div class="terminal-status" id="terminalStatus">Loading terminal status&hellip;</div>
-              </div>
-              <pre class="terminal-screen" id="terminalOutput" aria-live="polite">MotionModule web terminal is locked.</pre>
-              <form class="terminal-form" id="terminalForm">
-                <input id="terminalCommand" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter a Bash command" disabled>
-                <button class="button primary" id="terminalRun" type="submit" disabled>Run</button>
-              </form>
-              <div class="button-row">
-                <button class="button" id="terminalInterrupt" type="button" disabled>Interrupt &middot; Ctrl-C</button>
-                <button class="button" id="terminalClear" type="button">Clear screen</button>
-                <button class="button danger" id="terminalStop" type="button" disabled>Close terminal</button>
-              </div>
-              <p class="muted small">This is a real PTY-backed Bash shell.
-                Commands can change or delete files with your Pi user's
-                permissions. Use it for short diagnostics and service commands;
-                full-screen terminal programs are not supported here. The robot
-                UI uses plain HTTP, so never type a reusable password here.</p>
-            </div>
-          </article>
+          <div class="hero-side"><span class="pill" id="terminalPill">LOCKED</span></div>
         </div>
-      </section>
 
-    </div>
-  </main>
-</div>
+        <article class="card">
+          <div class="panel-head">
+            <h2>Bash session</h2>
+            <span id="terminalSessionState">Checking access&hellip;</span>
+          </div>
+          <div class="panel-body stack">
+            <div class="notice">For security, enable access from SSH with
+              <code>motionmodule terminal enable</code>, then enter the
+              temporary code below. Access expires by itself, is invalid after
+              reboot, and an idle shell closes after five minutes.</div>
+            <div class="terminal-unlock">
+              <label class="field">Temporary access code
+                <input id="terminalCode" type="password" autocomplete="off" spellcheck="false" placeholder="Run terminal enable over SSH">
+              </label>
+              <button class="button primary" id="terminalStart" type="button">Unlock Bash</button>
+              <div class="terminal-status" id="terminalStatus">Loading terminal status&hellip;</div>
+            </div>
+            <pre class="terminal-screen" id="terminalOutput" aria-live="polite">MotionModule web terminal is locked.</pre>
+            <form class="terminal-form" id="terminalForm">
+              <input id="terminalCommand" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Enter a Bash command" disabled>
+              <button class="button primary" id="terminalRun" type="submit" disabled>Run</button>
+            </form>
+            <div class="button-row">
+              <button class="button" id="terminalInterrupt" type="button" disabled>Interrupt &middot; Ctrl-C</button>
+              <button class="button" id="terminalClear" type="button">Clear screen</button>
+              <button class="button danger" id="terminalStop" type="button" disabled>Close terminal</button>
+            </div>
+            <p class="muted small">This is a real PTY-backed Bash shell.
+              Commands can change or delete files with your Pi user's
+              permissions. Use it for short diagnostics and service commands;
+              full-screen terminal programs are not supported here. The robot
+              UI uses plain HTTP, so never type a reusable password here.</p>
+          </div>
+        </article>
+      </div>
+    </section>
 
-<button class="mobile-stop" data-stop type="button" aria-label="Stop all motors">STOP</button>
+  </div>
+</main>
+
+<button class="stop-button mobile-stop" data-stop type="button" aria-label="Stop all motors">Stop</button>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script>
 /* ==========================================================================
@@ -2281,74 +1825,16 @@ function ioStatus(state, label) {
   return element('span', `io-status ${state}`, label);
 }
 
-/* ---------------------------------------------------------------- theme */
-
-/* Three states. "system" stores nothing and removes the attribute, so the
-   page keeps following whatever light/dark the browser reports. "light" and
-   "dark" pin the attribute the boot script in <head> reads on the next load.
-   Every browser API here is optional: the dashboard still runs without
-   storage, matchMedia, or a documentElement. */
-
-const THEME_KEY = 'motionmodule-theme';
-const THEME_COLORS = { light: '#f3f4f6', dark: '#0b0d12' };
-
-function storedTheme() {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    return saved === 'light' || saved === 'dark' ? saved : 'system';
-  } catch (error) {
-    return 'system';
-  }
-}
-
-function applyTheme(choice) {
-  const root = document.documentElement;
-  if (root) {
-    if (choice === 'system') root.removeAttribute?.('data-theme');
-    else root.setAttribute('data-theme', choice);
-  }
-  // Keep the browser chrome (address bar, PWA shell) matching the page. On
-  // "system" each tag goes back to answering for its own scheme; a pinned
-  // theme drops the media condition so both tags report the chosen colour.
-  document.querySelectorAll('[data-scheme]').forEach(tag => {
-    const scheme = tag.dataset.scheme;
-    tag.setAttribute('content', THEME_COLORS[choice === 'system' ? scheme : choice]);
-    if (choice === 'system') tag.setAttribute('media', `(prefers-color-scheme: ${scheme})`);
-    else tag.removeAttribute?.('media');
-  });
-  $$('[data-theme-choice]').forEach(button => {
-    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === choice));
-  });
-}
-
-function chooseTheme(choice) {
-  try {
-    if (choice === 'system') localStorage.removeItem?.(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, choice);
-  } catch (error) { /* the choice still applies for this page */ }
-  applyTheme(choice);
-}
-
-// Appearance is a convenience, never a reason for the controls below not to
-// load, so a surprising environment leaves the CSS default in place.
-try {
-  $$('[data-theme-choice]').forEach(button => {
-    button.addEventListener('click', () => chooseTheme(button.dataset.themeChoice));
-  });
-  applyTheme(storedTheme());
-
-  // Lift the sticky header once content scrolls beneath it.
-  addEventListener('scroll', () => {
-    $('.topbar')?.classList.toggle('scrolled', (window.scrollY || 0) > 4);
-  }, { passive: true });
-} catch (error) {
-  console.warn('Theme controls unavailable:', error);
-}
+/* The theme switch, the bar's scroll shadow and the narrow-screen menu are
+   appearance, not robot control, so they live in /static/motionmodule.js.
+   Nothing below depends on them. */
 
 /* --------------------------------------------------------- page + tabs */
 
 $$('[data-page]').forEach(link => {
-  link.classList.toggle('active', link.dataset.page === activePage);
+  const current = link.dataset.page === activePage;
+  link.classList.toggle('active', current);
+  link.setAttribute('aria-current', current ? 'page' : 'false');
 });
 $$('[data-view]').forEach(view => {
   view.hidden = view.dataset.view !== activePage;
@@ -3151,7 +2637,7 @@ function renderImu(imu) {
   $('#imuPitch').textContent = telemetryNumber(imu?.pitch);
   $('#imuRoll').textContent = telemetryNumber(imu?.roll);
   $('#imuRate').textContent = telemetryNumber(imu?.rate, '°/s');
-  $('#headingDial').style['--yaw'] = `${yaw ?? 0}deg`;
+  $('#headingDial').style.setProperty?.('--yaw', `${yaw ?? 0}deg`);
   $('#imuDetail').textContent = imu?.detail || (connected
     ? 'Yaw is the field heading; pitch and roll show robot attitude.'
     : 'Add an IMU reading in dashboard.py. Keep the robot still while it calibrates.');
