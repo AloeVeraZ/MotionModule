@@ -27,19 +27,23 @@ curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/inst
 Keep `--version testing` on that second command. Without it the installer
 downloads `main`, even from this branch's link.
 
-Either command installs the testing code as a new runtime release, runs the
-test suite on the Pi, and reboots, like any other install. If the testing
-build fails its tests, the installer stops and the version you had stays
-active. Your robot folders in `~/MotionModule/robots` are never touched, so
-the same `robot.py` keeps running. While a Pi runs this branch, the
-dashboard's top bar shows a yellow **testing** badge.
+Either command builds the testing code, runs the test suite on the Pi, and,
+once the testing version is running, removes the MotionModule software the Pi
+had before. If the testing build fails its tests, the installer stops and the
+version you had stays active. Your robot folders, their backups, the active
+project, `hardware.py`, and Wi-Fi settings are never touched, so the same
+`robot.py` keeps running. The Pi reboots at the end, like any install. While a
+Pi runs this branch, the dashboard's top bar shows a yellow **testing** badge.
 
 ### Go back to the main line
 
 ```bash
-motionmodule rollback        # back to the release you had before
-motionmodule install main    # or install the latest main
+motionmodule install main
 ```
+
+That replaces the testing software with `main` the same way and keeps every
+robot file. Switching between the two branches is safe in either direction,
+as often as you need.
 
 ### Work on this branch from a computer
 
