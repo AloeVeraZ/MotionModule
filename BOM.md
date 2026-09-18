@@ -112,11 +112,12 @@ driver library.
 | ---: | --- | --- |
 | As needed | Jumper wires | [Multicoloured breadboard jumper set](https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78); female-to-female for the Pi header |
 | As needed | Wago 221 lever connectors | [Wago 221-2401 compact splicing connectors](https://www.amazon.com/221-2401-Compact-Splicing-Inline-Connectors/dp/B0BT8DHLJJ) for every 12 V join |
-| As needed | Motor and battery wire | Stranded copper; gauge sized for the current each run carries |
+| As needed | 16 AWG silicone wire | [Haerkn 16 AWG silicone wire, two cores, tinned copper, 25 ft](https://www.amazon.com/dp/B07RRPFL3Q) for the 12 V battery and motor runs, up to the 10 A each driver draws |
 
 That is the whole wiring list. Control signals are ordinary jumper wires from
-the Pi header, every 12 V join is a Wago connector, and the boards, motors and
-servos all arrive with their own leads.
+the Pi header, every 12 V and motor run is 16 AWG silicone wire, every 12 V
+join is a Wago connector, and the boards, motors and servos all arrive with
+their own leads. The wire's red core is positive and its black core negative.
 
 Raspberry Pi GPIOs are inputs during early boot, so keep motor power switched
 off until you have watched the outputs stay still. If one driver twitches at
@@ -135,7 +136,6 @@ boot, a 10 kΩ pull-down from that input to signal ground holds it low.
 
 1. The servo rail output on the power module, sized for every servo that can
    move at once and set to your servos' voltage.
-2. Motor and battery wire gauge, from the longest high-current run.
-3. The CAD files themselves — both `cad/` folders are still being filled in.
+2. The CAD files themselves — both `cad/` folders are still being filled in.
 
 The complete signal wiring is in [docs/PINOUT.md](docs/PINOUT.md).

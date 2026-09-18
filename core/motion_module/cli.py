@@ -126,14 +126,14 @@ def doctor(as_json: bool = False) -> int:
 
 def show_pinout() -> int:
     config = load_config()
-    print("Motor driver pinout (IN1/IN2 are direction/PWM inputs)")
+    print("Motor driver pinout (IN1/IN2 drive each board's MOTOR_A, IN3/IN4 its MOTOR_B)")
     print('Use the name in code: module.motor("name")')
-    print("Name          Chan Driver Out  IN1 physical/BCM  IN2 physical/BCM  Inverted")
+    print("Name          Chan Driver Out  Forward wire        Reverse wire        Inverted")
     for row in motor_rows(config):
         print(
             f"{row['name']:<13} {row['motor']:>4} {row['driver']:>6} {row['output']:>3}  "
-            f"pin {row['in1_physical']:>2}/GPIO{row['in1_bcm']:<2}   "
-            f"pin {row['in2_physical']:>2}/GPIO{row['in2_bcm']:<2}   "
+            f"{row['forward_input']} pin {row['in1_physical']:>2}/GPIO{row['in1_bcm']:<2}   "
+            f"{row['reverse_input']} pin {row['in2_physical']:>2}/GPIO{row['in2_bcm']:<2}   "
             f"{'yes' if row['inverted'] else 'no'}"
         )
     grounds = "; ".join(

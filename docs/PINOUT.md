@@ -22,22 +22,52 @@ the motor. The motor's two heavy wires go to that driver's output pair.
 Confirm pin 1 using the Pi/header markings; a diagram can be rotated relative
 to the board on your bench.
 
+The dashboard draws the Pi 5 the way it sits on the reference controller
+plate: USB and Ethernet ports at the bottom, the 40-pin header down the right
+edge. Held that way, pin 1 is the top pin of the row nearer the middle of the
+board and pin 2 sits beside it on the board edge. Odd pins run down the inner
+row and even pins down the outer row, exactly as the pin list beside the
+drawing reads.
+
 ## Four dual H-bridge boards
 
-Each GODIYMODULES board controls two motors and has four signal inputs. Connect
-each motor only to its own output pair. The names `IN1`/`IN2` below mean the two
-direction inputs for that motor; match them to the board's A/B input labels.
+Each GODIYMODULES board controls two motors. Its control header reads
+`IN1 IN2 IN3 IN4 GND`: **IN1 and IN2 drive the board's MOTOR_A terminal
+(output A), and IN3 and IN4 drive MOTOR_B (output B).** So `1A` is Driver 1's
+MOTOR_A, wired from IN1 and IN2, and `1B` is Driver 1's MOTOR_B, wired from IN3
+and IN4; drivers 2, 3 and 4 follow the same pattern. The inputs accept 3-18 V,
+so the Pi's 3.3 V signals drive them directly. VIN+ and VIN- take the 12 V
+battery, and GND joins the Pi's ground as the signal reference. Connect each
+motor only to its own terminal pair.
 
-| Driver | Output | Motor channel | Default code name | IN1 | IN2 | Pi ground |
+Two inputs drive one motor:
+
+| First input (IN1 or IN3) | Second input (IN2 or IN4) | Motor |
+| --- | --- | --- |
+| Speed signal (PWM) | Off | Forward |
+| Off | Speed signal (PWM) | Reverse |
+| Off | Off | Stopped (coasts) |
+
+Which way counts as forward depends on how the motor's two wires sit in the
+terminal. Set `inverted` in `hardware.py` rather than swapping wires.
+
+| Driver | Output | Motor channel | Default code name | Forward wire | Reverse wire | Pi ground |
 | ---: | :---: | ---: | --- | --- | --- | --- |
-| 1 | A | 1 | `driver_1a` | physical 37 / GPIO26 | physical 35 / GPIO19 | physical 39 |
-| 1 | B | 2 | `driver_1b` | physical 33 / GPIO13 | physical 31 / GPIO6 | physical 39 |
-| 2 | A | 3 | `driver_2a` | physical 40 / GPIO21 | physical 38 / GPIO20 | physical 34 |
-| 2 | B | 4 | `driver_2b` | physical 36 / GPIO16 | physical 32 / GPIO12 | physical 34 |
-| 3 | A | 5 | `driver_3a` | physical 23 / GPIO11 | physical 21 / GPIO9 | physical 25 |
-| 3 | B | 6 | `driver_3b` | physical 26 / GPIO7 | physical 24 / GPIO8 | physical 25 |
-| 4 | A | 7 | `driver_4a` | physical 15 / GPIO22 | physical 13 / GPIO27 | physical 14 |
-| 4 | B | 8 | `driver_4b` | physical 18 / GPIO24 | physical 16 / GPIO23 | physical 14 |
+| 1 | A | 1 | `driver_1a` | IN1 · physical 37 / GPIO26 | IN2 · physical 35 / GPIO19 | physical 39 |
+| 1 | B | 2 | `driver_1b` | IN3 · physical 33 / GPIO13 | IN4 · physical 31 / GPIO6 | physical 39 |
+| 2 | A | 3 | `driver_2a` | IN1 · physical 40 / GPIO21 | IN2 · physical 38 / GPIO20 | physical 34 |
+| 2 | B | 4 | `driver_2b` | IN3 · physical 36 / GPIO16 | IN4 · physical 32 / GPIO12 | physical 34 |
+| 3 | A | 5 | `driver_3a` | IN1 · physical 23 / GPIO11 | IN2 · physical 21 / GPIO9 | physical 25 |
+| 3 | B | 6 | `driver_3b` | IN3 · physical 26 / GPIO7 | IN4 · physical 24 / GPIO8 | physical 25 |
+| 4 | A | 7 | `driver_4a` | IN1 · physical 15 / GPIO22 | IN2 · physical 13 / GPIO27 | physical 14 |
+| 4 | B | 8 | `driver_4b` | IN3 · physical 18 / GPIO24 | IN4 · physical 16 / GPIO23 | physical 14 |
+
+**Where each driver sits.** On the reference controller plate, with the Pi on
+the left and its USB ports at the bottom, Driver 1 sits beside the USB ports,
+Driver 2 above it, Driver 3 to the right of Driver 1 and Driver 4 above
+Driver 3. That is the wiring the project's Mecanum sample expects, with its
+wheels on Drivers 1 and 2. Wire the same way to run the sample unchanged, or
+change the pins in `hardware.py` to match your own wiring.
 
 The default name is the driver position, so no lookup is needed to find the
 wire. Rename any of them in `hardware.py` and the dashboard follows: the

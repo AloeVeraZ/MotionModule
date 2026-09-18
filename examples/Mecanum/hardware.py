@@ -21,14 +21,17 @@ HARDWARE = {
     },
 
     # Each driver owns a short run of header positions with its own ground
-    # inside the run, so one driver is one small bundle of wires.
+    # inside the run, so one driver is one small bundle of wires. On each
+    # board, IN1 and IN2 drive MOTOR_A (output A) and IN3 and IN4 drive
+    # MOTOR_B (output B). Driver 1 sits beside the Pi's USB ports and
+    # Driver 2 above it.
     #
-    # channel  name          driver / output   IN1 wire        IN2 wire
-    # -------  ------------  ---------------   -------------   -------------
-    #    1     front_left    Driver 1 · A      pin 37/GPIO26   pin 35/GPIO19
-    #    2     rear_left     Driver 1 · B      pin 33/GPIO13   pin 31/GPIO6
-    #    3     front_right   Driver 2 · A      pin 40/GPIO21   pin 38/GPIO20
-    #    4     rear_right    Driver 2 · B      pin 36/GPIO16   pin 32/GPIO12
+    # channel  name          driver / output   forward wire        reverse wire
+    # -------  ------------  ---------------   -----------------   -----------------
+    #    1     front_left    Driver 1 · A      IN1 pin 37/GPIO26   IN2 pin 35/GPIO19
+    #    2     rear_left     Driver 1 · B      IN3 pin 33/GPIO13   IN4 pin 31/GPIO6
+    #    3     front_right   Driver 2 · A      IN1 pin 40/GPIO21   IN2 pin 38/GPIO20
+    #    4     rear_right    Driver 2 · B      IN3 pin 36/GPIO16   IN4 pin 32/GPIO12
     #    5-8   spare         Drivers 3 and 4   see docs/PINOUT.md
     #
     # Every wheel starts uninverted. Test each one raised, then set `inverted`

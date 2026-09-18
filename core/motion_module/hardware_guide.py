@@ -84,11 +84,11 @@ def parts_groups() -> list[dict]:
             "id": "wiring", "title": "Wiring",
             "requirement": "recommended",
             "items": [
-                _part("As needed", "Motor & battery wire", "Stranded copper; gauge sized for the current each run carries", "Carries battery and motor current", "needs_spec"),
+                _part("As needed", "16 AWG silicone wire", "Haerkn 16 AWG silicone wire, two cores (red and black), tinned copper, 25 ft", "Carries the 12 V battery and motor current, up to the 10 A each driver draws", "selected", "https://www.amazon.com/dp/B07RRPFL3Q"),
                 _part("As needed", "Jumper wires", "Multicoloured breadboard jumper set; female-to-female for the Pi header", "Carries the Pi's control signals to each driver and to the servo board", "selected", "https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78"),
                 _part("As needed", "Wago 221 lever connectors", "Compact splicing connectors used for every 12 V power join", "Branches the battery rail to the drivers and regulators without soldering", "selected", "https://www.amazon.com/221-2401-Compact-Splicing-Inline-Connectors/dp/B0BT8DHLJJ"),
             ],
-            "note": "Signals are ordinary jumper wires from the Pi header; every 12 V join is a Wago connector. Nothing else is needed - the boards, motors and servos come with their own leads.",
+            "note": "Signals are ordinary jumper wires from the Pi header; every 12 V and motor run is 16 AWG silicone wire, and every 12 V join is a Wago connector. Nothing else is needed - the boards, motors and servos come with their own leads.",
         },
         {
             "id": "tools", "title": "Tools for setup",
@@ -174,7 +174,6 @@ def hardware_guide(config) -> dict:
         "missing_specs": [
             {"name": "Servo rail on the power module", "needed": "Set its output for the servos you fit, and size it for every servo that can move at once. PCA9685 V+ is rated 3.3-6 V, so the 12 V battery rail must never reach it."},
             {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},
-            {"name": "Wire gauge", "needed": "Pick the motor and battery wire gauge from the current each run actually carries. Control signals use ordinary GPIO jumper wires."},
         ],
         "wiring": {
             "summary": "Four wires reach the Pi and that is all: 3.3 V, ground, SDA and SCL. Every other terminal on the board either belongs to the separate servo supply, is a chaining duplicate, or is left alone. The 16 servo outputs live on the board, not on Pi pins.",

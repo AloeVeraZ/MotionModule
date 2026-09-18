@@ -97,6 +97,25 @@ class DefaultConfigTests(unittest.TestCase):
         self.assertEqual(header[26]["category"], "reserved")
         self.assertEqual(header[39]["role"], "driver_2a · Driver 2A IN1")
 
+    def test_output_b_is_wired_to_in3_and_in4_as_the_board_prints_them(self):
+        config = load_config()
+        rows = motor_rows(config)
+        self.assertEqual(
+            [(row["output"], row["forward_input"], row["reverse_input"], row["terminal"]) for row in rows[:2]],
+            [("A", "IN1", "IN2", "MOTOR_A"), ("B", "IN3", "IN4", "MOTOR_B")],
+        )
+        header = header_rows(config)
+        # Physical 36 and 32 carry driver_2b, the second motor on Driver 2.
+        self.assertEqual(header[35]["role"], "driver_2b · Driver 2B IN3")
+        self.assertEqual(header[31]["role"], "driver_2b · Driver 2B IN4")
+        self.assertIn("Connect to IN3 on Driver 2", header[35]["detail"])
+        self.assertIn("IN3 and IN4 drive that board's MOTOR_B terminal", header[35]["detail"])
+        # No output B pin is ever described as IN1 or IN2.
+        for row in rows:
+            if row["output"] == "B":
+                for physical in (row["in1_physical"], row["in2_physical"]):
+                    self.assertNotRegex(header[physical - 1]["role"], r"IN[12]$")
+
     def test_default_names_describe_the_driver_output_and_servo_channel(self):
         """Out of the box a name says where the wire goes, with no lookup."""
 

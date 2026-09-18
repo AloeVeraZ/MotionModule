@@ -240,6 +240,33 @@ class DashboardTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn(active, response.data)
 
+    def test_wiring_guide_draws_the_pi_beside_its_header_then_the_drivers(self):
+        page = self.client.get("/diagnostics").data.decode("utf-8")
+        # The Pi 5 drawing sits in the same card as the header list, captioned.
+        pi_view = page[page.index('class="pi-header-view"'):page.index('id="headerGrid"')]
+        self.assertIn(f'src="/static/raspberry-pi-5.svg?v={static_asset_version()}"', pi_view)
+        self.assertIn("<figcaption>Pi-5</figcaption>", pi_view)
+        self.assertIn("ports at the bottom, header down the right edge", page)
+        # Then the drivers, then the servo board, then power.
+        order = [page.index(text) for text in (
+            'id="headerGrid"', "02 / Motor drivers", 'id="driverGrid"', "03 / Servo controller", "04 / Power")]
+        self.assertEqual(order, sorted(order))
+        # The driver drawing names every pin the way the board prints it.
+        drawing = page[page.index('class="driver-figure"'):page.index("</figure>", page.index('class="driver-figure"'))]
+        for label in ("IN1", "IN2", "IN3", "IN4", "GND", "MOTOR_A", "MOTOR_B", "VIN−", "VIN+"):
+            self.assertIn(f">{label}</text>", drawing)
+        self.assertIn("Mecanum sample", page)
+
+        drawing_file = self.client.get("/static/raspberry-pi-5.svg")
+        svg = drawing_file.data
+        drawing_file.close()
+        self.assertEqual(drawing_file.status_code, 200)
+        self.assertTrue(svg.startswith(b"<svg"))
+        # Forty header pins, and nothing fetched from anywhere else.
+        self.assertEqual(svg.count(b'<use href="#pin" x="51.23"') + svg.count(b'<use href="#pin" x="53.77"'), 40)
+        self.assertNotIn(b"http://", svg.replace(b"http://www.w3.org/2000/svg", b""))
+        self.assertNotIn(b"https://", svg)
+
     def test_pages_load_only_self_hosted_design_assets(self):
         version = static_asset_version()
         for path in ("/", "/drive", "/driver-station"):

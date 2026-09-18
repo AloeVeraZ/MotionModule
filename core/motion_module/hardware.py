@@ -70,16 +70,21 @@ HARDWARE = {
     # Rename them to match your machine ("front_left", "intake", ...) and the
     # dashboard follows along.
     #
-    # channel  name        driver / output   IN1 wire        IN2 wire        driver ground
-    # -------  ----------  ---------------   -------------   -------------   -------------
-    #    1     driver_1a   Driver 1 · A      pin 37/GPIO26   pin 35/GPIO19   pin 39
-    #    2     driver_1b   Driver 1 · B      pin 33/GPIO13   pin 31/GPIO6    pin 39
-    #    3     driver_2a   Driver 2 · A      pin 40/GPIO21   pin 38/GPIO20   pin 34
-    #    4     driver_2b   Driver 2 · B      pin 36/GPIO16   pin 32/GPIO12   pin 34
-    #    5     driver_3a   Driver 3 · A      pin 23/GPIO11   pin 21/GPIO9    pin 25
-    #    6     driver_3b   Driver 3 · B      pin 26/GPIO7    pin 24/GPIO8    pin 25
-    #    7     driver_4a   Driver 4 · A      pin 15/GPIO22   pin 13/GPIO27   pin 14
-    #    8     driver_4b   Driver 4 · B      pin 18/GPIO24   pin 16/GPIO23   pin 14
+    # Each board's control header reads IN1 IN2 IN3 IN4 GND. IN1 and IN2
+    # drive its MOTOR_A terminal (output A); IN3 and IN4 drive MOTOR_B
+    # (output B). `forward_gpio` is the first of the pair, `reverse_gpio`
+    # the second.
+    #
+    # channel  name        driver / output   forward wire        reverse wire        driver ground
+    # -------  ----------  ---------------   -----------------   -----------------   -------------
+    #    1     driver_1a   Driver 1 · A      IN1 pin 37/GPIO26   IN2 pin 35/GPIO19   pin 39
+    #    2     driver_1b   Driver 1 · B      IN3 pin 33/GPIO13   IN4 pin 31/GPIO6    pin 39
+    #    3     driver_2a   Driver 2 · A      IN1 pin 40/GPIO21   IN2 pin 38/GPIO20   pin 34
+    #    4     driver_2b   Driver 2 · B      IN3 pin 36/GPIO16   IN4 pin 32/GPIO12   pin 34
+    #    5     driver_3a   Driver 3 · A      IN1 pin 23/GPIO11   IN2 pin 21/GPIO9    pin 25
+    #    6     driver_3b   Driver 3 · B      IN3 pin 26/GPIO7    IN4 pin 24/GPIO8    pin 25
+    #    7     driver_4a   Driver 4 · A      IN1 pin 15/GPIO22   IN2 pin 13/GPIO27   pin 14
+    #    8     driver_4b   Driver 4 · B      IN3 pin 18/GPIO24   IN4 pin 16/GPIO23   pin 14
     #
     # Every motor starts uninverted. Run the raised-wheel test in
     # Debug -> Test outputs, and set `inverted` True on any motor that

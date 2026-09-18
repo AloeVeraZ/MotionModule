@@ -44,6 +44,10 @@ DRIVER_ASSIGNMENTS = {
     8: (4, "B"),
 }
 DRIVER_GROUNDS = {1: 39, 2: 34, 3: 25, 4: 14}
+# The names printed on each driver board's control header. IN1 and IN2 drive
+# its MOTOR_A terminal (output A); IN3 and IN4 drive MOTOR_B (output B). The
+# forward wire goes to the first of each pair and the reverse wire to the second.
+DRIVER_INPUTS = {"A": ("IN1", "IN2", "MOTOR_A"), "B": ("IN3", "IN4", "MOTOR_B")}
 
 HEADER_FUNCTIONS = {
     1: "3.3 V", 2: "5 V", 3: "GPIO2 / SDA", 4: "5 V", 5: "GPIO3 / SCL",
@@ -73,11 +77,15 @@ def motor_rows(config) -> list[dict]:
     rows = []
     for motor in config.motors:
         driver, output = DRIVER_ASSIGNMENTS[motor.channel]
+        forward_input, reverse_input, terminal = DRIVER_INPUTS[output]
         rows.append(
             {
                 "driver": driver,
                 "ground_physical": DRIVER_GROUNDS[driver],
                 "output": output,
+                "terminal": terminal,
+                "forward_input": forward_input,
+                "reverse_input": reverse_input,
                 "motor": motor.channel,
                 "name": motor.name,
                 "in1_bcm": motor.forward_gpio,
@@ -148,12 +156,13 @@ def header_rows(config) -> list[dict]:
         configured_pins.add(physical)
     for row in motor_connections:
         label = f"{row['name']} · Driver {row['driver']}{row['output']}"
-        roles[row["in1_physical"]] = (f"{label} IN1", "motor")
-        roles[row["in2_physical"]] = (f"{label} IN2", "motor")
-        for signal in ("in1", "in2"):
+        pair = f"{row['forward_input']} and {row['reverse_input']}"
+        for signal, board_input in (("in1", row["forward_input"]), ("in2", row["reverse_input"])):
             physical = row[f"{signal}_physical"]
+            roles[physical] = (f"{label} {board_input}", "motor")
             details[physical] = (
-                f"Connect to Driver {row['driver']}, output {row['output']}, {signal.upper()} for {row['name']} (motor {row['motor']}). "
+                f"Connect to {board_input} on Driver {row['driver']}. {pair} drive that board's "
+                f"{row['terminal']} terminal, output {row['output']}, which runs {row['name']} (motor {row['motor']}). "
                 "This is a 3.3 V control signal, not a motor output. It carries direction and speed to the driver; the motor's own two wires go to that driver's output pair."
             )
             if row[f"{signal}_bcm"] in {7, 8, 9, 10, 11}:

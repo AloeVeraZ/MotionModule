@@ -150,6 +150,14 @@ class HardwareGuideTests(unittest.TestCase):
             self.assertNotIn(gone, names)
         self.assertEqual(len(wiring["items"]), 3)
 
+    def test_power_and_motor_runs_use_the_chosen_16_awg_silicone_wire(self):
+        guide = hardware_guide(self.config)
+        wiring = next(g for g in guide["parts_groups"] if g["id"] == "wiring")
+        wire = next(part for part in wiring["items"] if "16 AWG" in part["name"])
+        self.assertEqual(wire["status"], "selected")
+        self.assertEqual(wire["url"], "https://www.amazon.com/dp/B07RRPFL3Q")
+        self.assertNotIn("Wire gauge", [spec["name"] for spec in guide["missing_specs"]])
+
     def test_only_one_servo_board_and_no_pull_down_resistors_are_listed(self):
         parts = [part for group in hardware_guide(self.config)["parts_groups"] for part in group["items"]]
         names = " ".join(part["name"] for part in parts).lower()

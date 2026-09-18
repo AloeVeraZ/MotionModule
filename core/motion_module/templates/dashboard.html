@@ -310,8 +310,17 @@
 
 /* ------------------------------------------------------------- pin map */
 
-.pin-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, .92fr) minmax(0, 1.45fr); align-items: start; }
-.pi-board { padding: 1.125rem; }
+.pin-layout { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.65fr) minmax(17rem, 1fr); align-items: start; }
+/* clip rather than hide, so the Pi drawing can stay in view beside a long list */
+.pi-board { padding: 1.125rem; overflow: clip; }
+/* The Pi is drawn turned the same way as the list beside it: ports at the
+   bottom and the header down the right edge, so pin 1 is top left in both. */
+.pi-header-view { display: grid; grid-template-columns: minmax(7rem, 12.5rem) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.pi-figure { position: sticky; top: 5.5rem; display: grid; justify-items: center; gap: .375rem; margin: 0; }
+.pi-figure img { display: block; width: 100%; height: auto; }
+.pi-figure figcaption { color: var(--faint); font-size: .6875rem; font-weight: 600; letter-spacing: .06em; }
+.orient-steps { display: grid; gap: .625rem; padding-left: 1.125rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.orient-steps strong { color: var(--ink); font-weight: 600; }
 .pi-label {
   margin-bottom: .25rem;
   color: var(--accent-text);
@@ -374,9 +383,45 @@
 .legend span { display: inline-flex; align-items: center; gap: .375rem; }
 .legend i { width: .625rem; height: .625rem; border-radius: 3px; }
 
-.driver-grid { display: grid; gap: .625rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Each board's two motor outputs keep one colour everywhere: blue for
+   IN1/IN2 and MOTOR_A, amber for IN3/IN4 and MOTOR_B. */
+.pair-a { --pair: var(--blue); }
+.pair-b { --pair: var(--amber); }
+.driver-intro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.25rem 1.75rem; align-items: center; }
+.driver-figure { margin: 0; }
+.driver-figure svg { display: block; width: 100%; height: auto; }
+.driver-figure figcaption { margin-top: .375rem; color: var(--faint); font-size: .6875rem; text-align: center; }
+.driver-art-label { font: 700 17px/1 var(--font-display); letter-spacing: .05em; fill: var(--ink); }
+.driver-art-note { font: 500 12.5px/1 var(--font-text); fill: var(--faint); }
+.driver-art-label.pair-a, .driver-art-label.pair-b { fill: var(--pair); }
+.driver-art-lead { stroke: var(--faint); stroke-width: 1.2; }
+.driver-terms { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem .875rem; margin-top: .75rem; font-size: .8125rem; line-height: 1.55; }
+.driver-terms dt { font: 700 .9375rem/1.45 var(--font-display); letter-spacing: .05em; white-space: nowrap; }
+.driver-terms dt.pair-a, .driver-terms dt.pair-b { color: var(--pair); }
+.driver-terms dd { color: var(--muted); }
+.driver-terms strong { color: var(--ink); font-weight: 600; }
+.truth-table { width: 100%; margin-top: 1rem; border-collapse: collapse; font-size: .75rem; }
+.truth-table caption { margin-bottom: .375rem; color: var(--faint); font-weight: 600; text-align: left; }
+.truth-table th, .truth-table td { padding: .4375rem .5rem; border-bottom: 1px solid var(--line-soft); text-align: left; }
+.truth-table th { color: var(--faint); font-weight: 600; }
+/* Laid out like the reference controller plate: Pi on the left with its USB
+   ports at the bottom, Driver 1 beside them, Driver 2 above it, Drivers 3
+   and 4 to their right. */
+.driver-grid { display: grid; gap: .625rem; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "d2 d4" "d1 d3"; }
+.driver-card[data-driver="1"] { grid-area: d1; }
+.driver-card[data-driver="2"] { grid-area: d2; }
+.driver-card[data-driver="3"] { grid-area: d3; }
+.driver-card[data-driver="4"] { grid-area: d4; }
 .driver-card { padding: .875rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
-.driver-card h3 { margin-bottom: .5rem; color: var(--accent-text); font: 700 .9375rem/1.1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.driver-card-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .25rem .75rem; }
+.driver-card h3 { color: var(--accent-text); font: 700 .9375rem/1.1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.driver-card-head span { color: var(--faint); font-size: .6875rem; }
+.driver-card.unused p { margin-top: .5rem; }
+.driver-output { margin-top: .625rem; padding: .5rem .625rem; border-left: 3px solid var(--pair); border-radius: 0 var(--radius-xs) var(--radius-xs) 0; background: var(--surface); }
+.driver-output-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .25rem .5rem; margin-bottom: .375rem; font-size: .8125rem; font-weight: 600; }
+.driver-output-head b { color: var(--pair); font: 700 1rem/1 var(--font-display); letter-spacing: .04em; }
+.driver-output-head small { margin-left: auto; color: var(--faint); font-size: .6875rem; font-weight: 500; }
+.driver-ground { margin-top: .625rem; padding-left: calc(.625rem + 3px); }
 .wire { display: grid; grid-template-columns: auto 1fr; gap: .25rem .625rem; font-size: .75rem; }
 .wire b { color: var(--faint); font: 600 .75rem/1.45 var(--font-mono); }
 .wire span { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
@@ -769,7 +814,10 @@
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .servo-outputs { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .5rem; }
   .signal-flow { flex-wrap: wrap; }
-  .driver-grid { grid-template-columns: minmax(0, 1fr); }
+  .driver-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; }
+  .driver-grid > .driver-card[data-driver] { grid-area: auto; }
+  .driver-intro { grid-template-columns: minmax(0, 1fr); }
+  .driver-figure { max-width: 30rem; }
 }
 
 @media (max-width: 640px) {
@@ -797,6 +845,8 @@
   .test-row strong { overflow-wrap: anywhere; }
   .button.hold { min-width: 4.5rem; padding-inline: .75rem; }
   .pin { gap: .25rem; padding-inline: .25rem; }
+  .pi-header-view { grid-template-columns: minmax(0, 1fr); }
+  .pi-figure { position: static; width: min(10rem, 55%); justify-self: center; }
 }
 
 @media (max-width: 420px) {
@@ -1019,11 +1069,18 @@
           switched off through boot until you have watched the outputs stay still.
         </div>
 
-        <div class="section-heading"><div><p class="eyebrow">01 / Controller &amp; motor drivers</p><h2>Follow the signal.</h2><p>Choose any header pin to see its full connection. Pin numbers are physical positions; GPIO numbers are the names used by Python.</p></div><span class="pill">40 HEADER PINS</span></div>
+        <div class="section-heading"><div><p class="eyebrow">01 / Controller</p><h2>Follow the signal.</h2><p>Choose any header pin to see its full connection. Pin numbers are physical positions; GPIO numbers are the names used by Python.</p></div><span class="pill">40 HEADER PINS</span></div>
         <div class="pin-layout">
           <article class="card pi-board">
-            <div class="pi-label">Raspberry Pi · physical header positions</div>
-            <p class="small muted pin-help">Find the board’s pin 1 marker before wiring. Select a pin for details.</p><div class="header-grid" id="headerGrid"></div>
+            <div class="pi-label">Raspberry Pi 5 · 40-pin header</div>
+            <p class="small muted pin-help">Drawn the way the Pi sits on the robot: ports at the bottom, header down the right edge. Select a pin for details.</p>
+            <div class="pi-header-view">
+              <figure class="pi-figure">
+                <img src="/static/raspberry-pi-5.svg?v={{ asset_version }}" width="620" height="940" alt="Raspberry Pi 5 seen from above, with its USB and Ethernet ports at the bottom and the 40-pin header down its right edge. Pin 1 is the top pin of the header's inner row.">
+                <figcaption>Pi-5</figcaption>
+              </figure>
+              <div class="header-grid" id="headerGrid"></div>
+            </div>
             <div class="legend">
               <span><i style="background:var(--motor)"></i>Motor signal</span>
               <span><i style="background:var(--servo)"></i>Servo-board logic</span>
@@ -1036,19 +1093,95 @@
           <div class="stack">
             <article class="card pin-inspector" aria-live="polite"><div class="panel-body"><span class="eyebrow" id="pinInspectorLabel">SELECTED CONNECTION</span><h2 id="pinInspectorTitle">Physical pin 1 · 3.3 V</h2><p id="pinInspectorRole">PCA9685 logic supply</p><p class="muted small" id="pinInspectorDetail">Select a pin in the diagram to see where it goes and what it does.</p></div></article>
             <article class="card">
-              <div class="panel-head">
-                <h2>Four dual H-bridge drivers</h2>
-                <span>Configured &middot; physical connection unverified</span>
-              </div>
-              <p class="lead">Each board controls two motors. IN1 and IN2 control direction and power. Driver 1 holds motor channels 1 and 2, driver 2 holds 3 and 4, and so on, with each driver&rsquo;s four signal pins and its ground sitting together on the header.</p>
+              <div class="panel-head"><h2>Line the Pi up with the list</h2></div>
               <div class="panel-body">
-                <div class="driver-grid" id="driverGrid"></div>
+                <ol class="orient-steps">
+                  <li>Turn the Pi so its <strong>USB and Ethernet ports face down</strong>. The 40-pin header then runs down its right edge, as drawn.</li>
+                  <li><strong>Pin 1</strong> is the top pin of the row nearer the middle of the board. <strong>Pin 2</strong> sits beside it, on the board&rsquo;s edge.</li>
+                  <li>Odd pins run down the inner row and even pins down the outer row, so the list reads like the header itself: 1 and 2 at the top, 39 and 40 at the bottom.</li>
+                </ol>
               </div>
             </article>
           </div>
         </div>
 
-        <div class="section-heading"><div><p class="eyebrow">02 / Servo controller</p><h2>Five wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C and holds its output-enable pin. All five wires sit in one run on header pins 1–9, leaving pins 8 and 10 free for the serial console. Each servo plugs into a separate three-pin output on the board.</p></div></div>
+        <div class="section-heading"><div><p class="eyebrow">02 / Motor drivers</p><h2>Two motors per board.</h2><p>Each dual H-bridge board takes four signal wires and a ground from the Pi, and drives two motors from the 12&nbsp;V battery.</p></div><span class="pill">4 BOARDS · 8 MOTORS</span></div>
+        <article class="card">
+          <div class="panel-head">
+            <h2>Four dual H-bridge drivers</h2>
+            <span>Configured &middot; physical connection unverified</span>
+          </div>
+          <div class="panel-body stack">
+            <div class="driver-intro">
+              <figure class="driver-figure">
+                <svg viewBox="0 0 436 250" role="img" aria-labelledby="driverArtTitle">
+                  <title id="driverArtTitle">The dual H-bridge driver. Control pins IN1, IN2, IN3, IN4 and GND on its left edge; MOTOR_A, MOTOR_B and the VIN power terminals on its right edge.</title>
+                  <rect x="118" y="12" width="176" height="226" rx="6" fill="#141517" stroke="#2c2e31"/>
+                  <g fill="#d9dbde"><circle cx="131" cy="25" r="5.5"/><circle cx="131" cy="225" r="5.5"/></g>
+                  <g fill="#0b0c0d"><circle cx="131" cy="25" r="3"/><circle cx="131" cy="225" r="3"/></g>
+                  <g fill="#b9bdc2"><circle cx="170" cy="52" r="25"/><circle cx="170" cy="198" r="25"/></g>
+                  <g fill="#dfe2e5"><circle cx="170" cy="52" r="21"/><circle cx="170" cy="198" r="21"/></g>
+                  <g fill="#5d636a"><path d="M151 45a21 21 0 0 1 8-13v40a21 21 0 0 1-8-13z"/><path d="M151 191a21 21 0 0 1 8-13v40a21 21 0 0 1-8-13z"/></g>
+                  <g fill="#4b5157" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9" text-anchor="middle"><text x="175" y="50">470</text><text x="175" y="61">35V</text><text x="175" y="196">470</text><text x="175" y="207">35V</text></g>
+                  <g fill="#26292d"><rect x="146" y="98" width="16" height="10" rx="1"/><rect x="146" y="116" width="16" height="10" rx="1"/><rect x="146" y="134" width="16" height="10" rx="1"/><rect x="146" y="152" width="16" height="10" rx="1"/></g>
+                  <g fill="#d6ccb3"><rect x="168" y="100" width="4" height="7" rx=".6"/><rect x="176" y="100" width="4" height="7" rx=".6"/><rect x="168" y="136" width="4" height="7" rx=".6"/><rect x="176" y="136" width="4" height="7" rx=".6"/><rect x="186" y="118" width="4" height="7" rx=".6"/><rect x="186" y="154" width="4" height="7" rx=".6"/></g>
+                  <rect x="186" y="88" width="6" height="4" rx="1" fill="#ff5a4f"/>
+                  <rect x="200" y="12" width="90" height="226" fill="#aab2ba"/>
+                  <g fill="#dde2e6"><rect x="203" y="12" width="16" height="226"/><rect x="225" y="12" width="16" height="226"/><rect x="247" y="12" width="16" height="226"/><rect x="269" y="12" width="16" height="226"/></g>
+                  <g fill="#f3f5f7" fill-opacity=".7"><rect x="205" y="12" width="3" height="226"/><rect x="227" y="12" width="3" height="226"/><rect x="249" y="12" width="3" height="226"/><rect x="271" y="12" width="3" height="226"/></g>
+                  <rect x="118" y="94" width="12" height="82" rx="1.5" fill="#f2c230"/>
+                  <g fill="#e4c15a"><rect x="106" y="100" width="12" height="4"/><rect x="106" y="116" width="12" height="4"/><rect x="106" y="132" width="12" height="4"/><rect x="106" y="148" width="12" height="4"/><rect x="106" y="164" width="12" height="4"/></g>
+                  <rect x="288" y="40" width="38" height="52" rx="3" fill="#2f6fd0"/>
+                  <rect x="288" y="108" width="38" height="52" rx="3" fill="#2f6fd0"/>
+                  <rect x="288" y="176" width="38" height="52" rx="3" fill="#1e1f22" stroke="#3a3c40"/>
+                  <g fill="#cfd4d9"><circle cx="307" cy="53" r="9"/><circle cx="307" cy="79" r="9"/><circle cx="307" cy="121" r="9"/><circle cx="307" cy="147" r="9"/><circle cx="307" cy="189" r="9"/><circle cx="307" cy="215" r="9"/></g>
+                  <g stroke="#6d747b" stroke-width="2.2" stroke-linecap="round"><path d="M302 53h10M302 79h10M302 121h10M302 147h10M302 189h10M302 215h10"/></g>
+                  <g class="driver-art-lead"><path d="M96 102h8M96 118h8M96 134h8M96 150h8M96 166h8M330 66h4M330 134h4M330 189h4M330 215h4"/></g>
+                  <text class="driver-art-note" x="100" y="80" text-anchor="end">Control, 3–18 V</text>
+                  <text class="driver-art-label pair-a" x="92" y="107" text-anchor="end">IN1</text>
+                  <text class="driver-art-label pair-a" x="92" y="123" text-anchor="end">IN2</text>
+                  <text class="driver-art-label pair-b" x="92" y="139" text-anchor="end">IN3</text>
+                  <text class="driver-art-label pair-b" x="92" y="155" text-anchor="end">IN4</text>
+                  <text class="driver-art-label" x="92" y="171" text-anchor="end">GND</text>
+                  <text class="driver-art-label pair-a" x="338" y="67">MOTOR_A</text>
+                  <text class="driver-art-note" x="338" y="81">output A · 1A</text>
+                  <text class="driver-art-label pair-b" x="338" y="135">MOTOR_B</text>
+                  <text class="driver-art-note" x="338" y="149">output B · 1B</text>
+                  <text class="driver-art-label" x="338" y="194">VIN−</text>
+                  <text class="driver-art-label" x="338" y="220">VIN+</text>
+                  <text class="driver-art-note" x="338" y="236">12 V battery</text>
+                </svg>
+                <figcaption>GODIYMODULES dual H-bridge, the driver in the parts list</figcaption>
+              </figure>
+              <div>
+                <p class="small muted">This is the motor driver MotionModule is built around. Each board runs two motors, and every pin is printed on the board:</p>
+                <dl class="driver-terms">
+                  <dt class="pair-a">IN1 · IN2</dt><dd>Drive <strong>MOTOR_A</strong>. MotionModule calls that output <strong>A</strong>, so on Driver&nbsp;1 it is <strong>1A</strong>.</dd>
+                  <dt class="pair-b">IN3 · IN4</dt><dd>Drive <strong>MOTOR_B</strong>, output <strong>B</strong>: <strong>1B</strong> on Driver&nbsp;1. Drivers 2, 3 and 4 follow the same pattern.</dd>
+                  <dt>GND</dt><dd>Joins a Pi ground pin so the signals share a reference. Motor current never flows through it.</dd>
+                  <dt>VIN+ · VIN−</dt><dd>The 12&nbsp;V battery; the board takes 3&ndash;18&nbsp;V. Its inputs take 3&ndash;18&nbsp;V signals too, so the Pi&rsquo;s 3.3&nbsp;V drives them directly.</dd>
+                </dl>
+                <table class="truth-table">
+                  <caption>Two inputs drive one motor</caption>
+                  <thead><tr><th scope="col">IN1 or IN3</th><th scope="col">IN2 or IN4</th><th scope="col">Motor</th></tr></thead>
+                  <tbody>
+                    <tr><td>Speed signal</td><td>Off</td><td>Forward</td></tr>
+                    <tr><td>Off</td><td>Speed signal</td><td>Reverse</td></tr>
+                    <tr><td>Off</td><td>Off</td><td>Stopped, coasting</td></tr>
+                  </tbody>
+                </table>
+                <p class="small muted spaced">The speed signal is PWM: the pin switches on and off many times a second, and the share of time it is on sets the speed. Which way counts as forward depends on how the motor&rsquo;s wires sit in its terminal, so flip it with <code>inverted</code> in <code>hardware.py</code> rather than rewiring.</p>
+              </div>
+            </div>
+            <div>
+              <h3 class="subheading">Where each driver sits</h3>
+              <p class="small muted">The cards below are laid out like the reference controller plate: the Pi on the left with its USB ports at the bottom, <strong>Driver&nbsp;1</strong> beside those ports, <strong>Driver&nbsp;2</strong> above it, <strong>Driver&nbsp;3</strong> to the right of Driver&nbsp;1 and <strong>Driver&nbsp;4</strong> above Driver&nbsp;3. That is how the project&rsquo;s Mecanum sample is wired, with its four wheels on Drivers 1 and 2. Wire the same way to run the sample unchanged, or change the pins in <code>hardware.py</code> to match your own wiring.</p>
+            </div>
+            <div class="driver-grid" id="driverGrid"></div>
+          </div>
+        </article>
+
+        <div class="section-heading"><div><p class="eyebrow">03 / Servo controller</p><h2>Five wires. Sixteen servo outputs.</h2><p>The Pi talks to one PCA9685 board over I²C and holds its output-enable pin. All five wires sit in one run on header pins 1–9, leaving pins 8 and 10 free for the serial console. Each servo plugs into a separate three-pin output on the board.</p></div></div>
         <article class="card"><div class="panel-head"><h2>PCA9685 servo bus</h2><span id="servoSummary">Loading…</span></div><div class="panel-body stack">
           <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>3.3 V · SDA · SCL · OE · GND</span></div><b aria-hidden="true">→</b><div><small>SERVO DRIVER</small><strong>PCA9685</strong><span>I²C commands → PWM signals</span></div><b aria-hidden="true">→</b><div><small>OUTPUTS</small><strong>16 servo channels</strong><span>Signal · V+ · Ground, each</span></div></div>
           <p class="notice danger" id="servoBusNotice" hidden></p>
@@ -1058,7 +1191,7 @@
           <div class="wire" id="servoDetection"></div>
         </div></article>
 
-        <div class="section-heading"><div><p class="eyebrow">03 / Power</p><h2>Give each rail the right supply.</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">04 / Power</p><h2>Give each rail the right supply.</h2></div></div>
         <div class="stack"><article class="card"><div class="panel-head"><h2>Power connections</h2><span>Separate rails · common ground</span></div><div class="panel-body stack" id="powerDomains"></div></article></div>
 
         <article class="card spaced">
@@ -2802,29 +2935,58 @@ function renderPinMap(header) {
   if (header.length) inspectPin(header[0]);
 }
 
+/* Where each driver sits on the reference controller plate, with the Pi on
+   the left and its USB ports at the bottom. The grid is laid out the same way. */
+const DRIVER_PLACES = {
+  1: 'Bottom left · beside the Pi’s USB ports',
+  2: 'Top left · above Driver 1',
+  3: 'Bottom right · beside Driver 1',
+  4: 'Top right · above Driver 3',
+};
+
+/* One motor output, named the way the board prints it: output A is MOTOR_A
+   on IN1/IN2, output B is MOTOR_B on IN3/IN4. */
+function driverOutput(motor) {
+  const block = element('div', `driver-output ${motor.output === 'B' ? 'pair-b' : 'pair-a'}`);
+  const head = element('div', 'driver-output-head');
+  head.append(
+    element('b', null, `${motor.driver}${motor.output}`),
+    element('span', null, motor.name),
+    element('small', null, `${motor.terminal} · motor ${motor.motor}`),
+  );
+  const wire = element('div', 'wire');
+  wire.append(
+    element('b', null, motor.forward_input),
+    element('span', null, `Pin ${motor.in1_physical} · GPIO${motor.in1_bcm}`),
+    element('b', null, motor.reverse_input),
+    element('span', null, `Pin ${motor.in2_physical} · GPIO${motor.in2_bcm}`),
+  );
+  block.append(head, wire);
+  return block;
+}
+
 function renderDrivers(motors) {
   const drivers = new Map();
   motors.forEach(motor => {
     if (!drivers.has(motor.driver)) drivers.set(motor.driver, []);
     drivers.get(motor.driver).push(motor);
   });
-  const cards = [...drivers].sort((a, b) => a[0] - b[0]).map(([driver, outputs]) => {
-    const card = element('div', 'driver-card');
-    card.append(element('h3', null, `Driver ${driver}`));
-    outputs.sort((a, b) => a.output.localeCompare(b.output)).forEach(motor => {
-      const wire = element('div', 'wire');
-      wire.append(
-        element('b', null, `${motor.driver}${motor.output}`),
-        element('span', null, motor.name),
-        element('b', null, 'IN1'),
-        element('span', null, `Physical ${motor.in1_physical} / GPIO${motor.in1_bcm}`),
-        element('b', null, 'IN2'),
-        element('span', null, `Physical ${motor.in2_physical} / GPIO${motor.in2_bcm}`),
-        element('b', null, 'GND'),
-        element('span', null, `Physical ${motor.ground_physical} · signal reference`),
-      );
-      card.append(wire);
-    });
+  const numbers = [...new Set([1, 2, 3, 4, ...drivers.keys()])].sort((a, b) => a - b);
+  const cards = numbers.map(driver => {
+    const outputs = (drivers.get(driver) || []).sort((a, b) => a.output.localeCompare(b.output));
+    const card = element('div', `driver-card${outputs.length ? '' : ' unused'}`);
+    card.dataset.driver = driver;
+    const head = element('div', 'driver-card-head');
+    head.append(element('h3', null, `Driver ${driver}`), element('span', null, DRIVER_PLACES[driver] || ''));
+    card.append(head);
+    if (!outputs.length) {
+      card.append(element('p', 'small muted', 'No motor in this project uses this board.'));
+      return card;
+    }
+    outputs.forEach(motor => card.append(driverOutput(motor)));
+    const ground = element('div', 'wire driver-ground');
+    ground.append(element('b', null, 'GND'), element('span', null, `Pin ${outputs[0].ground_physical} · signal ground`));
+    card.append(ground);
     return card;
   });
   replaceWith($('#driverGrid'), cards);
