@@ -128,7 +128,7 @@ def dashboard_checks(module) -> list[dict]:
                 detail = (
                     "Not connected. Nothing answered at this address, so no servo on this "
                     "board can move. Check SDA on pin 3, SCL on pin 5, VCC on pin 1 and GND "
-                    f"on pin 6. I2C reported: {board.get('error') or 'board not detected'}"
+                    f"on pin 9. I2C reported: {board.get('error') or 'board not detected'}"
                 )
             elif board.get("fault"):
                 level = "warn"

@@ -2243,7 +2243,7 @@ function renderServos(robot) {
       replaceWith(busNotice, [
         element('strong', null, offline.length === boards.length
           ? 'No servo board is answering.' : `${offline.length} servo board(s) not answering.`),
-        document.createTextNode(` Nothing is being sent to the outputs below. Check SDA on pin 3, SCL on pin 5, VCC on pin 1 (3.3 V) and GND on pin 6, then confirm the board's address pads match ${offline.map(board => board.address).join(', ')}. The diagram stays visible so you can wire against it.`),
+        document.createTextNode(` Nothing is being sent to the outputs below. Check SDA on pin 3, SCL on pin 5, VCC on pin 1 (3.3 V) and GND on pin 9, then confirm the board's address pads match ${offline.map(board => board.address).join(', ')}. The diagram stays visible so you can wire against it.`),
         ...(offline[0].error ? [element('span', 'muted small', ` I²C reported: ${offline[0].error}`)] : []),
       ]);
     } else if (refusing.length) {

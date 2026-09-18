@@ -1,5 +1,11 @@
 """Pin and name definitions for this Mecanum robot.
 
+LOCKED WIRING: the robot is wired exactly like this, and that wiring works.
+Never change a GPIO in this file, motor or servo, and never move a wheel to
+another channel. Renaming channels 5-8 and flipping `inverted` are fine.
+AGENTS.md at the repository root explains, and tests/test_wiring_lock.py
+fails if a pin here moves.
+
 This is a copy of the hardware.py that ships with MotionModule, with the four
 drive motors renamed. Everything else is unchanged. Keep this file with the
 sample robot.py because its drive code uses these wheel names. A robot that
@@ -47,7 +53,8 @@ HARDWARE = {
         8: {"name": "driver_4b", "forward_gpio": 24, "reverse_gpio": 23, "inverted": False},
     },
 
-    # One PCA9685 board on I2C: SDA pin 3, SCL pin 5, VCC pin 1, GND pin 6.
+    # One PCA9685 board on I2C: VCC pin 1, SDA pin 3, SCL pin 5, OE pin 7,
+    # GND pin 9.
     # Servo power (V+) comes from its own regulated 5-6 V supply, never the Pi.
     "servos": {
         "enabled": True,
