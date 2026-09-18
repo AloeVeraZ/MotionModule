@@ -66,7 +66,7 @@ independent of the selected robot style. PCA9685 boards are checked through
 I2C. USB devices appear with their IDs, Pi ports, drivers, and access state.
 Basic H-bridge and servo outputs cannot identify attached hardware.
 
-With all wheels raised, use the guarded Motor Bench Test at low power. Test
+With all wheels raised, use the guarded Motor Bench Test at half power. Test
 servos one channel at a time after selecting the correct voltage and behavior.
 
 ## 5. Add sensors with the Arduino GIGA (optional)

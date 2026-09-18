@@ -314,7 +314,7 @@ Every install now checks for it. A `hardware.py` whose motors all sit on those
 old pins is replaced with the one this release ships: the Mecanum sample's in
 `robots/Mecanum`, the built-in one in `~/.config/motionmodule/hardware.py`. The
 old file stays beside it as `hardware.py.retired-wiring`, and the install log
-says what moved. Every motor then starts uninverted, so repeat the first
-electrical test above and set `inverted` on any wheel that turns the wrong way
-before driving. A `hardware.py` with any other pins is the robot's own and is
+says what moved. The new file brings the shipped `inverted` values, so repeat
+the first electrical test above and fix `inverted` on any wheel that turns the
+wrong way before driving. A `hardware.py` with any other pins is the robot's own and is
 never changed.

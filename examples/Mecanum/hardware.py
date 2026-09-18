@@ -40,12 +40,13 @@ HARDWARE = {
     #    4     rear_right    Driver 2 · B      IN3 pin 36/GPIO16   IN4 pin 32/GPIO12
     #    5-8   spare         Drivers 3 and 4   see docs/PINOUT.md
     #
-    # Every wheel starts uninverted. Test each one raised, then set `inverted`
-    # True on any wheel that turns the wrong way.
+    # On this robot both front wheels turn backward on forward power, so they
+    # are inverted and the rear wheels are not. Test each wheel raised, then
+    # flip `inverted` on any wheel that still turns the wrong way.
     "motors": {
-        1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": False},
+        1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": True},
         2: {"name": "rear_left", "forward_gpio": 13, "reverse_gpio": 6, "inverted": False},
-        3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": False},
+        3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": True},
         4: {"name": "rear_right", "forward_gpio": 16, "reverse_gpio": 12, "inverted": False},
         5: {"name": "driver_3a", "forward_gpio": 11, "reverse_gpio": 9, "inverted": False},
         6: {"name": "driver_3b", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},

@@ -899,8 +899,8 @@ def create_app(
             power = float(body.get("power"))
             if channel not in bench_channels:
                 raise ValueError("That motor channel is not on the installed hardware map")
-            if not -0.2 <= power <= 0.2:
-                raise ValueError("Dashboard motor tests are limited to 20% power")
+            if not -0.5 <= power <= 0.5:
+                raise ValueError("Dashboard motor tests are limited to 50% power")
             with command_lock:
                 module.set_motors({channel: power})
         except (TypeError, ValueError) as error:

@@ -1007,7 +1007,7 @@
                     <strong>Test one motor</strong>
                     <p>Raise the robot so no wheel touches the ground, then
                       use <a href="/diagnostics#tests">Debug &rarr; Tests</a> to hold
-                      one motor at low power and watch which way it turns.</p>
+                      one motor at half power and watch which way it turns.</p>
                   </div>
                 </div>
                 <div class="step">
@@ -1272,9 +1272,9 @@
           <article class="card">
             <div class="panel-head">
               <h2>Motor bench test</h2>
-              <span>Hold to run &middot; max 20% power</span>
+              <span>Hold to run &middot; max 50% power</span>
             </div>
-            <p class="lead">Press and hold to run one motor at 20% for as long
+            <p class="lead">Press and hold to run one motor at 50% for as long
               as you hold it. This talks straight to the driver pins on the
               installed hardware map, so deployed robot code cannot change or
               disable it. Watch which way the wheel turns, then write it down.</p>
@@ -2641,14 +2641,28 @@ function paintKeys() {
     key.classList.toggle('active', heldKeys.has(bindings[key.dataset.action])));
 }
 
+async function requestStop() {
+  try {
+    return (await fetch('/api/stop', { method: 'POST', keepalive: true })).ok;
+  } catch (_) {
+    return false;   // the watchdog is the backstop
+  }
+}
+
+/* Resolves true once the robot has confirmed the stop. A held bench test
+   waits for that before it sends any power, and every stop ends one. */
 async function stopAll() {
   heldKeys.clear();
+  motorGeneration++;
   clearInterval(motorTimer);
   motorTimer = null;
   paintKeys();
-  try {
-    await fetch('/api/stop', { method: 'POST', keepalive: true });
-  } catch (_) { /* the watchdog is the backstop */ }
+  const pending = [testInFlight, servoInFlight].filter(Boolean);
+  let stopped = await requestStop();
+  // A test command already on its way can land after that stop, so stop
+  // again once it has.
+  if (pending.length) { await Promise.allSettled(pending); stopped = await requestStop(); }
+  return stopped;
 }
 
 addEventListener('keydown', event => {
@@ -3212,8 +3226,8 @@ function renderMotorTests(motors) {
       );
       const reverse = element('button', 'button hold', 'Hold −');
       const forward = element('button', 'button hold primary', 'Hold +');
-      bindMotorHold(reverse, motor.motor, -0.2);
-      bindMotorHold(forward, motor.motor, 0.2);
+      bindMotorHold(reverse, motor.motor, -0.5);
+      bindMotorHold(forward, motor.motor, 0.5);
       row.append(label, reverse, forward);
       return row;
     });
@@ -3646,7 +3660,7 @@ function bindMotorHold(button, channel, power) {
     if (!connected || !$('#motorSafe').checked) { toast('Connect and confirm the raised-wheel check first.', true); return; }
     holding = true;
     button.setPointerCapture?.(event.pointerId);
-    const stop = stopAll({keepBenchConfirmation: true});
+    const stop = stopAll();
     const generation = motorGeneration;
     if (!await stop || !holding || generation !== motorGeneration) { holding = false; return; }
     const pulse = async () => {
@@ -3660,7 +3674,7 @@ function bindMotorHold(button, channel, power) {
     };
     pulse();
   };
-  const end = () => { if (!holding) return; holding = false; stopAll({keepBenchConfirmation: true}); };
+  const end = () => { if (!holding) return; holding = false; stopAll(); };
   button.addEventListener('pointerdown', start);
   button.addEventListener('pointerup', end);
   button.addEventListener('pointercancel', end);

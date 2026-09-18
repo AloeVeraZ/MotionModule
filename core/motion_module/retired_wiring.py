@@ -113,7 +113,7 @@ def replace_retired_pin_maps(
         messages.append(
             f"Moved {path} onto the robot's wiring in docs/PINOUT.md. It still had the "
             f"motor pins from before the robot was rewired; that copy is kept as {backup.name}. "
-            "Every motor now starts uninverted: test each wheel with the robot raised before driving."
+            "Its inverted settings are now the shipped ones, so test each wheel with the robot raised before driving."
         )
     return messages
 

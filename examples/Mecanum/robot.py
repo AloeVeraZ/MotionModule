@@ -97,7 +97,7 @@ class MecanumDrive:
 
         controls = [
             {"name": "spin_test", "label": "Spin in place", "kind": "hold",
-             "detail": "Turns slowly for as long as you hold it"},
+             "detail": "Turns at half power for as long as you hold it"},
             {"name": "creep", "label": "Creep forward", "kind": "slider",
              "minimum": -0.3, "maximum": 0.3, "step": 0.05,
              "detail": "Fine positioning without touching the sticks"},
@@ -115,7 +115,7 @@ class MecanumDrive:
         """Handle one control from the Drive page. `value` is a number."""
 
         if name == "spin_test":
-            return self.drive(0, 0, 1 if value else 0, speed=0.2)
+            return self.drive(0, 0, 1 if value else 0, speed=0.5)
         if name == "creep":
             return self.drive(value, 0, 0, speed=1.0)
         if name == "zero_heading" and self.sensors is not None:

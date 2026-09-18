@@ -464,7 +464,7 @@ the PWM signal; it does not first move a mechanism to a safe pose.
 - The reference H-bridge inputs and ordinary servos have no return data. The Pi
   cannot prove that a board, motor, or servo is plugged into those output-only
   wires. Debug labels those outputs as configured but unverified; use the
-  guarded low-power bench tests with the robot raised.
+  guarded bench tests with the robot raised.
 
 ## How the system works together
 
@@ -499,7 +499,7 @@ Use this order:
    network addresses, and service log.
 2. Run `motionmodule doctor`; it does not intentionally move hardware.
 3. Run `motionmodule pinout` and compare every wire before applying power.
-4. Raise the robot and use the guarded Motor Bench Test at low power.
+4. Raise the robot and use the guarded Motor Bench Test at half power.
 5. Select the correct board, channel, and behavior in Servo Pulse Test.
 6. Check `motionmodule logs` after a failed project start.
 

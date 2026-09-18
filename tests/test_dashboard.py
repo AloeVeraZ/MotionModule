@@ -749,20 +749,20 @@ class DashboardTests(unittest.TestCase):
     def test_motor_test_requires_confirmation_and_caps_power(self):
         denied = self.client.post(
             "/api/motors/test", headers=self.headers,
-            json={"channel": 5, "power": 0.15},
+            json={"channel": 5, "power": 0.5},
         )
         self.assertEqual(denied.status_code, 400)
         too_high = self.client.post(
             "/api/motors/test", headers=self.headers,
-            json={"channel": 5, "power": 0.21, "confirmed": True},
+            json={"channel": 5, "power": 0.51, "confirmed": True},
         )
         self.assertEqual(too_high.status_code, 400)
         accepted = self.client.post(
             "/api/motors/test", headers=self.headers,
-            json={"channel": 5, "power": -0.15, "confirmed": True},
+            json={"channel": 5, "power": -0.5, "confirmed": True},
         )
         self.assertEqual(accepted.status_code, 200)
-        self.assertEqual(self.module.outputs[5], -0.15)
+        self.assertEqual(self.module.outputs[5], -0.5)
 
     def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
         status = self.client.get("/api/autonomous").get_json()
