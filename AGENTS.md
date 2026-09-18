@@ -33,6 +33,12 @@ The rules:
 A robot that someone wires differently gets its own `hardware.py` in its robot
 folder. That copy is theirs to change; the shipped files above are not.
 
+The pins the robot used before it was rewired (`front_left` on GPIO12 and
+GPIO6, and so on) are kept in `core/motion_module/retired_wiring.py` for one
+job only: an install recognises a pin map a Pi still has on those pins and
+moves it onto this wiring, keeping the old file beside it. Never wire to them
+or put them back in any pin map.
+
 ### Motor drivers
 
 Physical pin numbers are positions on the Pi's 40-pin header; GPIO numbers are

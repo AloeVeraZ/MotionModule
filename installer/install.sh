@@ -252,6 +252,13 @@ else
     say "Installed the default pin and name definitions at $CONFIG_FILE."
 fi
 
+# A pin map an earlier release left on the wiring the robot had before it was
+# rewired drives the wrong pins. Move it onto the locked wiring (AGENTS.md) and
+# keep the old file beside it; a pin map with any other pins stays as it is.
+while IFS= read -r message; do
+    say "$message"
+done < <("$release_dir/.venv/bin/python" -m motion_module.retired_wiring "$ROBOT_DIR" "$CONFIG_FILE")
+
 if [ ! -f "$PROJECT_DIR/README.md" ] || grep -q '^# MotionModule student workspace$' "$PROJECT_DIR/README.md"; then
 cat > "$PROJECT_DIR/README.md" <<EOF
 # MotionModule student workspace
