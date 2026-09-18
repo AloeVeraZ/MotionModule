@@ -270,3 +270,21 @@ high continuous current. Use one motor per H-bridge channel.
    `motionmodule test-motor 1`.
 9. Test each channel and label the resulting physical wheel/mechanism.
 10. Restart normal code only after the map is verified: `motionmodule start`.
+
+## A Pi set up before the rewiring
+
+Until 6 September 2026 every pin map MotionModule shipped put the motors on
+other pins, `front_left` on GPIO12 and GPIO6, `rear_left` on GPIO19 and GPIO16
+and so on, and left the servo board's OE unwired. An install keeps the robot
+folders and `~/.config/motionmodule/hardware.py` it finds, so a Pi set up before
+then kept that pin map, and its dashboard kept drawing it, after the robot was
+rewired to the tables above.
+
+Every install now checks for it. A `hardware.py` whose motors all sit on those
+old pins is replaced with the one this release ships: the Mecanum sample's in
+`robots/Mecanum`, the built-in one in `~/.config/motionmodule/hardware.py`. The
+old file stays beside it as `hardware.py.retired-wiring`, and the install log
+says what moved. Every motor then starts uninverted, so repeat the first
+electrical test above and set `inverted` on any wheel that turns the wrong way
+before driving. A `hardware.py` with any other pins is the robot's own and is
+never changed.
