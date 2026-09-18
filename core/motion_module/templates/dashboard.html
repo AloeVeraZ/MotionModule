@@ -3204,7 +3204,8 @@ function renderUpdates(data) {
   if (!data.installable && lines.length) {
     note.push('Updating from here needs the helper the installer adds. Update once over SSH with motionmodule install, then this button works.');
   }
-  if (data.error) note.push(data.error);
+  /* An unreachable line already says why; only a stray error needs the note. */
+  if (data.error && !lines.some(line => line.status === 'unreachable')) note.push(data.error);
   if (data.checked_at && !data.checking) {
     note.push(`Last checked ${new Date(data.checked_at * 1000).toLocaleTimeString()}. Updates are checked again every 15 minutes.`);
   }
