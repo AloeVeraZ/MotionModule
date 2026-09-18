@@ -130,7 +130,42 @@ is invalid after reboot, and its shell closes after five idle minutes. Revoke it
 with `motionmodule terminal disable`. Do not enter reusable secrets because the
 local robot dashboard uses HTTP.
 
+## 8. Update MotionModule
+
+A Pi with internet access checks GitHub by itself. Open **Debug -> Checks &
+logs**; *MotionModule updates* is the first card.
+
+1. The main line is green when this robot already runs its newest version and
+   red when an update is waiting. The card shows the commit the Pi has against
+   the one on GitHub.
+2. **Update now** asks once, then stops the motors and installs in the
+   background. The output appears under the card. MotionModule restarts, so
+   the dashboard reconnects on its own after a minute or two; keep the robot
+   powered until it does.
+
+Robot folders, `hardware.py`, and the active project are kept, the tests run
+before the new version is switched on, and a version that will not start is
+rolled back. Checks repeat every 15 minutes; **Check now** asks straight away.
+Nothing is ever installed without pressing the button.
+
 ## Troubleshooting
+
+### The update card says the helper is missing
+
+Updating from the dashboard needs `/usr/local/sbin/motionmodule-update`, which
+only installs from this version onwards. Update once over SSH:
+
+```bash
+motionmodule install main
+```
+
+The button works from then on.
+
+### The update card cannot reach GitHub
+
+The Pi is on Wi-Fi with no route to the internet, which is normal on its own
+hotspot. Join a network with internet access, or update over SSH. The card
+never guesses; it says so instead.
 
 ### The Pi is online but the website does not open
 

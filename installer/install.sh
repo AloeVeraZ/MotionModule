@@ -145,9 +145,13 @@ sudo systemctl enable --now ssh avahi-daemon
 say "Building isolated release $release_id..."
 mkdir -p "$RELEASES_DIR"
 mkdir "$release_dir"
+release_commit="$(git -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || true)"
 cp -a "$SOURCE_DIR/." "$release_dir/"
 rm -rf -- "$release_dir/.git" "$release_dir/.venv" "$release_dir/__pycache__"
 printf '%s\n' "$VERSION_REF" > "$release_dir/INSTALL_REF"
+# The commit this release was built from, so the dashboard's update check
+# can compare it with the branch on GitHub.
+printf '%s\n' "$release_commit" > "$release_dir/INSTALL_COMMIT"
 
 python3 -m venv --system-site-packages "$release_dir/.venv"
 "$release_dir/.venv/bin/python" -m pip install --upgrade pip setuptools wheel
@@ -271,6 +275,7 @@ sudo install -m 0755 "$release_dir/installer/motionmodule" /usr/local/bin/motion
 sudo install -m 0755 "$release_dir/installer/network_manager.py" /usr/local/sbin/motionmodule-network
 sudo install -m 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionmodule-hotspot
 sudo install -m 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
+sudo install -m 0755 "$release_dir/installer/update.sh" /usr/local/sbin/motionmodule-update
 
 sudoers_temp="$(mktemp)"
 systemctl_path="$(command -v systemctl)"
@@ -279,6 +284,14 @@ printf '%s ALL=(root) NOPASSWD: %s restart motionmodule.service\n' "$USER" "$sys
 sudo visudo -cf "$sudoers_temp" >/dev/null
 sudo install -m 0440 "$sudoers_temp" /etc/sudoers.d/motionmodule-network
 rm -f "$sudoers_temp"
+
+# The dashboard's update button, restricted to these two exact command lines.
+update_sudoers_temp="$(mktemp)"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update main\n' "$USER" > "$update_sudoers_temp"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update testing\n' "$USER" >> "$update_sudoers_temp"
+sudo visudo -cf "$update_sudoers_temp" >/dev/null
+sudo install -m 0440 "$update_sudoers_temp" /etc/sudoers.d/motionmodule-update
+rm -f "$update_sudoers_temp"
 
 say "Saving the Raspberry Pi Imager Wi-Fi as the preferred startup network..."
 sudo /usr/local/sbin/motionmodule-network init >/dev/null

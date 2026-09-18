@@ -972,6 +972,36 @@ output { color: var(--text); font-weight: 700; }
 .command-row code { color: var(--accent-text); }
 .command-row p { color: var(--muted); font-size: 12.5px; }
 
+/* --------------------------------------------------------------- updates */
+
+.update-lines { display: grid; gap: 10px; }
+.update-line {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.update-line.behind { border-color: var(--red-line); background: var(--red-soft); }
+.update-line.current-line.ready { border-color: var(--green-line); background: var(--green-soft); }
+.update-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.update-head strong { font-size: 13px; font-weight: 680; }
+.update-state {
+  font-size: 10px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.update-state.ready { color: var(--green); }
+.update-state.behind { color: var(--red); }
+.update-state.unknown { color: var(--amber); }
+.update-state.offline, .update-state.other { color: var(--faint); }
+.update-line p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.update-log { max-height: 220px; margin-top: 12px; }
+@media (max-width: 640px) {
+  .update-line { grid-template-columns: minmax(0, 1fr); }
+  .update-line .button { justify-self: start; }
+}
+
 /* ---------------------------------------------------------------- network */
 
 .networks { display: grid; gap: 8px; max-height: 320px; overflow: auto; }
@@ -1616,9 +1646,28 @@ kbd:empty { border: 0; background: transparent; }
 
         <!-- ---------------------------------------------------- checks -->
         <div data-panel="checks" hidden>
-          
+          <article class="card">
+            <div class="panel-head">
+              <h2>MotionModule updates</h2>
+              <div class="button-row">
+                <span id="updateSummary">Checking&hellip;</span>
+                <button class="button" id="refreshUpdates" type="button">Check now</button>
+              </div>
+            </div>
+            <p class="lead">The Pi asks GitHub what each branch is on. Updating
+              keeps your robot folders, <code>hardware.py</code> and Wi-Fi
+              settings, runs the tests before switching, and puts the old version
+              back if the new one will not start.</p>
+            <div class="panel-body">
+              <div class="update-lines" id="updateLines">
+                <p class="muted">Looking for this Pi's version&hellip;</p>
+              </div>
+              <p class="muted small spaced" id="updateNote"></p>
+              <pre class="logs update-log" id="updateLog" hidden></pre>
+            </div>
+          </article>
 
-          <div class="grid equal">
+          <div class="grid equal spaced">
             <article class="card">
               <div class="panel-head">
                 <h2>MotionModule Doctor</h2>
@@ -2192,11 +2241,13 @@ def create_drive(module):
      GET  /api/config        pin map and names from hardware.py (once)
      GET  /api/diagnostics   Doctor checks
      GET  /api/usb           attached USB devices
+     GET  /api/updates       branch versions on GitHub and any running update
      GET  /api/logs          service log
      GET  /api/projects/*    installed robot folders, sample download
      GET  /api/network/*     Wi-Fi status and scan
      POST /api/drive, /api/stop, /api/motors/test, /api/servos/*,
-          /api/terminal/*, /api/network/*, /api/projects/deploy
+          /api/terminal/*, /api/network/*, /api/projects/deploy,
+          /api/updates
 
    Writes carry the per-page dashboard token so another page in the browser
    cannot command the robot.
@@ -3591,6 +3642,124 @@ async function loadConfig() {
   }
 }
 
+/* ------------------------------------------------------------- updates */
+
+/* The Pi checks GitHub itself. A green line means this branch is current, a
+   red one means an update is waiting. A Pi on testing is also offered the
+   main line, so it can go back. */
+
+let updateTimer = null;
+let updateBusy = false;
+
+const UPDATE_STATES = {
+  'up-to-date': {label: 'Up to date', tone: 'ready'},
+  'update-available': {label: 'Update available', tone: 'behind'},
+  unknown: {label: 'Version unknown', tone: 'unknown'},
+  unreachable: {label: 'No connection', tone: 'offline'},
+  'other-line': {label: 'Other branch', tone: 'other'},
+};
+
+function updateLineCard(line, data) {
+  const state = UPDATE_STATES[line.status] || UPDATE_STATES.unknown;
+  const row = element('div', `update-line ${state.tone}${line.current ? ' current-line' : ''}`);
+  const copy = element('div');
+  const head = element('div', 'update-head');
+  head.append(
+    element('strong', null, line.label + (line.current ? ' \u00b7 running now' : '')),
+    element('span', `update-state ${state.tone}`, state.label),
+  );
+  copy.append(head);
+  if (line.status === 'update-available') {
+    copy.append(element('p', null, `This Pi has ${line.installed}; GitHub has ${line.latest}.`));
+  } else if (line.status === 'up-to-date') {
+    copy.append(element('p', null, `Running the newest ${line.label.toLowerCase()} (${line.latest}).`));
+  } else if (line.status === 'unknown') {
+    copy.append(element('p', null, 'This version was installed before update checks existed, so it cannot be compared. Updating fixes that.'));
+  } else if (line.status === 'unreachable') {
+    copy.append(element('p', null, data.error || 'The Pi could not reach GitHub. Connect it to Wi-Fi with internet access.'));
+  } else {
+    copy.append(element('p', null, `${line.note} GitHub has ${line.latest}.`));
+  }
+  const button = element('button', `button${line.status === 'update-available' ? ' primary' : ''}`, line.action);
+  button.type = 'button';
+  button.disabled = updateBusy || !data.installable || line.status === 'unreachable' || data.job.state === 'running';
+  button.addEventListener('click', () => installUpdate(line));
+  row.append(copy, button);
+  return row;
+}
+
+function renderUpdates(data) {
+  const job = data.job || {state: 'idle', log: []};
+  const running = job.state === 'running';
+  const lines = data.lines || [];
+  const behind = lines.filter(line => line.status === 'update-available').length;
+  $('#updateSummary').textContent = running ? 'Updating\u2026'
+    : data.checking ? 'Checking\u2026'
+    : data.error ? 'Check failed'
+    : behind ? `${behind} update${behind === 1 ? '' : 's'} available`
+    : lines.some(line => line.status === 'up-to-date') ? 'Up to date'
+    : 'Not checked yet';
+  $('#refreshUpdates').disabled = data.checking || running;
+
+  if (!lines.length) {
+    replaceWith($('#updateLines'), [element('p', 'muted',
+      'This MotionModule was not installed by the installer, so there is nothing to update from here.')]);
+  } else {
+    replaceWith($('#updateLines'), lines.map(line => updateLineCard(line, data)));
+  }
+
+  const note = [];
+  if (!data.installable && lines.length) {
+    note.push('Updating from here needs the helper the installer adds. Update once over SSH with motionmodule install, then this button works.');
+  }
+  /* An unreachable line already says why; only a stray error needs the note. */
+  if (data.error && !lines.some(line => line.status === 'unreachable')) note.push(data.error);
+  if (data.checked_at && !data.checking) {
+    note.push(`Last checked ${new Date(data.checked_at * 1000).toLocaleTimeString()}. Updates are checked again every 15 minutes.`);
+  }
+  note.push(`Repository: ${data.repository}`);
+  $('#updateNote').textContent = note.join(' ');
+
+  const log = $('#updateLog');
+  const recent = job.finished_at && (Date.now() / 1000 - job.finished_at) < 1800;
+  log.hidden = !(running || (recent && job.state !== 'idle'));
+  if (!log.hidden) log.textContent = (job.log || []).join('\n') || 'Starting the update\u2026';
+
+  clearTimeout(updateTimer);
+  if (running || data.checking) updateTimer = setTimeout(refreshUpdates, 2000);
+}
+
+async function refreshUpdates(force = false) {
+  if (!$('#updateLines')) return;
+  try {
+    renderUpdates(await jsonFetch(`/api/updates${force ? '?refresh=1' : ''}`));
+  } catch (error) {
+    $('#updateSummary').textContent = 'Check failed';
+    $('#updateNote').textContent = error.message;
+  }
+}
+
+async function installUpdate(line) {
+  const question = line.current
+    ? `Update this robot to the newest ${line.label.toLowerCase()}? Motors stop, MotionModule restarts, and your robot folders are kept.`
+    : `Install the ${line.label.toLowerCase()} on this robot? Motors stop, MotionModule restarts, and your robot folders are kept.`;
+  if (!confirm(question)) return;
+  updateBusy = true;
+  try {
+    const answer = await jsonFetch('/api/updates', {
+      method: 'POST', headers: apiHeaders, body: JSON.stringify({ref: line.ref}),
+    });
+    toast(answer.message || 'Update started. Keep the robot powered.');
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    updateBusy = false;
+  }
+  refreshUpdates();
+}
+
+$('#refreshUpdates')?.addEventListener('click', () => refreshUpdates(true));
+
 /* ------------------------------------------------------------ USB list */
 
 async function refreshUsb() {
@@ -4292,6 +4461,8 @@ if (activePage === 'diagnostics') {
   refreshLogs();
   refreshUsb();
   setInterval(refreshUsb, 5000);
+  refreshUpdates();
+  setInterval(() => refreshUpdates(), 60000);
   updateSecurityFields();
 }
 </script>
