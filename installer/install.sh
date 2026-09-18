@@ -292,6 +292,7 @@ install_system_file 0755 "$release_dir/installer/network_manager.py" /usr/local/
 install_system_file 0755 "$release_dir/installer/hotspot.sh" /usr/local/sbin/motionmodule-hotspot
 install_system_file 0755 "$release_dir/installer/dashboard_launcher" /usr/local/sbin/motionmodule-dashboard
 install_system_file 0755 "$release_dir/installer/update.sh" /usr/local/sbin/motionmodule-update
+install_system_file 0755 "$release_dir/installer/askpass.sh" /usr/local/sbin/motionmodule-askpass
 
 sudoers_temp="$(mktemp)"
 systemctl_path="$(command -v systemctl)"
@@ -301,10 +302,13 @@ sudo visudo -cf "$sudoers_temp" >/dev/null
 install_system_file 0440 "$sudoers_temp" /etc/sudoers.d/motionmodule-network
 rm -f "$sudoers_temp"
 
-# The dashboard's update button, restricted to these two exact command lines.
+# The dashboard's update button, restricted to these exact command lines.
+# "password" gives a running update the sudo password it was started with;
+# the helper answers only processes inside that update.
 update_sudoers_temp="$(mktemp)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update main\n' "$USER" > "$update_sudoers_temp"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update testing\n' "$USER" >> "$update_sudoers_temp"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update password\n' "$USER" >> "$update_sudoers_temp"
 sudo visudo -cf "$update_sudoers_temp" >/dev/null
 install_system_file 0440 "$update_sudoers_temp" /etc/sudoers.d/motionmodule-update
 rm -f "$update_sudoers_temp"

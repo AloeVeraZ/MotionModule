@@ -420,7 +420,7 @@ class DashboardTests(unittest.TestCase):
                     "job": {"state": "idle", "log": [], "finished_at": None, "result": ""},
                 }
 
-            def start_update(self, ref):
+            def start_update(self, ref, password=None):
                 if ref not in ("main", "testing"):
                     from motion_module.errors import MotionModuleError
 
@@ -454,6 +454,60 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(checker.started, ["testing"])
         # Outputs stop before the software is replaced.
         self.assertTrue(self.module.stopped)
+
+    def test_an_update_asks_for_the_sudo_password_when_sudo_wants_one(self):
+        from motion_module.updates import PasswordRequired, TooManyPasswordAttempts
+
+        class Checker:
+            """sudo on this Pi wants a password, and it is hunter2."""
+
+            def __init__(self):
+                self.passwords = []
+                self.limited = False
+
+            def start_update(self, ref, password=None):
+                self.passwords.append(password)
+                if self.limited:
+                    raise TooManyPasswordAttempts("Too many wrong passwords. Wait 10 minutes, then try again.")
+                if not password:
+                    raise PasswordRequired("This update needs the password sudo asks for on this Pi.", user="aloe")
+                if password != "hunter2":
+                    raise PasswordRequired("That password was not accepted. Try again.", user="aloe", rejected=True)
+                return f"Installing the {ref} branch."
+
+            def close(self):
+                pass
+
+        checker = Checker()
+        app = create_app(self.module, MecanumDrive(self.module), self.network, update_checker=checker)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+
+        asked = client.post("/api/updates", headers=headers, json={"ref": "testing"})
+        self.assertEqual(asked.status_code, 401)
+        self.assertEqual(asked.get_json()["password_required"], True)
+        self.assertEqual(asked.get_json()["rejected"], False)
+        self.assertEqual(asked.get_json()["user"], "aloe")
+
+        wrong = client.post("/api/updates", headers=headers, json={"ref": "testing", "password": "letmein"})
+        self.assertEqual(wrong.status_code, 401)
+        self.assertEqual(wrong.get_json()["rejected"], True)
+        self.assertNotIn("letmein", wrong.get_data(as_text=True))
+
+        started = client.post("/api/updates", headers=headers, json={"ref": "testing", "password": "hunter2"})
+        self.assertEqual(started.status_code, 202)
+        self.assertNotIn("hunter2", started.get_data(as_text=True))
+        self.assertEqual(checker.passwords, [None, "letmein", "hunter2"])
+
+        self.assertEqual(client.post("/api/updates", headers=headers,
+                                     json={"ref": "testing", "password": ["hunter2"]}).status_code, 400)
+        self.assertEqual(client.post("/api/updates", json={"ref": "testing", "password": "hunter2"}).status_code, 403)
+        self.assertEqual(len(checker.passwords), 3, "a refused request never reaches the update")
+
+        checker.limited = True
+        limited = client.post("/api/updates", headers=headers, json={"ref": "testing", "password": "guess"})
+        self.assertEqual(limited.status_code, 429)
+        self.assertIn("Wait", limited.get_json()["error"])
 
     def test_giga_firmware_status_and_install_are_guarded(self):
         status = self.client.get("/api/giga/firmware").get_json()

@@ -109,7 +109,14 @@ release root, compares them against `git ls-remote` for `main` and `testing`,
 and, when you press the button, runs `/usr/local/sbin/motionmodule-update REF`
 through the `motionmodule-update` sudoers rule. That helper starts a transient
 `systemd-run` unit so the install survives the service restart it causes, and
-logs to `/var/log/motionmodule-update.log`. Runtime changes otherwise require
+logs to `/var/log/motionmodule-update.log`. When `sudo` asks the Pi user for a
+password, the dashboard asks for it, checks it with `sudo -S -k`, and passes it
+to the helper on stdin. The helper keeps it in a root-only file under
+`/run/motionmodule-update` while that update runs, with `SUDO_ASKPASS` set to
+`/usr/local/sbin/motionmodule-askpass`. That script fetches it through
+`motionmodule-update password`, which the rule also allows, and the helper
+answers only processes inside the update's own unit. A second transient unit
+deletes the file when the update ends. Runtime changes otherwise require
 an explicit `motionmodule install REF`, `motionmodule activate NAME`, or
 `motionmodule rollback`. Rollback returns to the earlier release of the same
 branch when one is kept; switching branches is always `motionmodule install`.

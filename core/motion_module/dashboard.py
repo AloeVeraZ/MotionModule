@@ -48,7 +48,7 @@ from .runner import load_project
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
 from .telemetry import empty_snapshot, merge_usb_controllers, normalize_snapshot
-from .updates import UpdateChecker, installed_release
+from .updates import PasswordRequired, TooManyPasswordAttempts, UpdateChecker, installed_release
 from .usb import sensor_controllers, usb_devices
 
 
@@ -519,13 +519,27 @@ def create_app(
 
         if not authorized():
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
-        ref = str((request.get_json(silent=True) or {}).get("ref", ""))
+        body = request.get_json(silent=True)
+        body = body if isinstance(body, dict) else {}
+        ref = str(body.get("ref", ""))
+        # Sent only when sudo on this Pi asked for it; it goes to this update
+        # and nowhere else.
+        password = body.get("password") or None
+        if password is not None and not isinstance(password, str):
+            return jsonify({"ok": False, "error": "The password must be text"}), 400
         # The robot must not be driving while its software is replaced.
         autonomous.stop()
         with command_lock:
             stop_outputs()
         try:
-            message = updates.start_update(ref)
+            message = updates.start_update(ref, password=password)
+        except PasswordRequired as error:
+            return jsonify({
+                "ok": False, "error": str(error), "password_required": True,
+                "rejected": error.rejected, "user": error.user,
+            }), 401
+        except TooManyPasswordAttempts as error:
+            return jsonify({"ok": False, "error": str(error)}), 429
         except MotionModuleError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
         return jsonify({"ok": True, "started": True, "ref": ref, "message": message}), 202

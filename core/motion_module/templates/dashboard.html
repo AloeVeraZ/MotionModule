@@ -585,6 +585,26 @@
 .update-line code { font-size: .6875rem; }
 .update-log { max-height: 14rem; margin-top: .75rem; }
 @media (max-width: 640px) { .update-line { grid-template-columns: minmax(0, 1fr); } .update-line .button { justify-self: start; } }
+/* The password sudo asks for during an update. A native modal <dialog>: the
+   browser keeps focus inside it and closes it on Escape. */
+.password-dialog {
+  width: min(27rem, calc(100vw - 2rem));
+  max-width: none;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-top-color: var(--edge-top);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 28px 60px -28px rgba(0, 0, 0, .85);
+}
+.password-dialog[open] { animation: mm-rise .22s var(--ease) both; }
+.password-dialog::backdrop { background: rgba(8, 8, 8, .62); }
+.password-dialog .panel-body p { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.password-dialog .panel-body p strong { color: var(--ink); overflow-wrap: anywhere; }
+.password-dialog .panel-body .message.error { color: var(--red); }
+.password-dialog .panel-body p.fine { color: var(--faint); font-size: .75rem; }
+.password-dialog .button-row { justify-content: flex-end; }
 .giga-firmware { display: grid; gap: .5rem; margin-top: .625rem; padding-top: .625rem; border-top: 1px solid var(--line-soft); }
 .giga-firmware p { margin: 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
 .giga-firmware p.failed { color: var(--red); }
@@ -1911,6 +1931,32 @@ def create_drive(module):
 
 <button class="stop-button mobile-stop" data-stop type="button" aria-label="Stop all motors">Stop</button>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<dialog class="password-dialog" id="updatePasswordDialog" aria-labelledby="updatePasswordTitle" aria-describedby="updatePasswordLead">
+  <!-- method="dialog": without the script, submitting only closes the popup;
+       the password never lands in the address bar. -->
+  <form id="updatePasswordForm" method="dialog">
+    <div class="panel-head">
+      <h2 id="updatePasswordTitle">Password required for update</h2>
+    </div>
+    <div class="panel-body stack">
+      <p id="updatePasswordLead">sudo on this Pi asks for the password of
+        <strong id="updatePasswordUser">the Pi user</strong> before it installs
+        anything. It is used for this update only and deleted when the update
+        ends.</p>
+      <label class="field">Password
+        <input id="updatePassword" type="password" name="password" autocomplete="current-password"
+               autocapitalize="none" spellcheck="false" autofocus required>
+      </label>
+      <p class="message error" id="updatePasswordError" role="alert" hidden></p>
+      <p class="fine">The dashboard uses plain HTTP, so enter this only on a
+        network you trust.</p>
+      <div class="button-row">
+        <button class="button" id="updatePasswordCancel" type="button">Cancel</button>
+        <button class="button primary" id="updatePasswordSubmit" type="submit">Update now</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 <script>
 /* ==========================================================================
    MotionModule dashboard behavior.
@@ -1978,7 +2024,13 @@ function toast(message, isError = false) {
 async function jsonFetch(url, options = {}) {
   const response = await fetch(url, { cache: 'no-store', ...options });
   const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  if (!response.ok) {
+    /* The reply stays on the error, for callers that act on more than the message. */
+    const error = new Error(data.error || `Request failed (${response.status})`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 
@@ -3399,19 +3451,76 @@ async function installUpdate(line) {
     ? `Update this robot to the newest ${line.label.toLowerCase()}? Motors stop, MotionModule restarts, and your robot folders are kept.`
     : `Install the ${line.label.toLowerCase()} on this robot? Motors stop, MotionModule restarts, and your robot folders are kept.`;
   if (!confirm(question)) return;
+  await requestUpdate(line);
+}
+
+/* When sudo on the Pi asks for a password, the robot answers "password
+   required" and the popup asks for it. The password goes out with that one
+   request and is not kept in the page. */
+let passwordLine = null;
+
+async function requestUpdate(line, password = '') {
   updateBusy = true;
   try {
     const answer = await jsonFetch('/api/updates', {
-      method: 'POST', headers: apiHeaders, body: JSON.stringify({ref: line.ref}),
+      method: 'POST', headers: apiHeaders,
+      body: JSON.stringify(password ? {ref: line.ref, password} : {ref: line.ref}),
     });
+    closeUpdatePassword();
     toast(answer.message || 'Update started. Keep the robot powered.');
   } catch (error) {
-    toast(error.message, true);
+    const asked = Boolean(error.data?.password_required);
+    if (asked || passwordLine) {
+      /* The first "password required" is the question, not a problem. */
+      openUpdatePassword(line, error.data?.user, asked && !password ? '' : error.message);
+    } else {
+      toast(error.message, true);
+    }
   } finally {
     updateBusy = false;
   }
   refreshUpdates();
 }
+
+function setPasswordBusy(busy) {
+  $('#updatePassword').disabled = busy;
+  $('#updatePasswordCancel').disabled = busy;
+  $('#updatePasswordSubmit').disabled = busy;
+  $('#updatePasswordSubmit').textContent = busy ? 'Checking…' : (passwordLine?.action || 'Update now');
+}
+
+function openUpdatePassword(line, user, problem) {
+  const dialog = $('#updatePasswordDialog');
+  passwordLine = line;
+  if (user) $('#updatePasswordUser').textContent = user;
+  $('#updatePasswordError').textContent = problem;
+  $('#updatePasswordError').hidden = !problem;
+  $('#updatePassword').value = '';
+  setPasswordBusy(false);
+  if (!dialog.open) dialog.showModal();
+  $('#updatePassword').focus();
+}
+
+function closeUpdatePassword() {
+  const dialog = $('#updatePasswordDialog');
+  if (dialog.open) dialog.close();
+}
+
+$('#updatePasswordForm')?.addEventListener('submit', async event => {
+  event.preventDefault();
+  const password = $('#updatePassword').value;
+  if (!password || !passwordLine || updateBusy) return;
+  $('#updatePassword').value = '';
+  setPasswordBusy(true);
+  await requestUpdate(passwordLine, password);
+});
+$('#updatePasswordCancel')?.addEventListener('click', closeUpdatePassword);
+/* Escape does not hide a password that is still being checked. */
+$('#updatePasswordDialog')?.addEventListener('cancel', event => { if (updateBusy) event.preventDefault(); });
+$('#updatePasswordDialog')?.addEventListener('close', () => {
+  $('#updatePassword').value = '';
+  passwordLine = null;
+});
 
 $('#refreshUpdates')?.addEventListener('click', () => refreshUpdates(true));
 

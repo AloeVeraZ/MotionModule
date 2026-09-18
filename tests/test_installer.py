@@ -11,6 +11,7 @@ from pathlib import Path
 INSTALLER = Path(__file__).resolve().parents[1] / "installer" / "install.sh"
 BOOTSTRAP = Path(__file__).resolve().parents[1] / "install.sh"
 CLEANUP = INSTALLER.parent / "runtime_cleanup.sh"
+UPDATE_HELPER = INSTALLER.parent / "update.sh"
 
 
 def usable_bash():
@@ -317,6 +318,191 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('"$RAW_BASE/main/install.sh"', manager)
         self.assertIn('bash -s -- --version "$ref" "$@"', manager)
         self.assertIn("No earlier release of this branch is kept on the Pi", manager)
+
+    def test_an_update_gets_the_sudo_password_only_through_the_helper(self):
+        self.assertIn(
+            'install_system_file 0755 "$release_dir/installer/askpass.sh" /usr/local/sbin/motionmodule-askpass',
+            self.script,
+        )
+        self.assertIn("NOPASSWD: /usr/local/sbin/motionmodule-update password", self.script)
+        # All three rules go through the same visudo check before installing.
+        rules = self.script[self.script.index('update_sudoers_temp="$(mktemp)"'):
+                            self.script.index('visudo -cf "$update_sudoers_temp"')]
+        self.assertEqual(rules.count('>> "$update_sudoers_temp"'), 2)
+        self.assertIn("motionmodule-update password", rules)
+        askpass = (INSTALLER.parent / "askpass.sh").read_text(encoding="utf-8")
+        self.assertIn("exec sudo -n /usr/local/sbin/motionmodule-update password", askpass)
+
+
+# Stand-ins for what the update helper calls on a Pi. Each logs what it was
+# asked, so the tests can see what reached systemd.
+HELPER_STUBS = {
+    "id": "echo 0\n",
+    "getent": 'echo "aloe:x:1000:1000:Aloe:/home/aloe:/bin/bash"\n',
+    "sleep": "exit 0\n",
+    "systemctl": (
+        'printf "%s\\n" "$*" >> "$STUBS/systemctl.log"\n'
+        'case "$1" in\n'
+        '    is-active) [ -f "$STUBS/update-active" ] ;;\n'
+        '    show)\n'
+        '        state="$(head -n 1 "$STUBS/states" 2>/dev/null || true)"\n'
+        '        [ ! -f "$STUBS/states" ] || sed -i 1d "$STUBS/states"\n'
+        '        echo "${state:-inactive}"\n'
+        '        ;;\n'
+        'esac\n'
+    ),
+    "systemd-run": (
+        'printf "%s\\n" "$@" "@@" >> "$STUBS/systemd-run.log"\n'
+        'case " $* " in\n'
+        '    *" --unit=motionmodule-update "*) cat "$SECRET_FILE" > "$STUBS/secret-at-start" 2>/dev/null || true ;;\n'
+        'esac\n'
+        '[ ! -f "$STUBS/systemd-run-fails" ]\n'
+    ),
+}
+
+
+@unittest.skipUnless(BASH, "bash with GNU readlink is required to run the update helper")
+class UpdateHelperTests(unittest.TestCase):
+    """installer/update.sh, run as it is on the Pi but against stand-ins for systemd."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.stubs = self.root / "stubs"
+        self.stubs.mkdir()
+        for name, body in HELPER_STUBS.items():
+            stub = self.stubs / name
+            stub.write_text("#!/bin/sh\n" + body, encoding="utf-8", newline="\n")
+            stub.chmod(0o755)
+        self.secret_dir = self.root / "run"
+        self.secret = self.secret_dir / "sudo-password"
+        self.cgroup = self.root / "cgroup"
+        self.in_cgroup("motionmodule.service")
+        self.log = self.root / "update.log"
+        script = UPDATE_HELPER.read_text(encoding="utf-8").replace("\r\n", "\n")
+        for real, stand_in in (
+            ('LOG="/var/log/motionmodule-update.log"', f"LOG={bash_path(self.log)}"),
+            ('SECRET_DIR="/run/motionmodule-update"', f"SECRET_DIR={bash_path(self.secret_dir)}"),
+            ("/proc/self/cgroup", bash_path(self.cgroup)),
+        ):
+            self.assertIn(real, script, "the test must never touch the real path")
+            script = script.replace(real, stand_in)
+        self.helper = self.root / "update.sh"
+        self.helper.write_text(script, encoding="utf-8", newline="\n")
+
+    def in_cgroup(self, unit):
+        self.cgroup.write_text(f"0::/system.slice/{unit}\n", encoding="utf-8", newline="\n")
+
+    def store(self, text):
+        self.secret_dir.mkdir()
+        self.secret.write_text(text, encoding="utf-8", newline="\n")
+
+    def run_helper(self, *arguments, stdin=""):
+        environment = {
+            **os.environ,
+            "PATH": f"{self.stubs}{os.pathsep}{os.environ.get('PATH', '')}",
+            "SUDO_USER": "aloe",
+            "STUBS": self.stubs.as_posix(),
+            "SECRET_FILE": self.secret.as_posix(),
+        }
+        # Bytes, so the password reaches bash exactly as typed on every system.
+        result = subprocess.run(
+            [BASH, str(self.helper), *arguments], input=stdin.encode("utf-8"), capture_output=True,
+            env=environment, timeout=30, check=False,
+        )
+        return result.returncode, result.stdout.decode("utf-8"), result.stderr.decode("utf-8")
+
+    def systemd_runs(self):
+        log = self.stubs / "systemd-run.log"
+        if not log.exists():
+            return []
+        return [run.strip("\n").split("\n") for run in log.read_text(encoding="utf-8").split("@@\n") if run.strip()]
+
+    def test_a_password_is_stored_for_the_update_and_nowhere_else(self):
+        password = ' correct horse \\ battery $HOME "quoted" '
+        code, out, err = self.run_helper("testing", stdin=password + "\n")
+        self.assertEqual(code, 0, out + err)
+
+        update, forget = self.systemd_runs()
+        self.assertIn("--unit=motionmodule-update", update)
+        self.assertIn("--uid=aloe", update)
+        self.assertIn("--setenv=SUDO_ASKPASS=/usr/local/sbin/motionmodule-askpass", update)
+        self.assertIn("--setenv=DISPLAY=", update)
+        self.assertEqual(update[-4:], ["/usr/local/bin/motionmodule", "install", "testing", "--no-reboot"])
+        # In place before the update starts, byte for byte, for its sudo to read.
+        self.assertEqual((self.stubs / "secret-at-start").read_text(encoding="utf-8"), password + "\n")
+        self.assertEqual(self.secret.read_text(encoding="utf-8"), password + "\n")
+        if os.name == "posix":
+            self.assertEqual(self.secret_dir.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(self.secret.stat().st_mode & 0o777, 0o600)
+        # A second unit deletes it once the update ends.
+        self.assertIn("--unit=motionmodule-update-forget", forget)
+        self.assertEqual(forget[-2:], ["/usr/local/sbin/motionmodule-update", "forget"])
+        # Never on a command line, in the update log, or in the output.
+        seen = (self.stubs / "systemd-run.log").read_text(encoding="utf-8") + self.log.read_text(encoding="utf-8")
+        self.assertNotIn(password.strip(), seen + out + err)
+
+    def test_without_a_password_the_update_starts_as_before(self):
+        code, out, err = self.run_helper("main")
+        self.assertEqual(code, 0, out + err)
+        (update,) = self.systemd_runs()
+        self.assertFalse([option for option in update if "SUDO_ASKPASS" in option or "DISPLAY" in option])
+        self.assertEqual(update[-4:], ["/usr/local/bin/motionmodule", "install", "main", "--no-reboot"])
+        self.assertFalse(self.secret_dir.exists())
+
+    def test_a_second_press_leaves_the_running_update_its_password(self):
+        self.store("first\n")
+        (self.stubs / "update-active").touch()
+        code, out, err = self.run_helper("testing", stdin="second\n")
+        self.assertNotEqual(code, 0)
+        self.assertIn("already running", err)
+        self.assertEqual(self.secret.read_text(encoding="utf-8"), "first\n")
+        self.assertEqual(self.systemd_runs(), [])
+
+    def test_an_update_that_cannot_start_leaves_no_password_behind(self):
+        (self.stubs / "systemd-run-fails").touch()
+        code, out, err = self.run_helper("testing", stdin="secret\n")
+        self.assertNotEqual(code, 0)
+        self.assertIn("Could not start the update", err)
+        self.assertFalse(self.secret_dir.exists())
+
+    def test_a_password_left_by_an_earlier_update_is_removed(self):
+        self.store("old\n")
+        code, out, err = self.run_helper("testing")
+        self.assertEqual(code, 0, out + err)
+        self.assertFalse(self.secret_dir.exists())
+
+    def test_only_processes_inside_the_update_are_given_the_password(self):
+        self.store("secret\n")
+        code, out, err = self.run_helper("password")  # asked from the robot's own service
+        self.assertNotEqual(code, 0)
+        self.assertEqual(out, "")
+        self.assertIn("Only the running update", err)
+
+        self.in_cgroup("motionmodule-update.service")
+        self.assertEqual(self.run_helper("password")[:2], (0, "secret\n"))
+
+    def test_an_update_without_a_password_has_none_to_give(self):
+        self.in_cgroup("motionmodule-update.service")
+        code, out, err = self.run_helper("password")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(out, "")
+
+    def test_the_password_is_deleted_once_the_update_ends(self):
+        self.store("secret\n")
+        (self.stubs / "states").write_text("active\ndeactivating\n", encoding="utf-8", newline="\n")
+        code, out, err = self.run_helper("forget")
+        self.assertEqual(code, 0, out + err)
+        self.assertFalse(self.secret_dir.exists())
+        shows = (self.stubs / "systemctl.log").read_text(encoding="utf-8").count("show")
+        self.assertEqual(shows, 3, "it waited while the update was still running")
+
+    def test_nothing_else_is_accepted(self):
+        for arguments in ((), ("main", "testing"), ("rm -rf /",), ("--help",)):
+            code, out, err = self.run_helper(*arguments)
+            self.assertNotEqual(code, 0, arguments)
+        self.assertEqual(self.systemd_runs(), [])
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """Checking GitHub for a newer MotionModule, and starting an update."""
 
+import getpass
 import subprocess
 import tempfile
 import time
@@ -9,10 +10,15 @@ from pathlib import Path
 from motion_module.errors import MotionModuleError
 from motion_module.updates import (
     BRANCHES,
+    PASSWORD_ATTEMPTS,
+    PASSWORD_WINDOW_SECONDS,
+    PasswordRequired,
+    TooManyPasswordAttempts,
     UpdateChecker,
     installed_release,
     remote_commits,
     start_update,
+    sudo_needs_password,
     update_job,
     update_lines,
 )
@@ -39,9 +45,11 @@ class Runner:
     def __init__(self, **answers):
         self.answers = answers
         self.commands = []
+        self.options = []
 
     def __call__(self, command, **options):
         self.commands.append(command)
+        self.options.append(options)
         for name, answer in self.answers.items():
             if name in " ".join(command):
                 if isinstance(answer, Exception):
@@ -116,23 +124,40 @@ class UpdateLineTests(unittest.TestCase):
         self.assertEqual(update_lines({"ref": "", "commit": ""}, {"main": MAIN}), [])
 
 
+SUDO_WANTS_PASSWORD = {"-n -k true": (1, "", "sudo: a password is required\n")}
+WRONG_PASSWORD = (1, "", "Sorry, try again.\nsudo: no password was provided\nsudo: 1 incorrect password attempt\n")
+
+
+def helper_calls(runner):
+    return [index for index, command in enumerate(runner.commands) if "motionmodule-update" in " ".join(command)]
+
+
 class StartUpdateTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.helper = Path(self.directory.name) / "motionmodule-update"
-        self.helper.write_text("#!/bin/sh\n", encoding="utf-8")
-        self.helper.chmod(0o755)
+        self.askpass = Path(self.directory.name) / "motionmodule-askpass"
+        for path in (self.helper, self.askpass):
+            path.write_text("#!/bin/sh\n", encoding="utf-8")
+            path.chmod(0o755)
+
+    def start(self, ref, runner, **options):
+        return start_update(ref, run=runner, helper=self.helper, askpass=self.askpass, **options)
 
     def test_only_the_two_branches_can_be_installed(self):
         for ref in ("", "rm -rf /", "some-other-branch", "main; reboot"):
             with self.assertRaisesRegex(MotionModuleError, "main or the testing"):
-                start_update(ref, run=Runner(), helper=self.helper)
+                self.start(ref, Runner())
 
     def test_the_root_helper_is_asked_to_install_the_branch(self):
         runner = Runner()
-        message = start_update("testing", run=runner, helper=self.helper)
-        self.assertEqual(runner.commands, [["sudo", "-n", str(self.helper), "testing"]])
+        message = self.start("testing", runner)
+        self.assertEqual(runner.commands, [
+            ["sudo", "-n", "-k", "true"],  # does sudo want a password? Here it does not.
+            ["sudo", "-n", str(self.helper), "testing"],
+        ])
+        self.assertEqual(runner.options[-1]["input"], "")
         self.assertIn("testing", message)
 
     def test_an_older_pi_without_the_helper_is_told_what_to_run(self):
@@ -142,7 +167,67 @@ class StartUpdateTests(unittest.TestCase):
     def test_a_refused_helper_reports_why(self):
         runner = Runner(**{"motionmodule-update": (1, "", "sudo: a password is required")})
         with self.assertRaisesRegex(MotionModuleError, "password is required"):
-            start_update("main", run=runner, helper=self.helper)
+            self.start("main", runner)
+
+    def test_sudo_wanting_a_password_asks_the_dashboard_for_it_first(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD)
+        with self.assertRaises(PasswordRequired) as asked:
+            self.start("testing", runner)
+        self.assertFalse(asked.exception.rejected)
+        self.assertEqual(asked.exception.user, getpass.getuser())
+        self.assertEqual(helper_calls(runner), [], "nothing starts without the password")
+        # sudo's messages are read in English, whatever the Pi's language.
+        self.assertEqual(runner.options[0]["env"]["LC_ALL"], "C")
+
+    def test_a_wrong_password_is_refused_before_anything_starts(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD, **{"-S -k": WRONG_PASSWORD})
+        with self.assertRaises(PasswordRequired) as refused:
+            self.start("testing", runner, password="not-it")
+        self.assertTrue(refused.exception.rejected)
+        self.assertIn("not accepted", str(refused.exception))
+        self.assertEqual(helper_calls(runner), [])
+
+    def test_the_right_password_reaches_the_helper_on_stdin_only(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD)
+        self.start("testing", runner, password="hunter2 two")
+        check = runner.commands.index(["sudo", "-S", "-k", "-p", "", "true"])
+        self.assertEqual(runner.options[check]["input"], "hunter2 two\n")
+        self.assertEqual(helper_calls(runner), [len(runner.commands) - 1])
+        self.assertEqual(runner.commands[-1], ["sudo", "-n", str(self.helper), "testing"])
+        self.assertEqual(runner.options[-1]["input"], "hunter2 two\n")
+        for command in runner.commands:
+            self.assertNotIn("hunter2 two", " ".join(command))
+
+    def test_a_password_is_not_passed_on_when_sudo_needs_none(self):
+        runner = Runner()
+        self.start("testing", runner, password="left over")
+        self.assertEqual(runner.options[-1]["input"], "")
+        self.assertNotIn(["sudo", "-S", "-k", "-p", "", "true"], runner.commands)
+
+    def test_a_password_with_a_line_break_is_refused_unchecked(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD)
+        with self.assertRaises(PasswordRequired) as refused:
+            self.start("testing", runner, password="first\nsecond")
+        self.assertTrue(refused.exception.rejected)
+        self.assertEqual(len(runner.commands), 1)
+
+    def test_a_user_sudo_refuses_outright_is_told_why(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD, **{"-S -k": (1, "", "aloe is not in the sudoers file.\n")})
+        with self.assertRaisesRegex(MotionModuleError, "not in the sudoers file") as refused:
+            self.start("testing", runner, password="hunter2")
+        self.assertNotIsInstance(refused.exception, PasswordRequired)
+        self.assertEqual(helper_calls(runner), [])
+
+    def test_a_helper_too_old_for_passwords_says_to_update_over_ssh(self):
+        runner = Runner(**SUDO_WANTS_PASSWORD)
+        with self.assertRaisesRegex(MotionModuleError, "motionmodule install testing"):
+            start_update("testing", password="hunter2", run=runner, helper=self.helper,
+                         askpass=self.askpass.with_name("missing"))
+        self.assertEqual(helper_calls(runner), [])
+
+    def test_a_pi_without_sudo_is_not_asked_for_a_password(self):
+        self.assertFalse(sudo_needs_password(run=Runner(**{"-n -k true": OSError("no sudo")})))
+        self.assertFalse(sudo_needs_password(run=Runner(**{"-n -k true": (1, "", "sudo: some other trouble")})))
 
 
 class UpdateJobTests(unittest.TestCase):
@@ -242,6 +327,50 @@ class UpdateCheckerTests(unittest.TestCase):
         checker = self.build()
         with self.assertRaisesRegex(MotionModuleError, "motionmodule install testing"):
             checker.start_update("testing")
+
+    def installable(self, **answers):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        helpers = [Path(directory.name) / name for name in ("motionmodule-update", "motionmodule-askpass")]
+        for path in helpers:
+            path.write_text("#!/bin/sh\n", encoding="utf-8")
+            path.chmod(0o755)
+        self.clock = Clock()
+        self.runner = Runner(**SUDO_WANTS_PASSWORD, **answers)
+        checker = UpdateChecker(run=self.runner, clock=self.clock, helper=helpers[0], askpass=helpers[1])
+        self.addCleanup(checker.close)
+        return checker
+
+    def checks(self):
+        return self.runner.commands.count(["sudo", "-S", "-k", "-p", "", "true"])
+
+    def test_wrong_passwords_stop_being_checked_for_a_while(self):
+        checker = self.installable(**{"-S -k": WRONG_PASSWORD})
+        for _ in range(PASSWORD_ATTEMPTS):
+            with self.assertRaises(PasswordRequired):
+                checker.start_update("testing", "guess")
+        with self.assertRaisesRegex(TooManyPasswordAttempts, "Wait 10 minutes"):
+            checker.start_update("testing", "one more guess")
+        self.assertEqual(self.checks(), PASSWORD_ATTEMPTS, "sudo is not asked once the limit is reached")
+        # The popup still opens meanwhile; it just cannot check anything.
+        with self.assertRaises(PasswordRequired):
+            checker.start_update("testing")
+        self.clock.now += PASSWORD_WINDOW_SECONDS
+        with self.assertRaises(PasswordRequired):
+            checker.start_update("testing", "later guess")
+        self.assertEqual(self.checks(), PASSWORD_ATTEMPTS + 1)
+
+    def test_the_right_password_starts_the_update_and_clears_the_count(self):
+        checker = self.installable(**{"-S -k": WRONG_PASSWORD})
+        for _ in range(PASSWORD_ATTEMPTS - 1):
+            with self.assertRaises(PasswordRequired):
+                checker.start_update("testing", "guess")
+        del self.runner.answers["-S -k"]
+        self.assertIn("testing", checker.start_update("testing", "right"))
+        self.runner.answers["-S -k"] = WRONG_PASSWORD
+        for _ in range(PASSWORD_ATTEMPTS):
+            with self.assertRaises(PasswordRequired):
+                checker.start_update("testing", "guess")
 
     def test_branches_offered_are_the_two_lines(self):
         self.assertEqual(BRANCHES, ("main", "testing"))

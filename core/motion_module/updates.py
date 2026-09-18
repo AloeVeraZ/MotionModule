@@ -9,10 +9,17 @@ MotionModule partway through does not kill the update.
 
 A Pi on ``main`` is offered the main line only. A Pi on ``testing`` is offered
 both, so it can take the newest testing code or go back to the main line.
+
+The install runs sudo many times. When sudo on this Pi asks the user for a
+password, the button asks for it too, checks it with sudo before anything
+starts, and gives it to the helper on stdin. The helper keeps it in a
+root-only file for as long as that one update runs, and each sudo in the
+install fetches it through /usr/local/sbin/motionmodule-askpass.
 """
 
 from __future__ import annotations
 
+import getpass
 import os
 import re
 import subprocess
@@ -32,14 +39,76 @@ BRANCH_NOTES = {
     "testing": "New work lands here first and can break. Go back with the main line.",
 }
 UPDATE_HELPER = Path("/usr/local/sbin/motionmodule-update")
+ASKPASS_HELPER = Path("/usr/local/sbin/motionmodule-askpass")
 UPDATE_UNIT = "motionmodule-update.service"
 UPDATE_LOG = Path("/var/log/motionmodule-update.log")
 CHECK_INTERVAL_SECONDS = 15 * 60
 MAX_LOG_LINES = 40
+MAX_PASSWORD_LENGTH = 1024
+# Wrong passwords allowed in a window before the button stops checking them,
+# so the page cannot be used to guess the Pi's password.
+PASSWORD_ATTEMPTS = 5
+PASSWORD_WINDOW_SECONDS = 10 * 60
+
+
+class PasswordRequired(MotionModuleError):
+    """sudo on this Pi wants the user's password before anything is installed."""
+
+    def __init__(self, message: str, *, user: str = "", rejected: bool = False) -> None:
+        super().__init__(message)
+        self.user = user
+        self.rejected = rejected
+
+
+class TooManyPasswordAttempts(MotionModuleError):
+    """Too many wrong passwords in a row; the button waits before checking more."""
 
 
 def _short(text: str, limit: int = 200) -> str:
     return " ".join(str(text or "").split())[:limit]
+
+
+def _user() -> str:
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return ""
+
+
+def _sudo_environment() -> dict:
+    # sudo's messages in English whatever the Pi's language, so a wrong
+    # password can be told apart from any other refusal.
+    return {**os.environ, "LC_ALL": "C"}
+
+
+def sudo_needs_password(*, run=subprocess.run) -> bool:
+    """Whether sudo asks this user for a password, as the install's sudo will."""
+
+    try:
+        # -k ignores any sign-in sudo remembers, so the answer is what the
+        # install sees when it starts from nothing.
+        result = run(["sudo", "-n", "-k", "true"], capture_output=True, text=True,
+                     timeout=15, env=_sudo_environment())
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode != 0 and "password is required" in (result.stderr or "")
+
+
+def check_sudo_password(password: str, *, run=subprocess.run) -> None:
+    """Refuse a password sudo does not accept. Nothing is remembered either way."""
+
+    try:
+        # -S reads the password from stdin; -k neither uses nor saves a sign-in.
+        result = run(["sudo", "-S", "-k", "-p", "", "true"], input=f"{password}\n",
+                     capture_output=True, text=True, timeout=30, env=_sudo_environment())
+    except (OSError, subprocess.SubprocessError) as error:
+        raise MotionModuleError(f"Could not check the password: {_short(error)}") from error
+    if result.returncode == 0:
+        return
+    detail = result.stderr or ""
+    if re.search(r"incorrect password|try again|no password was provided", detail, re.IGNORECASE):
+        raise PasswordRequired("That password was not accepted. Try again.", user=_user(), rejected=True)
+    raise MotionModuleError(_short(detail) or "sudo refused the password")
 
 
 def _read(path: Path, pattern: str) -> str:
@@ -129,8 +198,21 @@ def update_lines(installed: dict, remotes: dict, *, error: str = "") -> list[dic
     return lines
 
 
-def start_update(ref: str, *, run=subprocess.run, helper: Path = UPDATE_HELPER, timeout: float = 30.0) -> str:
-    """Ask the root helper to install one branch. Returns as soon as it starts."""
+def start_update(
+    ref: str,
+    *,
+    password: str | None = None,
+    run=subprocess.run,
+    helper: Path = UPDATE_HELPER,
+    askpass: Path = ASKPASS_HELPER,
+    timeout: float = 30.0,
+) -> str:
+    """Ask the root helper to install one branch. Returns as soon as it starts.
+
+    When sudo wants this user's password, so does the install. Without one
+    this raises PasswordRequired, and a wrong one is refused here, before
+    anything has started.
+    """
 
     if ref not in BRANCHES:
         raise MotionModuleError("MotionModule installs the main or the testing branch")
@@ -139,8 +221,24 @@ def start_update(ref: str, *, run=subprocess.run, helper: Path = UPDATE_HELPER, 
             "This Pi was set up before the update button existed. Update it once over SSH with "
             f"motionmodule install {ref}; the button works from then on."
         )
+    secret = ""
+    if sudo_needs_password(run=run):
+        if not os.access(askpass, os.X_OK):
+            raise MotionModuleError(
+                "sudo on this Pi asks for a password, and this Pi's update helper is too old to pass "
+                f"one on. Update it once over SSH with motionmodule install {ref}; after that this "
+                "button asks for the password."
+            )
+        if not password:
+            raise PasswordRequired("This update needs the password sudo asks for on this Pi.", user=_user())
+        if len(password) > MAX_PASSWORD_LENGTH or any(character in password for character in "\r\n\0"):
+            raise PasswordRequired("That password was not accepted. Try again.", user=_user(), rejected=True)
+        check_sudo_password(password, run=run)
+        secret = password
     try:
-        result = run(["sudo", "-n", str(helper), ref], capture_output=True, text=True, timeout=timeout)
+        # The helper reads the password on stdin; empty means none is needed.
+        result = run(["sudo", "-n", str(helper), ref], input=f"{secret}\n" if secret else "",
+                     capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as error:
         raise MotionModuleError(f"Could not start the update: {_short(error)}") from error
     if result.returncode != 0:
@@ -203,6 +301,7 @@ class UpdateChecker:
         clock=time.monotonic,
         interval: float = CHECK_INTERVAL_SECONDS,
         helper: Path = UPDATE_HELPER,
+        askpass: Path = ASKPASS_HELPER,
         unit: str = UPDATE_UNIT,
         log: Path = UPDATE_LOG,
     ) -> None:
@@ -211,9 +310,14 @@ class UpdateChecker:
         self._clock = clock
         self._interval = interval
         self._helper = helper
+        self._askpass = askpass
         self._unit = unit
         self._log = log
         self._lock = threading.Lock()
+        # One start at a time: two presses cannot start two installs, and
+        # passwords are checked one after another.
+        self._start_lock = threading.Lock()
+        self._rejected: list[float] = []
         self._remotes: dict[str, str] = {}
         self._error = ""
         self._checked = 0.0
@@ -262,8 +366,24 @@ class UpdateChecker:
             self._checked_at = time.time()
             self._checking = False
 
-    def start_update(self, ref: str) -> str:
-        return start_update(ref, run=self._run, helper=self._helper)
+    def start_update(self, ref: str, password: str | None = None) -> str:
+        with self._start_lock:
+            now = self._clock()
+            self._rejected = [moment for moment in self._rejected if now - moment < PASSWORD_WINDOW_SECONDS]
+            if password and len(self._rejected) >= PASSWORD_ATTEMPTS:
+                raise TooManyPasswordAttempts(
+                    f"Too many wrong passwords. Wait {PASSWORD_WINDOW_SECONDS // 60} minutes, then try again."
+                )
+            try:
+                message = start_update(
+                    ref, password=password, run=self._run, helper=self._helper, askpass=self._askpass
+                )
+            except PasswordRequired as refusal:
+                if refusal.rejected:
+                    self._rejected.append(now)
+                raise
+            self._rejected.clear()
+            return message
 
     def close(self) -> None:
         with self._lock:

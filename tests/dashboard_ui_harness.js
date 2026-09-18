@@ -18,6 +18,7 @@ class Element {
       }
     }
     this.hidden = 'hidden' in this.attrs;
+    this.open = 'open' in this.attrs;
     this.checked = 'checked' in this.attrs;
     this.disabled = 'disabled' in this.attrs;
     this.value = this.attrs.value || '';
@@ -79,6 +80,15 @@ class Element {
     await Promise.all((this.events.get(type) || []).map(listener => listener(event)));
   }
   focus() { this.ownerDocument.activeElement = this; }
+  showModal() {
+    if (this.open) throw new Error('InvalidStateError: the dialog is already open');
+    this.open = true;
+  }
+  close() {
+    if (!this.open) return;
+    this.open = false;
+    this.fire('close');
+  }
   setPointerCapture() {}
   get childElementCount() { return this.children.length; }
 }
@@ -150,6 +160,7 @@ function browser(now = 1700000000000) {
     history: {replaceState() {}},
     navigator: {clipboard: {writeText: async () => {}}},
     localStorage: {getItem: () => null, setItem() {}},
+    confirm: () => true,
     addEventListener: (...args) => window.addEventListener(...args),
     setInterval: (callback, delay) => { intervals.set(++timerId, {callback, delay}); return timerId; },
     clearInterval: id => intervals.delete(id),
@@ -159,7 +170,7 @@ function browser(now = 1700000000000) {
       requests.push({url, ...options, payload: options.body ? JSON.parse(options.body) : undefined});
       const failure = failures.get(url);
       if (failure instanceof Error) throw failure;
-      if (failure) return {ok: false, status: failure.status, json: async () => ({error: failure.message})};
+      if (failure) return {ok: false, status: failure.status, json: async () => ({error: failure.message, ...failure.data})};
       const data = url === '/api/status' ? currentStatus
         : url === '/api/drive/telemetry' ? currentTelemetry
         : {ok: true};
@@ -168,7 +179,7 @@ function browser(now = 1700000000000) {
   });
   const exports = fixture.kind === 'station'
     ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll};'
-    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll};';
+    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
   const driveRequests = () => requests.filter(item => item.url === '/api/drive');
@@ -292,6 +303,56 @@ async function run(scenario) {
     await app.$('#cameraControls').querySelectorAll('button')[2].fire('click');
     assert(stage.classList.contains('single'), 'Choosing one camera expands it to a single square view');
     assert.equal(stage.querySelectorAll('[data-camera-id]').filter(frame => !frame.hidden).length, 1);
+  } else if (scenario === 'update-password') {
+    const line = {ref: 'testing', label: 'Testing line', current: true, action: 'Update now'};
+    const dialog = app.$('#updatePasswordDialog');
+    const input = app.$('#updatePassword');
+    const posts = () => app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST');
+    const asking = {status: 401, message: 'This update needs the password sudo asks for on this Pi.',
+      data: {password_required: true, rejected: false, user: 'aloe'}};
+
+    await app.context.dashboard.installUpdate(line);
+    await app.settle();
+    assert.equal(dialog.open, false, 'No popup when sudo on the Pi needs no password');
+    assert.deepEqual(posts().at(-1).payload, {ref: 'testing'});
+
+    app.failures.set('/api/updates', asking);
+    await app.context.dashboard.installUpdate(line);
+    await app.settle();
+    assert.equal(dialog.open, true, 'sudo asking for a password opens the popup');
+    assert.equal(app.$('#updatePasswordUser').textContent, 'aloe');
+    assert.equal(app.$('#updatePasswordError').hidden, true, 'Being asked is not an error');
+    assert.equal(app.document.activeElement, input, 'The password box takes the focus');
+    assert.equal(posts().at(-1).payload.password, undefined, 'Nothing is sent before a password is typed');
+
+    app.failures.set('/api/updates', {status: 401, message: 'That password was not accepted. Try again.',
+      data: {password_required: true, rejected: true, user: 'aloe'}});
+    input.value = 'wrong-password';
+    await app.$('#updatePasswordForm').fire('submit');
+    await app.settle();
+    assert.equal(posts().at(-1).payload.password, 'wrong-password');
+    assert.equal(dialog.open, true, 'A wrong password keeps the popup open');
+    assert.equal(app.$('#updatePasswordError').hidden, false);
+    assert.match(app.$('#updatePasswordError').textContent, /not accepted/);
+    assert.equal(input.value, '', 'A refused password is cleared');
+    assert.equal(input.disabled, false, 'The box can be used again');
+
+    app.failures.delete('/api/updates');
+    input.value = 'right-password';
+    await app.$('#updatePasswordForm').fire('submit');
+    await app.settle();
+    assert.deepEqual(posts().at(-1).payload, {ref: 'testing', password: 'right-password'});
+    assert.equal(dialog.open, false, 'The popup closes once the update starts');
+    assert.equal(input.value, '', 'The password is not left in the page');
+    assert.match(app.$('#toast').textContent, /started/i);
+
+    app.failures.set('/api/updates', asking);
+    await app.context.dashboard.installUpdate(line);
+    await app.settle();
+    const sent = posts().length;
+    await app.$('#updatePasswordCancel').fire('click');
+    assert.equal(dialog.open, false, 'Cancel closes the popup');
+    assert.equal(posts().length, sent, 'Cancelling sends nothing');
   } else {
     throw new Error(`Unknown scenario: ${scenario}`);
   }

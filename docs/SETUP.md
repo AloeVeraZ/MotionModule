@@ -205,6 +205,11 @@ logs**; *MotionModule updates* is the first card.
    background. The output appears under the card. MotionModule restarts, so
    the dashboard reconnects on its own after a minute or two; keep the robot
    powered until it does.
+4. If `sudo` on the Pi asks for your password, a **Password required for
+   update** popup asks for it first. It is the password of the Pi user you
+   installed MotionModule as. A wrong one is refused before anything starts;
+   the right one is used for this update only and deleted when it ends. A Pi
+   whose `sudo` needs no password never shows the popup.
 
 Robot folders, `hardware.py`, the active project, and Wi-Fi settings are kept,
 the tests run before the new version is switched on, and a version that will
@@ -223,6 +228,20 @@ motionmodule install testing
 ```
 
 The button works from then on.
+
+### The update says its helper is too old to pass on a password
+
+`sudo` on this Pi asks for a password, and the Pi was set up before the update
+button could ask for one. Update once over SSH, where `sudo` asks in the
+terminal:
+
+```bash
+motionmodule install testing
+```
+
+From then on the dashboard shows the password popup instead. Use SSH rather
+than the Code-page terminal for this: that terminal belongs to the MotionModule
+service, which restarts partway through the install.
 
 ### The update card cannot reach GitHub
 

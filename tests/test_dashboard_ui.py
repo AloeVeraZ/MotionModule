@@ -116,6 +116,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_reloaded_page_sends_sequences_newer_than_previous_page(self):
         self.run_behavior("reload-sequence")
 
+    def test_an_update_asks_for_the_sudo_password_only_when_sudo_wants_one(self):
+        self.run_behavior("update-password")
+
     def test_full_station_renders_cameras_imu_pi_inputs_and_usb_controller(self):
         self.run_behavior("station-telemetry-layout", self.station_fixture)
 

@@ -542,7 +542,9 @@ this robot is running the newest version, red with **Update now** when one is
 waiting. A Pi on `testing` also sees the `main` line, so it can go back; a Pi
 on `main` sees only `main`. Pressing the button stops the motors, runs the
 update as root in the background, and restarts MotionModule; the log appears
-under the card while it works. Nothing installs on its own.
+under the card while it works. If `sudo` on the Pi asks for a password, a
+popup asks for it first, and the update uses it only while it runs. Nothing
+installs on its own.
 
 The same thing over SSH:
 
