@@ -21,12 +21,19 @@ Five small files make the complete sample. Only one is required.
 
 `hardware.py` gives channels 1-4 these names, and `robot.py` uses them:
 
-| Name | Channel | Driver board |
-| --- | ---: | --- |
-| `front_left` | 1 | Driver 2 · A |
-| `rear_left` | 2 | Driver 2 · B |
-| `front_right` | 3 | Driver 1 · A |
-| `rear_right` | 4 | Driver 1 · B |
+| Name | Channel | Driver board | Board inputs | Motor terminal |
+| --- | ---: | --- | --- | --- |
+| `front_left` | 1 | Driver 1 · A | IN1, IN2 | MOTOR_A |
+| `rear_left` | 2 | Driver 1 · B | IN3, IN4 | MOTOR_B |
+| `front_right` | 3 | Driver 2 · A | IN1, IN2 | MOTOR_A |
+| `rear_right` | 4 | Driver 2 · B | IN3, IN4 | MOTOR_B |
+
+This is the reference wiring the sample expects. On the controller plate, with
+the Pi on the left and its USB ports at the bottom, Driver 1 sits beside the
+USB ports, Driver 2 above it, Driver 3 to the right of Driver 1 and Driver 4
+above Driver 3. **Debug -> Wiring guide** shows every wire. Wire the same way
+to run the sample unchanged, or change the pins in `hardware.py` to match your
+own wiring.
 
 If one wheel spins backward, change only that motor's `inverted` value in
 `hardware.py`. Never change the math in `mix()` to cancel out one bad motor.

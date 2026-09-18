@@ -55,6 +55,12 @@ HARDWARE = {
     # ------------------------------------------------------------------
     # Eight brushed-motor outputs: four dual H-bridge boards, two each.
     #
+    # LOCKED WIRING: the reference robot is wired exactly like this, and that
+    # wiring works. Never change a GPIO in this shipped file, motor or servo;
+    # a robot wired another way gets its own copy in its robot folder. Names
+    # and `inverted` may change. AGENTS.md explains, and
+    # tests/test_wiring_lock.py fails if a pin here moves.
+    #
     # Each driver owns a run of neighbouring header positions with its own
     # ground inside the run, so one driver is one short bundle of wires:
     #

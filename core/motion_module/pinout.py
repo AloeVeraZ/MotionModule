@@ -31,6 +31,12 @@ PHYSICAL_BY_BCM = {
     27: 13,
 }
 
+# LOCKED WIRING. The robot is wired exactly as DRIVER_ASSIGNMENTS,
+# DRIVER_GROUNDS and the shipped hardware.py pin maps say, and that wiring
+# works. Never move a channel, driver, output or ground. AGENTS.md at the
+# repository root has the full map, and tests/test_wiring_lock.py fails if
+# any of it changes.
+#
 # Motor channels run straight down the drivers: 1/2 on Driver 1, 3/4 on
 # Driver 2, and so on. Each driver's four inputs are grouped on the header.
 DRIVER_ASSIGNMENTS = {

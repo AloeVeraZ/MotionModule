@@ -8,6 +8,14 @@ dashboard, so the guide works on the robot hotspot without internet access.
 The dashboard uses the active configuration's names and pins; the tables here
 describe the reference harness.
 
+> [!IMPORTANT]
+> **This wiring is locked.** The reference robot is wired exactly as these
+> tables show, and that wiring works. The built-in `hardware.py`, the Mecanum
+> sample, the dashboard's wiring guide and `motionmodule pinout` all use it, on
+> `main` and on `testing`, and no change may move a pin, driver or ground.
+> [AGENTS.md](../AGENTS.md) explains, and `tests/test_wiring_lock.py` fails if
+> any of it changes. A robot wired another way keeps its own `hardware.py`.
+
 ## Read the connector before connecting a wire
 
 The Pi has **40 physical header pins**, with two numbering systems:
@@ -60,9 +68,10 @@ motor's two inputs are neighbouring positions on the same side, except
 Driver 2's output B, whose inputs sit either side of that driver's own ground
 at physical 34.
 
-Eight GPIOs stay free for later use: physical 7, 8, 10, 11, 12, 19, 22 and 29.
+Seven GPIOs stay free for later use: physical 8, 10, 11, 12, 19, 22 and 29.
 That includes the whole default UART pair (physical 8 and 10), so the GPIO
-serial console still works.
+serial console still works. Physical 7 (GPIO4) carries the servo board's OE
+wire.
 
 This direct-GPIO profile intentionally supports four dual drivers/eight motors.
 Adding still more direct H-bridges would consume pins reserved for other Pi
@@ -167,8 +176,8 @@ servo is plugged in.
 ### Other connectors and pads
 
 - **OE (output enable):** low enables the PWM outputs, high disables them.
-  MotionModule assigns no Pi GPIO to OE and does not control it. Verify that
-  the fitted board's enable circuit holds it low; do not leave OE floating.
+  It is wired to physical pin 7 / GPIO4, as described under
+  [OE, the output enable pin](#oe-the-output-enable-pin).
   Disabling PWM does not disconnect the servo power rail.
 - **A0–A5:** solder address pads, not servo outputs. They choose which I2C
   address this board responds to.
@@ -213,13 +222,13 @@ that a sensor is connected or supported; no sensors are implemented yet.
 
 | Physical pin(s) | Reference purpose | What to do |
 | --- | --- | --- |
-| 1, 3, 5, 6 | PCA9685 logic: VCC, SDA, SCL, GND | Connect the four logic wires above; GPIO2/3 stay reserved for I2C even if servo support is disabled |
+| 1, 3, 5, 7, 9 | PCA9685 logic: VCC, SDA, SCL, OE, GND | Connect the five logic wires above; GPIO2/3 stay reserved for I2C even if servo support is disabled |
 | 8 / GPIO14, 10 / GPIO15 | UART transmit and receive | Leave disconnected in the default harness; serial access may use them |
 | 27 / GPIO0, 28 / GPIO1 | HAT ID EEPROM data and clock | Leave disconnected; MotionModule rejects motor use of these pins |
 | 2, 4 | Pi 5 V power | Not used by the reference harness; never connect the motor battery or servo V+ here |
 | 17 | Spare Pi 3.3 V logic power | Unused; not a motor or servo supply |
-| 9, 14, 30 | Spare Pi ground | Available for low-current signal references |
-| 7, 11, 12, 13, 15, 19 | Unassigned GPIO4/17/18/27/22/10 | No configured device or sensor; alternate interfaces may use these pins |
+| 6, 20, 30 | Spare Pi ground | Available for low-current signal references |
+| 11, 12, 19, 22, 29 | Unassigned GPIO17/18/10/25/5 | No configured device or sensor; alternate interfaces may use these pins |
 
 If you customize motor pins, Debug shows the **active assignment** in place of
 the reference label. For example, using a UART GPIO for a motor requires
