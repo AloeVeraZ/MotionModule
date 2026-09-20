@@ -199,11 +199,24 @@ for robot_file in "$release_dir"/examples/*/robot.py; do
     robot_name="$(basename "$robot_template")"
     if [ ! -e "$ROBOT_DIR/$robot_name" ]; then
         cp -a "$robot_template" "$ROBOT_DIR/$robot_name"
-        say "Created robot project $ROBOT_DIR/$robot_name. Future installs will not overwrite it."
-    else
-        say "Keeping existing robot project $ROBOT_DIR/$robot_name."
+        say "Created robot project $ROBOT_DIR/$robot_name. Future installs keep the work you do in it."
     fi
 done
+
+# A robot folder nobody has edited still holds the sample an earlier release
+# put there, so fixes to a sample never reached the robot. Give those folders
+# the sample this release ships, keeping the copy replaced under backups. A
+# folder with any work of its own is left exactly as it is; the module
+# core/motion_module/shipped_samples.py explains how it tells them apart.
+released_with=()
+if [ -L "$CURRENT_LINK" ] && [ -d "$CURRENT_LINK/examples" ]; then
+    released_with=(--released-with "$(readlink -f "$CURRENT_LINK")/examples")
+fi
+while IFS= read -r message; do
+    say "$message"
+done < <("$release_dir/.venv/bin/python" -m motion_module.shipped_samples \
+    "$ROBOT_DIR" "$PROJECT_DIR/backups" "${released_with[@]}")
+
 [ -f "$ROBOT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
 
 ACTIVE_LINK="$PROJECT_DIR/active"
@@ -276,6 +289,10 @@ A robot folder needs only \`robot.py\`. Open the dashboard Code page, download
 the sample, edit that folder on any computer, then choose the folder under
 Driver Station. The robot validates, backs up, and activates it, then runs it
 directly through the robot website.
+
+An update gives a folder you have not edited the newest sample and keeps the
+copy it replaced in \`backups/\`. A folder you have edited is your work, and
+no install changes it.
 
 Motors and servos are addressed by name: \`module.motor("motor_1")\`. Those
 names live in \`$CONFIG_FILE\`. To rename them for one robot, copy that file

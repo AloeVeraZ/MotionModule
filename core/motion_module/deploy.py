@@ -163,7 +163,9 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
             raise MotionModuleError(str(error)) from error
 
 
-def _replace_project(staging: Path, target: Path, backups: Path, name: str) -> Path | None:
+def replace_project(staging: Path, target: Path, backups: Path, name: str) -> Path | None:
+    """Swap a prepared folder for a robot project, keeping the old one in backups."""
+
     backup: Path | None = None
     if target.exists():
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -203,7 +205,7 @@ def deploy_archive(
     try:
         _extract_archive(archive, staging)
         _check_python(staging)
-        backup = _replace_project(staging, target, backups, name)
+        backup = replace_project(staging, target, backups, name)
     except MotionModuleError:
         raise
     except OSError as error:
@@ -298,7 +300,7 @@ def deploy_project_files(
             destination.write_bytes(content)
             destination.chmod(0o644)
         _check_python(staging, strict=True)
-        backup = _replace_project(staging, target, backups, name)
+        backup = replace_project(staging, target, backups, name)
     except MotionModuleError:
         raise
     except OSError as error:

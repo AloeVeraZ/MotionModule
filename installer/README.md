@@ -73,9 +73,12 @@ For the Arduino GIGA sensor controller, the installer also installs
 lets that user flash the GIGA's firmware with `motionmodule giga flash`
 without sudo. Reboot once after the first install so the groups apply.
 
-Bundled examples are copied once into `~/MotionModule/robots`; existing robot
-folders are never overwritten. The `active` symlink selects the project loaded
-by the dashboard. A project may include its own data-only `hardware.py`;
+Bundled examples are copied into `~/MotionModule/robots` on the first install.
+A later install replaces one of those folders only while every file in it is
+still a copy MotionModule shipped, so a fix to a sample reaches the robot; the
+folder it replaces is kept under `~/MotionModule/backups`, and a folder with
+any file of its own is never overwritten. The `active` symlink selects the
+project loaded by the dashboard. A project may include its own data-only `hardware.py`;
 otherwise the installed `~/.config/motionmodule/hardware.py` supplies the pins
 and names. Installs made before that file existed keep using their
 `~/.config/motionmodule/config.toml`.

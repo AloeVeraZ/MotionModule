@@ -1,0 +1,62 @@
+{
+  "note": "Every copy of each robot sample MotionModule shipped, as the SHA-256 of its contents with Unix line endings. core/motion_module/shipped_samples.py reads this to tell a robot folder nobody edited from one that is the robot's own.",
+  "samples": {
+    "Mecanum": {
+      "README.md": [
+        "0146fe92d4eaa0ec37dd3ad4ef75501d1bbba4f8599c214875f25eb0789f298a",
+        "066409ea5b7fce85c09a07f01093b832002129177f5e4cff56cc13315f4cbddf",
+        "08396798687ea6660acc6abcfc72c34bd1fe8101bf3c786196141b9ec88d5097",
+        "3603c736be01286b38c1665160db4d30a73d1c6698ea1bec76a518015d2f6146",
+        "4025827b821dff28914470d7f421e6d37aa675eee0cf3891e56cf236812ac49c",
+        "567a10c8c95f6dbf6a5dadf190e21cb20ba01234ea2794138f3271dd58c35873",
+        "5d04c0fc9933807ef98236f7f426305c02995ad4bf7161765a4e8b3bbe2db297",
+        "67cf28ef1ab241dfbb344e99ff41235e4d93d0fccb46e6bd4ddbc50f0fbb904b",
+        "6fb8b877f51c9a3ea7174b19997c4e996fcba1bf2e6170184b7b691845dafcaa",
+        "84c2a29f75b512b5f67a4231b2914daa4c5c404c227ff5302dcf1d72ecbad2e8",
+        "a9e408dc84a0296ba28436d1d810b7badb5ee1dd9c546428c3177b02e3602981",
+        "df8a7e2430855111944c9c0a64d27b91fbf9c068976c9add7edddb393be8fe3f"
+      ],
+      "autonomous.py": [
+        "9a86b8b054a4b95f20d38dcc8fd60c7f727a0f475b40ccabbb73cb79325d2db9",
+        "fcf7533a6d7191d6e18b53a2aa20b717d887047496ef85e9cbd048f7eb4012fb"
+      ],
+      "dashboard.py": [
+        "68c6a0d91551a8049a3db0ed492c719c9627f4db5031a55ed9722ff13650bb2e",
+        "925e25ee1269a027fb053c0027d7110e844b022d11c4ba00d8df64b44591a3ee",
+        "b0e9b41f87fb2c20f96687930ef5077e1354da2c3248a0f53e1cbf290957c893",
+        "f560edb7d84d22bf29884aff0ca8b3c489aaa71aedb6243c11f697d12d3efd93"
+      ],
+      "giga_sensor_bridge.ino": [
+        "1503d4832ee202725af93984f05a6a3d5307f6dcfc71d3c74f189fb363b81d75"
+      ],
+      "hardware.py": [
+        "0df4380296fd8b6c0cf83be312c70f13161166174f3f8d99e2e3ef1c281a4691",
+        "3044dbdb3af76326d6db657ecac75fc1cb0553cc91d720aa641fee8db26b18ca",
+        "4cb929e387acb4e4ae661fbc1509dde08ad5785b642e3f42f9612f46f27fff41",
+        "819c32ea456847af477fa42346589ed635b7c989db7b47b01562885a81483a54",
+        "921989c7bf20a6393dae567537bba40c4ddb1881ec54f36ec558a8ec59b6c630",
+        "949122b07d107a1f7b226c44732e634d4413fd81d3e137ee33899c7d45930e72",
+        "9e373688d34af3f67ae83e92cfdcef7a7e1d7d3945ad80fe75b6e4dd72f3b966",
+        "c52dee6e9f05900a5f003a775467015d1521c08f204994c0831082175d06e842",
+        "fa396c31a26bf46a8f2e1b0993f9da1d82d16ef8c3c8387cc32b27c137db35b1"
+      ],
+      "mecanum.py": [
+        "42dd515e0e2076a144a7e33fe7d5f0b1fb8b11071bf209aa18d4137790263668",
+        "c23941a7998b0fdd2db4c23341789feb91824a1e144a8864918da02c51127dd7"
+      ],
+      "robot.py": [
+        "0c00cc87c07058dbd9e9bfaa32b321046cae0828d126f03f218e663fb8d71cd6",
+        "25946f35531ef2d095ea12ea5712937aa2913fdbdda41952f82d0049aadae7dd",
+        "3f2be35847cb2b27b90d4cb71ef28920793480a6d04379bbf2a9bca5f60a29b3",
+        "6be4518f8ba1b646d34da2253f14102bebabe01c03e6a250498aef514c8eca4a",
+        "872991267366975aa93375c8c26dbd6afaa123667281e1d23f86a7f36847e743",
+        "a1ce2a1c69e4e0fe279d4a7e914d91d28ca70bd4cf78b7330ccc08041ccd81b4",
+        "af97c68df0be89791378982f80dcb291fa1a874500802149e9461b8fd658c981"
+      ],
+      "sensors.py": [
+        "c1626bdfa8da984db42519db803d62646c1c5692757eae55365d91edb79838a7",
+        "ea093e7c60181b2febe6e9c28e6956fc0590120597c50901740ec734956bb152"
+      ]
+    }
+  }
+}

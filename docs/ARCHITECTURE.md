@@ -47,8 +47,11 @@ fused power system and physical cutoff.
 ```
 
 Installing a tag, branch, or commit builds and tests a new release before the
-`current` link changes. It does not overwrite robot projects. Once the new
-release is running, the install replaces the old MotionModule software: other
+`current` link changes. It does not overwrite the work in a robot project: a
+folder still holding an untouched copy of a sample takes the sample the new
+release ships, with the replaced folder kept under `backups/`, and a folder
+with one file of its own is left as it is. Once the new release is running,
+the install replaces the old MotionModule software: other
 releases and stale MotionModule system files are removed, so `main` and
 `testing` can replace each other in either direction. Only an earlier release
 of the same branch is kept, for rollback. Rollback switches the runtime links,

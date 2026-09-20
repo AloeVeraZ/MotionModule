@@ -32,10 +32,13 @@ downloads `main`, even from this branch's link.
 Either command builds the testing code, runs the test suite on the Pi, and,
 once the testing version is running, removes the MotionModule software the Pi
 had before. If the testing build fails its tests, the installer stops and the
-version you had stays active. Your robot folders, their backups, the active
-project, `hardware.py`, and Wi-Fi settings are never touched, so the same
-`robot.py` keeps running. The Pi reboots at the end, like any install. While a
-Pi runs this branch, the dashboard's top bar shows a yellow **testing** badge.
+version you had stays active. The robot folders you have edited, their
+backups, the active project, `hardware.py`, and Wi-Fi settings are never
+touched, so the same `robot.py` keeps running. A robot folder that still holds
+an untouched copy of a sample takes the sample the new version ships, and the
+copy it replaces is kept under `backups`. The Pi reboots at the end, like any
+install. While a Pi runs this branch, the dashboard's top bar shows a yellow
+**testing** badge.
 
 ### Go back to the main line
 
@@ -485,7 +488,10 @@ MotionModule dashboard + active Python project
 The service loads `~/MotionModule/active/robot.py`. `active` points to one
 folder under `~/MotionModule/robots`; browser uploads preserve previous copies
 under `~/MotionModule/backups`. Runtime releases live separately, so installing
-or rolling back MotionModule does not overwrite robot projects.
+or rolling back MotionModule does not overwrite the work in a robot project. A
+folder whose files are all copies MotionModule shipped holds no such work, so
+an install gives it that release's sample and keeps the replaced folder under
+`~/MotionModule/backups`.
 
 The network service tries saved Wi-Fi for 30 seconds and creates the fallback
 hotspot only when none connects. Nginx provides the same port-80 page in either

@@ -22,4 +22,11 @@ where = ["core"]
 include = ["motion_module*"]
 
 [tool.setuptools.package-data]
-motion_module = ["templates/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/fonts/*"]
+motion_module = [
+  "shipped_samples.json",
+  "templates/*.html",
+  "static/*.css",
+  "static/*.js",
+  "static/*.svg",
+  "static/fonts/*",
+]
