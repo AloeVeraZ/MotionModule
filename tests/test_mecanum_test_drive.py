@@ -45,6 +45,36 @@ class MecanumTestDriveTests(unittest.TestCase):
         self.assertGreater(front_left, 0)
         self.assertLess(front_right, 0)
 
+    def test_every_panel_of_the_gobilda_mecanum_reference(self):
+        """goBILDA's arrow chart, one row per panel: 1 up, -1 down, 0 stopped.
+
+        Forward is the row a working robot already proves; every other row is
+        that same value with some wheels' signs flipped.
+        """
+
+        up, down, off = 1, -1, 0
+        panels = {
+            #                      forward strafe rotate      FL    RL    FR    RR
+            "forward":           ((     1,     0,     0), (   up,   up,   up,   up)),
+            "backward":          ((    -1,     0,     0), ( down, down, down, down)),
+            "strafe right":      ((     0,     1,     0), (   up, down, down,   up)),
+            "strafe left":       ((     0,    -1,     0), ( down,   up,   up, down)),
+            "turn left (Q)":     ((     0,     0,     1), ( down, down,   up,   up)),
+            "turn right (E)":    ((     0,     0,    -1), (   up,   up, down, down)),
+            "diagonal up-left":  ((     1,    -1,     0), (  off,   up,   up,  off)),
+            "diagonal up-right": ((     1,     1,     0), (   up,  off,  off,   up)),
+            "diagonal down-left":((    -1,    -1,     0), ( down,  off,  off, down)),
+            "diagonal down-right":((   -1,     1,     0), (  off, down, down,  off)),
+        }
+        for panel, (command, expected) in panels.items():
+            with self.subTest(panel=panel):
+                measured = self.outputs(*command)
+                # Only the direction is under test; the magnitude is the
+                # speed limit, and a diagonal's two driven wheels are scaled
+                # back down into range together.
+                signs = tuple(0 if value == 0 else (1 if value > 0 else -1) for value in measured)
+                self.assertEqual(signs, expected)
+
     def test_turning_in_place_opposes_the_left_side_to_the_right_side(self):
         # The regression this page exists to catch: if the front pair opposes
         # the rear pair instead, every axis cancels and the robot only twitches.
