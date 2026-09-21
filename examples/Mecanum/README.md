@@ -35,12 +35,11 @@ above Driver 3. **Debug -> Wiring guide** shows every wire. Wire the same way
 to run the sample unchanged, or change the pins in `hardware.py` to match your
 own wiring.
 
-The raised-wheel motor bench on this robot shows that all four drivetrain
-motors need `inverted` set in `hardware.py`. With that configuration,
-**Hold +** in the bench turns every wheel toward the front and one positive
-forward command turns all four wheels forward together. If one wheel spins
-backward, change only that motor's `inverted` value in `hardware.py`. Never
-change the math in `mix()` to cancel out one bad motor.
+The base driver map already has inverted polarity for output A (`front_left`
+and `front_right`). This Mecanum sample additionally sets `inverted` on motor
+2 / Driver 1B (`rear_left`) and motor 4 / Driver 2B (`rear_right`). Their pins
+do not move: positive power uses the other input in each existing IN3/IN4
+pair. Never change the math in `mix()` to cancel out one motor.
 
 ## Add a mechanism
 

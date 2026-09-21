@@ -22,6 +22,10 @@ import math
 from sensors import create_sensors  # sensors.py, next to this file
 
 
+# These names stay in physical wheel order. Motor 2 (rear_left / Driver 1B)
+# and motor 4 (rear_right / Driver 2B) reverse their electrical polarity in
+# hardware.py, where that pin-level behavior belongs; the Mecanum equations
+# below therefore remain the standard wheel equations.
 WHEELS = ("front_left", "rear_left", "front_right", "rear_right")
 
 

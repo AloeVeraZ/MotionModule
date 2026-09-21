@@ -20,13 +20,13 @@ class ControllerTests(unittest.TestCase):
     def tearDown(self):
         self.module.close()
 
-    def test_positive_uses_the_bench_confirmed_direction_for_the_drivetrain(self):
+    def test_positive_drives_each_default_channel_with_its_shipped_polarity(self):
         self.module.set_motors({1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5})
-        # All four reference drivetrain motors are inverted, so dashboard
-        # Hold + drives the second input of each A/B pair.
-        for pin in (19, 6, 20, 12):
+        # Output A ships inverted; output B does not. A robot-specific
+        # hardware.py can change polarity without changing any pin.
+        for pin in (19, 13, 20, 16):
             self.assertEqual(self.gpio.values[pin], 0.5)
-        for pin in (26, 13, 21, 16):
+        for pin in (26, 6, 21, 12):
             self.assertEqual(self.gpio.values[pin], 0)
 
     def test_inversion_swaps_which_gpio_a_positive_command_drives(self):

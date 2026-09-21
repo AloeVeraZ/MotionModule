@@ -1595,7 +1595,7 @@
         <div class="driver-signal" id="driveSignalInput"><i></i>
           <div><small>Input</small><strong>None</strong></div></div>
         <div class="driver-signal" id="driveSignalArmed"><i></i>
-          <div><small>Control</small><strong>Disarmed</strong></div></div>
+          <div><small>Control</small><strong>Disabled</strong></div></div>
         <div class="driver-signal good" id="driveSignalOutputs"><i></i>
           <div><small>Outputs</small><strong>Idle</strong></div></div>
       </div>
@@ -1616,7 +1616,7 @@
         <div class="grid equal">
           <article class="card">
             <div class="panel-head">
-              <h2>Arm control</h2>
+              <h2>Enable drive</h2>
               <span>Hold-to-move · releases stop</span>
             </div>
             <div class="panel-body stack">
@@ -2587,7 +2587,7 @@ const axis = (positive, negative) =>
 const driveEnabled = () => activePage === 'drive' && Boolean($('#driveEnable')?.checked);
 
 function setDriveSignals() {
-  setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Armed' : 'Disarmed');
+  setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Enabled' : 'Disabled');
   setDriverSignal('#driveSignalInput', lastInputKind === 'none' ? '' : 'good',
     lastInputKind === 'pad' ? 'Controller' : lastInputKind === 'keys' ? 'Keyboard' : 'None');
 }
@@ -2632,7 +2632,7 @@ async function sendDrive() {
     }
   } catch (error) {
     markDisconnected();
-    disarmDrive('Lost contact with the robot. Re-arm when it is back.');
+    disarmDrive('Lost contact with the robot. Enable drive again when it is back.');
   }
 }
 
@@ -2705,7 +2705,7 @@ $$('[data-stop]').forEach(button => button.addEventListener('click', () => {
 
 $('#driveEnable')?.addEventListener('change', event => {
   if (!event.target.checked) stopAll();
-  else toast('Drive armed. Release everything to stop.');
+  else toast('Drive enabled. Release everything to stop.');
   setDriveSignals();
 });
 

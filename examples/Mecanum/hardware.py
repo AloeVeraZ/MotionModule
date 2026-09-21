@@ -40,10 +40,10 @@ HARDWARE = {
     #    4     rear_right    Driver 2 · B      IN3 pin 36/GPIO16   IN4 pin 32/GPIO12
     #    5-8   spare         Drivers 3 and 4   see docs/PINOUT.md
     #
-    # The raised-wheel motor bench confirms that all four drivetrain motors
-    # need their logical direction flipped: Hold + then turns every wheel
-    # toward the front of the robot. Test each wheel raised, then flip only
-    # that wheel's `inverted` value if its motor leads are mounted differently.
+    # The base driver map already inverts output A (channels 1 and 3). This
+    # Mecanum robot additionally needs output B reversed, so only channels 2
+    # and 4 change polarity from those defaults. No GPIO or wheel assignment
+    # changes: positive power simply uses the other pin in each existing pair.
     "motors": {
         1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": True},
         2: {"name": "rear_left", "forward_gpio": 13, "reverse_gpio": 6, "inverted": True},
