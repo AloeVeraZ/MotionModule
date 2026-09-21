@@ -547,10 +547,11 @@ asks GitHub what each branch is on and shows a line per branch: green when
 this robot is running the newest version, red with **Update now** when one is
 waiting. A Pi on `testing` also sees the `main` line, so it can go back; a Pi
 on `main` sees only `main`. Pressing the button stops the motors, runs the
-update as root in the background, and restarts MotionModule; the log appears
-under the card while it works. If `sudo` on the Pi asks for a password, a
-popup asks for it first, and the update uses it only while it runs. Nothing
-installs on its own.
+update as root in the background, and automatically reboots the whole Pi after
+a successful install; the log appears under the card while it works. The
+dashboard waits for the Pi to come back. If `sudo` on the Pi asks for a
+password, a popup asks for it first, and the update uses it only while it runs.
+Nothing installs on its own.
 
 The same thing over SSH:
 

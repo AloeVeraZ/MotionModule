@@ -96,8 +96,9 @@ PASSWORD=""
 printf '[MotionModule] Updating to %s, started by %s at %s\n' "$REF" "$OWNER" "$(date -Is)" > "$LOG"
 chmod 0644 "$LOG"
 
-# --no-reboot: restarting the MotionModule service is enough, and a robot in
-# the middle of a match should not disappear for a minute.
+# Keep the installer's default final reboot. The dashboard warns before it
+# starts, and rebooting after a successful install makes GPIO/I2C membership,
+# boot settings, services, and the newly activated release all start cleanly.
 if ! systemd-run \
     --unit="$UNIT" \
     --description="MotionModule update to $REF" \
@@ -107,7 +108,7 @@ if ! systemd-run \
     --property=StandardOutput=append:"$LOG" \
     --property=StandardError=append:"$LOG" \
     --property=TimeoutStartSec=infinity \
-    /usr/local/bin/motionmodule install "$REF" --no-reboot >/dev/null; then
+    /usr/local/bin/motionmodule install "$REF" >/dev/null; then
     rm -rf -- "$SECRET_DIR"
     fail "Could not start the update."
 fi

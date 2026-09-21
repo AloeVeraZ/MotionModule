@@ -5,7 +5,8 @@ account, no API limits), compares that with the commit this release was built
 from, and can install a branch through the root helper the installer puts at
 /usr/local/sbin/motionmodule-update. That helper accepts only ``main`` or
 ``testing``, and runs the install in its own service so that restarting
-MotionModule partway through does not kill the update.
+MotionModule partway through does not kill the update. A successful dashboard
+update finishes with the same full Pi reboot as an installation over SSH.
 
 A Pi on ``main`` is offered the main line only. A Pi on ``testing`` is offered
 both, so it can take the newest testing code or go back to the main line.

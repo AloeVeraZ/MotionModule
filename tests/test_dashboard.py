@@ -186,6 +186,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Connect to Wi", debug)
         self.assertIn(b"Useful commands", debug)
         self.assertIn(b"Stops outputs, reloads the active robot project", debug)
+        self.assertIn(b"Pi reboots automatically", debug)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
         self.assertNotIn(b'id="bomLink"', debug)

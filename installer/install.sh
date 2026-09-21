@@ -51,6 +51,16 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 
+# Dashboard helpers shipped before automatic update reboots passed
+# --no-reboot. The downloaded installer is already running inside the
+# dashboard's dedicated transient service, so recognize that trusted path and
+# restore the reboot for this first update as well as all later ones. An
+# explicit --no-reboot still works for every normal terminal/provisioning run.
+if [ "$REBOOT_SYSTEM" = false ] \
+    && grep -Eq ':/system\.slice/motionmodule-update\.service$' /proc/self/cgroup 2>/dev/null; then
+    REBOOT_SYSTEM=true
+fi
+
 say() { printf '\n\033[1;36m[MotionModule]\033[0m %s\n' "$*"; }
 fail() { printf '\n\033[1;31m[MotionModule ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 trap 'fail "Installation stopped on line $LINENO. Read the error above and rerun the same command."' ERR

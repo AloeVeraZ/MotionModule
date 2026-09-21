@@ -111,10 +111,13 @@ dashboard's update card reads `INSTALL_REF` and `INSTALL_COMMIT` from the
 release root, compares them against `git ls-remote` for `main` and `testing`,
 and, when you press the button, runs `/usr/local/sbin/motionmodule-update REF`
 through the `motionmodule-update` sudoers rule. That helper starts a transient
-`systemd-run` unit so the install survives the service restart it causes, and
-logs to `/var/log/motionmodule-update.log`. When `sudo` asks the Pi user for a
-password, the dashboard asks for it, checks it with `sudo -S -k`, and passes it
-to the helper on stdin. The helper keeps it in a root-only file under
+`systemd-run` unit so the install survives its service restarts, logs to
+`/var/log/motionmodule-update.log`, and leaves the installer's default final
+Pi reboot enabled. The installer also recognizes that dedicated unit and
+overrides the obsolete `--no-reboot` supplied by older dashboard helpers, so
+the first update to this behavior reboots too. When `sudo` asks the Pi user for
+a password, the dashboard asks for it, checks it with `sudo -S -k`, and passes
+it to the helper on stdin. The helper keeps it in a root-only file under
 `/run/motionmodule-update` while that update runs, with `SUDO_ASKPASS` set to
 `/usr/local/sbin/motionmodule-askpass`. That script fetches it through
 `motionmodule-update password`, which the rule also allows, and the helper

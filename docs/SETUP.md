@@ -202,9 +202,9 @@ logs**; *MotionModule updates* is the first card.
    **Switch to the main line** for going back to stable. A Pi installed from
    `main` sees only `main`.
 3. **Update now** asks once, then stops the motors and installs in the
-   background. The output appears under the card. MotionModule restarts, so
-   the dashboard reconnects on its own after a minute or two; keep the robot
-   powered until it does.
+   background. The output appears under the card. After a successful install,
+   the whole Pi reboots automatically and the dashboard reconnects on its own
+   after a minute or two; keep the robot powered until it does.
 4. If `sudo` on the Pi asks for your password, a **Password required for
    update** popup asks for it first. It is the password of the Pi user you
    installed MotionModule as. A wrong one is refused before anything starts;

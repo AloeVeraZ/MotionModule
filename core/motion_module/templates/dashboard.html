@@ -3370,9 +3370,9 @@ async function loadConfig() {
 
 let updateTimer = null;
 let updateBusy = false;
-/* Set once this page has seen an update running. The update restarts
-   MotionModule, so this page is left on the old version with a session the
-   robot has forgotten: it reloads itself when the update is over. */
+/* Set once this page has seen an update running. A successful update reboots
+   the Pi, so this page is left on the old version with a session the robot has
+   forgotten: it reloads itself when the robot comes back. */
 let updateWatched = false;
 /* The log follows its newest line, like a terminal, until someone scrolls up
    to read it. Scrolling back to the bottom follows along again. */
@@ -3480,9 +3480,8 @@ async function refreshUpdates(force = false) {
     renderUpdates(await jsonFetch(`/api/updates${force ? '?refresh=1' : ''}`));
   } catch (error) {
     if (updateWatched) {
-      /* An update restarts MotionModule, the network service and nginx, so
-         the robot stops answering for a moment. Keep asking until it is back
-         and can say whether the update finished. */
+      /* A successful update reboots the Pi, so the robot stops answering for
+         a moment. Keep asking until it is back and can report the result. */
       $('#updateSummary').textContent = 'Waiting for the robot…';
       clearTimeout(updateTimer);
       updateTimer = setTimeout(refreshUpdates, 2000);
@@ -3495,8 +3494,8 @@ async function refreshUpdates(force = false) {
 
 async function installUpdate(line) {
   const question = line.current
-    ? `Update this robot to the newest ${line.label.toLowerCase()}? Motors stop, MotionModule restarts, and your robot folders are kept.`
-    : `Install the ${line.label.toLowerCase()} on this robot? Motors stop, MotionModule restarts, and your robot folders are kept.`;
+    ? `Update this robot to the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept.`
+    : `Install the ${line.label.toLowerCase()} on this robot? Motors stop, the Pi reboots automatically, and your robot folders are kept.`;
   if (!confirm(question)) return;
   await requestUpdate(line);
 }

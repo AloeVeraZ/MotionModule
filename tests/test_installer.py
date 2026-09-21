@@ -90,6 +90,12 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("--no-reboot)", self.script)
         self.assertIn('if [ "$REBOOT_SYSTEM" = true ]', self.script)
 
+    def test_an_old_dashboard_helper_cannot_skip_its_successful_update_reboot(self):
+        self.assertIn("motionmodule-update\\.service$", self.script)
+        migration = self.script.index("Dashboard helpers shipped before automatic update reboots")
+        options_done = self.script.index("\nsay()", migration)
+        self.assertIn('REBOOT_SYSTEM=true', self.script[migration:options_done])
+
     def test_dashboard_runs_from_versioned_runtime_and_nginx_exposes_port_80(self):
         self.assertIn("/usr/local/sbin/motionmodule-dashboard", self.script)
         launcher = (INSTALLER.parent / "dashboard_launcher").read_text(encoding="utf-8")
@@ -306,10 +312,12 @@ class InstallerFinishTests(unittest.TestCase):
         # Only the two branches, and only ever one argument.
         self.assertIn("main|testing) ;;", helper)
         self.assertIn('[ "$#" -eq 1 ]', helper)
-        # The update outlives the restart of the service that started it.
+        # The update outlives the restart of the service that started it and
+        # keeps the installer's default successful-install reboot enabled.
         self.assertIn("systemd-run", helper)
         self.assertIn('--uid="$OWNER"', helper)
-        self.assertIn("/usr/local/bin/motionmodule install \"$REF\" --no-reboot", helper)
+        self.assertIn('/usr/local/bin/motionmodule install "$REF" >/dev/null', helper)
+        self.assertNotIn('install "$REF" --no-reboot', helper)
         self.assertIn("/var/log/motionmodule-update.log", helper)
 
     def test_manager_installs_each_branch_through_its_own_bootstrap(self):
@@ -429,7 +437,7 @@ class UpdateHelperTests(unittest.TestCase):
         self.assertIn("--uid=aloe", update)
         self.assertIn("--setenv=SUDO_ASKPASS=/usr/local/sbin/motionmodule-askpass", update)
         self.assertIn("--setenv=DISPLAY=", update)
-        self.assertEqual(update[-4:], ["/usr/local/bin/motionmodule", "install", "testing", "--no-reboot"])
+        self.assertEqual(update[-3:], ["/usr/local/bin/motionmodule", "install", "testing"])
         # In place before the update starts, byte for byte, for its sudo to read.
         self.assertEqual((self.stubs / "secret-at-start").read_text(encoding="utf-8"), password + "\n")
         self.assertEqual(self.secret.read_text(encoding="utf-8"), password + "\n")
@@ -448,7 +456,7 @@ class UpdateHelperTests(unittest.TestCase):
         self.assertEqual(code, 0, out + err)
         (update,) = self.systemd_runs()
         self.assertFalse([option for option in update if "SUDO_ASKPASS" in option or "DISPLAY" in option])
-        self.assertEqual(update[-4:], ["/usr/local/bin/motionmodule", "install", "main", "--no-reboot"])
+        self.assertEqual(update[-3:], ["/usr/local/bin/motionmodule", "install", "main"])
         self.assertFalse(self.secret_dir.exists())
 
     def test_a_second_press_leaves_the_running_update_its_password(self):
