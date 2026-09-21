@@ -278,6 +278,35 @@ sudo journalctl -u motionmodule.service -n 100 --no-pager
 Correct the local folder and deploy it again. Previous copies are retained in
 `~/MotionModule/backups`.
 
+### The Pi resets or the whole robot loses power at high motor output
+
+Do not repeatedly reproduce a full-power shutdown. A software watchdog cannot
+keep a Pi alive after its supply disappears. The motor commands are PWM duty
+cycles, not measured amperes: 100% requests continuous drive, and neither the
+H-bridges nor this code report battery voltage or motor current.
+
+**Debug → Checks & logs → Run checks** and `motionmodule doctor` now read
+`vcgencmd get_throttled` without moving anything. The Pi can report current
+undervoltage and undervoltage recorded during this boot. These firmware flags
+are not a battery gauge. They reset on reboot, and a fast supply cutoff can
+leave no warning, so a clean reading does not establish that the power system
+is adequate. Missing or unsupported diagnostics are reported as unavailable,
+not as a good supply. See the [official flag definitions](https://www.raspberrypi.com/documentation/computers/os.html#get_throttled).
+
+Inspect the actual battery, fuse markings, switch/connectors, driver ratings,
+and the Pi's 12 V-to-5 V converter with actuator power disconnected. A driver
+board's amp rating is not necessarily the main fuse rating. Do not bypass or
+increase a fuse to hide the symptom. A conventional blown blade fuse stays
+open; automatic recovery suggests another mechanism, such as converter
+protection or a voltage dip, rather than proving the fuse blew.
+
+Acceleration ramps can reduce startup transients but change acceleration and
+do not protect against sustained overload. Power caps reduce available output.
+Neither has been enabled automatically. Keeping full requested motor output
+while guaranteeing Pi power requires an adequately sized, protected supply
+system; software alone cannot create that current capacity. Hardware changes
+must be reviewed by the owner and must not alter the locked pinout.
+
 ### The hotspot never appears
 
 Wait at least 30 seconds. Any working saved Wi-Fi intentionally prevents the

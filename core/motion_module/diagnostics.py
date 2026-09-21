@@ -3,10 +3,56 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
+import subprocess
 
 from .config import load_config
 from .errors import MotionModuleError
 from .pinout import motor_rows
+
+
+def pi_power_check(hardware: bool) -> dict:
+    """Read firmware flags only; never change outputs or infer battery current.
+
+    Bit definitions: Raspberry Pi's official vcgencmd get_throttled docs.
+    This runs on demand in diagnostics, not in the motor command loop.
+    """
+
+    check = {"id": "pi-power", "title": "Pi undervoltage / throttling", "level": "info"}
+    if not hardware:
+        return {**check, "detail": "Simulation: Pi power flags are unavailable; no battery voltage or motor current is measured."}
+    try:
+        result = subprocess.run(
+            ["vcgencmd", "get_throttled"], capture_output=True, text=True,
+            timeout=1, check=False,
+        )
+        match = re.fullmatch(r"throttled=(0x[0-9a-fA-F]+)", result.stdout.strip())
+        if result.returncode != 0 or match is None:
+            return {**check, "detail": "Firmware power flags unavailable (vcgencmd failed or returned an unsupported response). This is not a clean power report."}
+    except (OSError, subprocess.TimeoutExpired):
+        return {**check, "detail": "Firmware power flags unavailable (vcgencmd missing, inaccessible, or timed out). This is not a clean power report."}
+
+    flags = int(match.group(1), 16)
+    descriptions = {
+        0: "undervoltage NOW", 1: "CPU frequency capped NOW",
+        2: "throttling NOW", 3: "soft temperature limit NOW",
+        16: "undervoltage recorded this boot", 17: "CPU frequency capping recorded this boot",
+        18: "throttling recorded this boot", 19: "soft temperature limit recorded this boot",
+    }
+    events = [description for bit, description in descriptions.items() if flags & (1 << bit)]
+    summary = "; ".join(events) if events else (
+        "Unrecognized firmware flags" if flags else "No firmware undervoltage or throttling flags reported this boot"
+    )
+    if flags & ((1 << 0) | (1 << 16)):
+        summary += ". Avoid high-power tests until the battery, connections, and Pi supply are checked"
+    return {
+        **check, "level": "warn" if flags else "info", "raw_flags": hex(flags),
+        "detail": (
+            f"{summary} ({hex(flags)}). These flags are not battery-voltage or motor-current measurements. "
+            "History resets on reboot; a clean report cannot rule out abrupt power loss. "
+            "This check does not limit motor power or prevent a brownout."
+        ),
+    }
 
 
 def _pin_map_conflicts(module) -> list[dict]:
@@ -103,6 +149,7 @@ def dashboard_checks(module) -> list[dict]:
         },
     ]
     checks.extend(_pin_map_conflicts(module))
+    checks.append(pi_power_check(bool(snapshot.get("hardware"))))
     spi_active = any(Path("/dev").glob("spidev*"))
     checks.append(
         {

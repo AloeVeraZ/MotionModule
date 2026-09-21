@@ -13,6 +13,7 @@ from pathlib import Path
 from . import __version__
 from .config import load_config
 from .controller import MotionModule
+from .diagnostics import pi_power_check
 from .errors import MotionModuleError
 from .gpio import is_raspberry_pi
 from .pinout import DRIVER_GROUNDS, PHYSICAL_BY_BCM, motor_rows, servo_rows
@@ -63,6 +64,8 @@ def doctor(as_json: bool = False) -> int:
         return 1
 
     pi = is_raspberry_pi()
+    power = pi_power_check(pi)
+    checks.append({"name": power["id"], "status": power["level"], "detail": power["detail"]})
     checks.append(
         {
             "name": "platform",
