@@ -1,8 +1,8 @@
 """The confirmed robot's Mecanum mixer, shared by the test and sample project.
 
-The Debug page's "Mecanum Test" panel posts here instead of to the robot
-project, so a four-wheel Mecanum base can be checked before any robot code
-exists, and so a bug in that code cannot be mistaken for a wiring fault.
+The Debug page's Drive Test uses this default when no project test.py exists.
+The shipped test.py delegates here too. A four-wheel Mecanum base can be
+checked independently of robot.py; a custom test.py can provide other mappings.
 
 Channels stay FL=1, RL=2, FR=3, RR=4 — the shipped wiring in AGENTS.md. The
 active hardware configuration applies each motor's ``inverted`` value once,

@@ -123,6 +123,15 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
             for node in tree.body
         ):
             raise MotionModuleError("robot.py must define create_drive(module)")
+    drive_test = project / "test.py"
+    if drive_test.is_file():
+        with tokenize.open(drive_test) as source_file:
+            test_tree = ast.parse(source_file.read(), filename=str(drive_test))
+        if not any(
+            isinstance(node, ast.FunctionDef) and node.name == "create_test"
+            for node in test_tree.body
+        ):
+            raise MotionModuleError("test.py must define create_test(module)")
     dashboard = project / "dashboard.py"
     if dashboard.is_file():
         try:

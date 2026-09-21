@@ -38,6 +38,7 @@ from .deploy import (
 )
 from .autonomous import AutonomousRunner, load_autonomous
 from .diagnostics import dashboard_checks
+from .drive_test import DriveTest
 from .errors import MotionModuleError
 from .giga_firmware import bundled_firmware, flash_giga
 from .hardware_guide import hardware_guide
@@ -303,6 +304,7 @@ def create_app(
     dashboard_telemetry=None,
     autonomous_routine=None,
     autonomous_error: str = "",
+    project_path: str | os.PathLike[str] | None = None,
 ) -> Flask:
     app = Flask(
         __name__,
@@ -314,6 +316,8 @@ def create_app(
     build_ref = install_ref()
     active_drive = drive or IdleDrive(module)
     mecanum_test_drive = MecanumTestDrive(module)
+    project_test_drive = DriveTest(module, project_path)
+    drive_test_timer = None
     network = network_client or NetworkClient()
     terminal = terminal_manager or TerminalManager()
     command_lock = threading.Lock()
@@ -432,6 +436,7 @@ def create_app(
                 "ok": True,
                 "project": project_name,
                 "drive_sequence_floor": sequence_floor,
+                "drive_test": project_test_drive.description(),
                 "module": {
                     "pwm_hz": module.config.pwm_hz,
                     "deadtime_ms": module.config.deadtime_ms,
@@ -723,9 +728,31 @@ def create_app(
     def drive_command():
         return run_drive_command(active_drive, allow_mecanum_selection=True)
 
-    @app.post("/api/mecanum/test")
+    @app.post("/api/mecanum/test")  # Older dashboard tabs keep working.
+    @app.post("/api/drive/test")
     def mecanum_test_command():
-        return run_drive_command(mecanum_test_drive)
+        return run_drive_command(project_test_drive)
+
+    def cancel_drive_test_timeout():
+        nonlocal drive_test_timer
+        if drive_test_timer is not None:
+            drive_test_timer.cancel()
+            drive_test_timer = None
+
+    def arm_drive_test_timeout():
+        """Also release servo-only tests if browser commands stop arriving."""
+        nonlocal drive_test_timer
+        cancel_drive_test_timeout()
+
+        def expire():
+            with command_lock:
+                if drive_test_timer is timer:
+                    stop_outputs()
+
+        timer = threading.Timer(module.config.watchdog_ms / 1000.0, expire)
+        timer.daemon = True
+        drive_test_timer = timer
+        timer.start()
 
     def run_drive_command(selected_drive, *, allow_mecanum_selection=False):
         nonlocal last_sequence
@@ -746,39 +773,57 @@ def create_app(
                     selected_drive = mecanum_test_drive
             sequence = int(body.get("sequence", -1))
             with command_lock:
+                if autonomous.running:
+                    return jsonify({"ok": False, "error": "Disable autonomous before taking manual control."}), 409
                 if sequence <= last_sequence:
                     return jsonify({"ok": True, "ignored": "stale sequence"})
                 last_sequence = sequence
+                if drive_test_timer is not None and selected_drive is not project_test_drive:
+                    stop_outputs()
+                cancel_drive_test_timeout()
                 result = selected_drive.drive(
                     body.get("forward", 0),
                     body.get("strafe", 0),
                     body.get("rotate", 0),
                     body.get("speed", 0.4),
                 )
+                response = jsonify({**result, "ok": True})
+                if selected_drive is project_test_drive:
+                    arm_drive_test_timeout()
         except (TypeError, ValueError) as error:
             with command_lock:
                 stop_outputs()
             return jsonify({"ok": False, "error": str(error)}), 400
-        return jsonify({"ok": True, **result})
+        except Exception as error:
+            with command_lock:
+                stop_outputs()
+            app.logger.exception("Drive command failed")
+            return jsonify({"ok": False, "error": str(error)}), 500
+        return response
 
     def stop_outputs():
         """Caller holds command_lock; stop every output even if robot code fails."""
 
-        try:
-            active_drive.stop()
-        finally:
+        cancel_drive_test_timeout()
+        errors = []
+        for driver in (active_drive, project_test_drive):
             try:
-                module.stop_all()
-            finally:
-                with servo_lock:
-                    for timer in servo_timers.values():
-                        timer.cancel()
-                    servo_timers.clear()
-                    servo_commands.clear()
-                # Forgetting a servo command is not the same as stopping the
-                # pulse. Release the outputs too, so the page and the wires
-                # agree about what is being driven.
-                module.release_all_servos()
+                driver.stop()
+            except Exception as error:
+                errors.append(str(error))
+                app.logger.exception("Project stop() failed; forcing hardware stop")
+        try:
+            module.stop_all()
+        finally:
+            with servo_lock:
+                for timer in servo_timers.values():
+                    timer.cancel()
+                servo_timers.clear()
+                servo_commands.clear()
+            module.release_all_servos()
+        return errors
+
+    app.config["STOP_OUTPUTS"] = halt_for_autonomous
 
     def drive_controls() -> list[dict]:
         """Extra controls the active project asks the Driver Station to show.
@@ -896,7 +941,9 @@ def create_app(
         autonomous.stop()
         with command_lock:
             try:
-                stop_outputs()
+                errors = stop_outputs()
+                if errors:
+                    raise RuntimeError("; ".join(errors))
             except Exception:
                 app.logger.exception("An output stop handler failed")
                 return jsonify({"ok": False, "error": "A stop handler failed. Check the service log and use the physical power cutoff."}), 500
@@ -954,7 +1001,10 @@ def create_app(
                 "error": "Confirm the area is clear and the cutoff is in reach first",
             }), 400
         try:
-            autonomous.start()
+            with command_lock:
+                if not autonomous.running:
+                    stop_outputs()
+                autonomous.start()
         except RuntimeError as error:
             return jsonify({"ok": False, "error": str(error)}), 409
         return jsonify({"ok": True, **autonomous.status()})
@@ -1291,6 +1341,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         dashboard_telemetry=dashboard_telemetry,
         autonomous_routine=autonomous_routine,
         autonomous_error=autonomous_error,
+        project_path=project_path,
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.
@@ -1301,7 +1352,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         while not stop_event.is_set():
             server.handle_request()
     finally:
-        module.stop_all()
+        app.config["STOP_OUTPUTS"]()
         close_telemetry = getattr(dashboard_telemetry, "close", None)
         if callable(close_telemetry):
             close_telemetry()

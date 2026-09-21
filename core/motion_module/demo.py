@@ -221,6 +221,7 @@ def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
         dashboard_telemetry=DemoTelemetry(),
         autonomous_routine=routine,
         autonomous_error=routine_error,
+        project_path=project if have_example else None,
     )
 
     @app.get("/demo/camera/<name>.svg")

@@ -18,6 +18,48 @@ SPEC.loader.exec_module(network_helper)
 
 
 class NetworkHelperTests(unittest.TestCase):
+    def test_update_initialization_preserves_saved_wifi_and_hotspot_settings(self):
+        # install.sh calls initialize on every update. It must never delete
+        # NetworkManager's saved connections or forget a preferred network
+        # just because the update happens over the hotspot or Ethernet.
+        cases = (("100 (connected)", "ap", "hotspot-uuid", "saved-uuid"),
+                 ("30 (disconnected)", "", "--", "saved-uuid"),
+                 ("100 (connected)", "infrastructure", "current-uuid", "current-uuid"))
+        for state, mode, uuid, expected in cases:
+            with self.subTest(state=state, mode=mode), tempfile.TemporaryDirectory() as directory:
+                config_path = Path(directory) / "network.json"
+                saved = {**network_helper.DEFAULT_CONFIG, "preferred_uuid": "saved-uuid",
+                         "hotspot_ssid": "MyRobot", "hotspot_password": "test-only-pass"}
+                config_path.write_text(json.dumps(saved), encoding="utf-8")
+                manager = network_helper.NetworkManager()
+                with (
+                    patch.object(network_helper, "CONFIG_PATH", config_path),
+                    patch.object(network_helper, "_require_root"),
+                    patch.object(manager, "wifi_interface", return_value="wlan0"),
+                    patch.object(manager, "_device_details", return_value={"state": state, "uuid": uuid}),
+                    patch.object(manager, "_connection_mode", return_value=mode),
+                    patch.object(manager, "status", return_value={}),
+                    patch.object(manager, "nmcli") as nmcli,
+                ):
+                    manager.initialize()
+                result = json.loads(config_path.read_text(encoding="utf-8"))
+                self.assertEqual(result["preferred_uuid"], expected)
+                self.assertEqual(result["hotspot_ssid"], saved["hotspot_ssid"])
+                self.assertEqual(result["hotspot_password"], saved["hotspot_password"])
+                nmcli.assert_not_called()
+
+    def test_update_with_wifi_unavailable_keeps_preferred_connection(self):
+        manager = network_helper.NetworkManager()
+        with (
+            patch.object(network_helper, "_require_root"),
+            patch.object(network_helper, "load_config", return_value={"preferred_uuid": "saved-uuid"}),
+            patch.object(network_helper, "save_config") as save,
+            patch.object(manager, "wifi_interface", side_effect=network_helper.NetworkError("no Wi-Fi")),
+            patch.object(manager, "status", return_value={}),
+        ):
+            manager.initialize()
+        self.assertEqual(save.call_args.args[0]["preferred_uuid"], "saved-uuid")
+
     def test_terse_parser_preserves_escaped_colons_and_backslashes(self):
         self.assertEqual(
             network_helper._split_terse(r"*:Robotics\:Lab\\Main:82:WPA2 PSK"),

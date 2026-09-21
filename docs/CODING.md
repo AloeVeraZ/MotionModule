@@ -21,6 +21,7 @@ the Pi runs.
 ```text
 MyRobot/
 ├── robot.py       # required: creates the browser drive controller
+├── test.py        # optional: Debug Drive Test motor/servo mapping (Mecanum by default)
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
 ├── sensors.py     # optional: what is wired to the Arduino GIGA, by name
 ├── autonomous.py  # optional: the routine the robot runs by itself
@@ -85,10 +86,51 @@ stop() -> None
 Avoid permanent loops and hardware movement at module scope. MotionModule must
 be able to import the project before it can serve the dashboard.
 
+### Optional Debug Drive Test mapping
+
+**Debug → Drive Test** loads `MyRobot/test.py`, next to `robot.py`. The sample
+download includes this default file:
+
+```python
+from motion_module.mecanum import MecanumTestDrive
+
+
+def create_test(module):
+    return MecanumTestDrive(module)
+```
+
+No `test.py`? The same confirmed Mecanum test remains available. A present but
+broken file disables Drive Test and displays its error; it never silently
+substitutes another drive. After editing locally, deploy the whole robot folder
+through Code to reload it. Existing customized projects are not overwritten by
+an update; copy the sample's `test.py` into your folder when you want to customize it.
+
+To test another drivetrain, return your own object with
+`drive(forward, strafe, rotate, speed)` and `stop()`. The keys stay fixed:
+W/S sends positive/negative `forward`, D/A positive/negative `strafe`, and Q/E
+positive/negative `rotate`. Axes are clamped to −1…1 and speed to 0…1.
+Use the supplied `module.set_motors(...)`, `module.motor(...)`, and
+`module.servo(...)` APIs to map those inputs to motor/servo outputs; respect
+the speed limit and stop on zero inputs. Return a JSON-compatible dictionary
+or `None`. Tank code may ignore strafe; swerve code may command steering servos
+as well as motors. These are output mappings, not changes to the shipped wiring.
+
+Do not start loops/threads, move outputs while importing/constructing the
+object, or open a second MotionModule. Each method must return promptly.
+Space/Disable calls `stop()`, then forcibly stops **all** motors and releases
+**all** servo pulses, even if your stop method fails. A command error or a
+gap longer than the configured watchdog also stops/releases test outputs.
+Keep Space as a safety stop, not an actuator command. Releasing servo pulses
+does not mechanically hold a loaded mechanism: support it safely before testing.
+
+This file affects only Debug. The full Driver Station still uses `robot.py`
+(or its explicitly selected confirmed Mecanum mixer). `dashboard.py` key
+remapping and autonomous code do not change Drive Test.
+
 ### Optional full Driver Station telemetry
 
-**Debug → Mecanum Test** is deliberately a drivetrain bench test and does not
-run your project at all. **Open Driver Station** in the top navigation opens
+**Debug → Drive Test** uses `test.py` or its Mecanum fallback, not `robot.py`.
+**Open Driver Station** in the top navigation opens
 `/driver-station`, the separate operator console that does. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
 one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
 sensor controller. MotionModule discovers it automatically; no import in
@@ -398,15 +440,13 @@ matched without case; a named key such as `ArrowUp` or `Escape` is matched as
 the browser reports it. If you bind a key another action already owns, that
 other action is left unassigned rather than one key meaning two things.
 
-This has nothing to do with **Debug → Mecanum Test**, which keeps
-fixed W/S, A/D, Q/E and space keys because it drives MotionModule's built-in
-mixer rather than your code. Test Mecanum is for checking that a Mecanum base
-moves; the Driver Station is for driving your robot.
+This has nothing to do with **Debug → Drive Test**, which keeps fixed W/S,
+A/D, Q/E and Space keys. Change its motor/servo mapping in `test.py`, not its keys.
 
 ## Manual testing
 
 The shipped Mecanum `robot.py` uses `motion_module.mecanum.mix`, shared with
-**Debug → Mecanum Test**, so it includes the same physically confirmed turning
+the default **Debug → Drive Test**, so it includes the same physically confirmed turning
 correction. Use that mixer when extending this robot rather than maintaining
 another copy of its wheel equations. It returns normalized powers keyed by
 channels 1–4; motor polarity remains in `hardware.py`.

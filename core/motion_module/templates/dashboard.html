@@ -1078,7 +1078,7 @@
         <button type="button" data-tab="wiring" class="active">Wiring guide</button>
         <button type="button" data-tab="parts">Parts list</button>
         <button type="button" data-tab="tests">Test outputs</button>
-        <button type="button" data-tab="mecanum">Mecanum Test</button>
+        <button type="button" data-tab="mecanum">Drive Test</button>
         <button type="button" data-tab="checks">Checks &amp; logs</button>
         <button type="button" data-tab="network">Network</button>
       </div>
@@ -1578,10 +1578,13 @@
       <div class="hero">
         <div>
           <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5h11a4 4 0 0 1 3.9 4.9l-.8 3.6a2 2 0 0 1-3.4.9L14.8 15.5H9.2l-2.4 2.4a2 2 0 0 1-3.4-.9l-.8-3.6a4 4 0 0 1 3.9-4.9z"/><path d="M8.5 11v3M7 12.5h3"/></svg>Driver station</p>
-          <h1>Test Mecanum</h1>
-          <p>A built-in sample to test a four-wheel Mecanum drive, independent
-            of your deployed robot code. Open the full Driver Station to run
-            your own project's drive logic and controls.</p>
+          <h1>Drive Test</h1>
+          <p>Mecanum testing is included by default. Add or edit
+            <code>MyRobot/test.py</code> beside <code>robot.py</code> to map
+            these same inputs to your robot's motors and servos, including
+            tank or swerve drives. The full Driver Station runs your separate
+            <code>robot.py</code> drive logic.</p>
+          <p class="small" id="driveTestSource">Loading Drive Test configuration…</p>
         </div>
         <div class="hero-side">
           <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
@@ -1602,20 +1605,20 @@
 
       <div class="notice danger page-notice">
         <strong>Clear the area first.</strong> This moves the real robot
-        using the built-in Mecanum test. Raise the wheels for the first test
+        using the selected Drive Test code. Raise the wheels for the first test
         and keep the physical cutoff in reach. Release controls to stop.
       </div>
 
       <div class="grid equal">
         <article class="card">
           <div class="panel-head">
-            <h2>Test Mecanum</h2>
+            <h2>Drive Test</h2>
             <span>Hold-to-move · releases stop</span>
           </div>
           <div class="panel-body stack">
             <label class="check">
               <input id="driveEnable" type="checkbox">
-              <span>Enable Test Mecanum. The area is clear and
+              <span>Enable Drive Test. The area is clear and
                 the physical cutoff is in reach.</span>
             </label>
             <label class="speed">Maximum speed <output id="speedLabel">40%</output>
@@ -1624,8 +1627,9 @@
             <div class="keys" id="driveKeys"></div>
             <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
             <p class="small">W/S: forward/back. A/D: strafe left/right.
-              Q/E: turn left/right in place, with both left wheels moving
-              opposite to both right wheels. Assumes an X-pattern roller layout.</p>
+              Q/E: turn left/right. Space always stops motors and releases
+              servos. These inputs stay fixed; <code>test.py</code> chooses
+              the outputs. The default is the confirmed Mecanum sample.</p>
           </div>
         </article>
 
@@ -1656,7 +1660,7 @@
           <span>Fixed motor assignments · BCM GPIO numbers</span>
         </div>
         <div class="panel-body stack">
-          <p>This sample commands channels 1–4 directly, regardless of their
+          <p>The default Mecanum sample commands channels 1–4 directly, regardless of their
             names in your project. It keeps the active <code>hardware.py</code>
             polarity settings used by Test outputs; no pins are changed.</p>
           <table class="data-table">
@@ -1669,28 +1673,10 @@
             </tbody>
           </table>
           <p class="small muted">These are the existing wires, not a rewiring
-            instruction. The test refuses a different motor pin map. Custom
-            buttons, sensors, and robot behavior belong in the full Driver Station.</p>
-        </div>
-      </article>
-
-      <article class="card spaced">
-        <div class="panel-head">
-          <h2>Which wheel is which?</h2>
-          <span>Enable Test Mecanum first · 50% power</span>
-        </div>
-        <div class="panel-body stack">
-          <p>Hold a button and watch which corner of the robot turns. The
-            mix above only works if each channel really drives the corner it
-            is named after.</p>
-          <div id="wheelCheck" class="stack"></div>
-          <p class="small muted">Driving and strafing look correct even when
-            two opposite corners are crossed &mdash; front&#8209;left with
-            rear&#8209;right, or front&#8209;right with rear&#8209;left.
-            Turning in place is the only move that shows it: the front pair
-            fights the rear pair and the robot twitches instead of spinning.
-            If a button turns the wrong corner, swap those two motors' leads
-            at the driver board. Never change a pin.</p>
+            instruction. The default sample refuses a different motor pin map.
+            A custom <code>test.py</code> may map these inputs to other motor
+            or servo outputs; this table remains the default Mecanum reference.
+            Test individual outputs in <strong>Test outputs</strong>.</p>
         </div>
       </article>
 
@@ -1960,7 +1946,7 @@ def create_drive(module):
      GET  /api/logs          service log
      GET  /api/projects/*    installed robot folders, sample download
      GET  /api/network/*     Wi-Fi status and scan
-     POST /api/mecanum/test  the built-in Mecanum bench drive (this page)
+     POST /api/drive/test    project test.py, or built-in Mecanum (this page)
      POST /api/drive         the deployed project's drive() (full Driver Station)
      POST /api/stop, /api/motors/test, /api/servos/*,
           /api/terminal/*, /api/network/*, /api/projects/deploy,
@@ -2332,7 +2318,7 @@ async function refreshStatus() {
     document.body.classList.remove('stale');
     $('#connectionNotice').hidden = true;
     $('#simulationNotice').hidden = robot.hardware;
-    $('#driveEnable').disabled = !configData;
+    $('#driveEnable').disabled = !configData || Boolean(configData.drive_test?.error);
     $('#motorSafe').disabled = !configData;
     $('#servoSafe').disabled = !configData;
     $('#liveDot').className = 'dot online';
@@ -2416,7 +2402,7 @@ function markDisconnected() {
 
 /* ----------------------------------------------------------- driver station */
 
-/* The built-in test uses fixed keys; project bindings belong to the full
+/* Drive Test uses fixed keys; project key bindings belong to the full
    Driver Station. Old browser key overrides must not change this test. */
 
 const DEFAULT_BINDINGS = {
@@ -2533,7 +2519,7 @@ const axis = (positive, negative) =>
   (heldKeys.has(bindings[positive]) ? 1 : 0) - (heldKeys.has(bindings[negative]) ? 1 : 0);
 const driveEnabled = () => activePage === 'diagnostics'
   && !document.querySelector('[data-panel="mecanum"]')?.hidden
-  && Boolean($('#driveEnable')?.checked);
+  && Boolean($('#driveEnable')?.checked) && !configData?.drive_test?.error;
 
 function setDriveSignals() {
   setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Enabled' : 'Disabled');
@@ -2566,7 +2552,7 @@ async function sendDrive() {
   lastInputKind = usingKeys ? 'keys' : pad ? 'pad' : 'none';
   setDriveSignals();
   try {
-    const response = await fetch('/api/mecanum/test', {
+    const response = await fetch('/api/drive/test', {
       method: 'POST',
       headers: apiHeaders,
       body: JSON.stringify({
@@ -2581,7 +2567,7 @@ async function sendDrive() {
     }
   } catch (error) {
     markDisconnected();
-    disarmDrive('Lost contact with the robot. Enable Test Mecanum again when it is back.');
+    disarmDrive('Lost contact with the robot. Enable Drive Test again when it is back.');
   }
 }
 
@@ -2645,7 +2631,7 @@ $$('[data-stop]').forEach(button => button.addEventListener('click', () => {
 
 $('#driveEnable')?.addEventListener('change', event => {
   if (!event.target.checked) stopAll();
-  else toast('Test Mecanum enabled. Release everything to stop.');
+  else toast('Drive Test enabled. Release everything to stop.');
   setDriveSignals();
 });
 
@@ -2654,33 +2640,6 @@ if ($('#speed')) {
     $('#speedLabel').value = `${$('#speed').value}%`;
     sendDrive();
   });
-}
-
-/* ------------------------------------------------------ wheel identity */
-
-/* Forward and strafe cannot tell a crossed diagonal apart; one wheel at a
-   time can. Pulsed through the same guarded motor test the Debug page uses. */
-
-function renderWheelCheck() {
-  const host = $('#wheelCheck');
-  if (!host) return;
-  const wheels = [[1, 'Front left', 'Driver 1A'], [2, 'Rear left', 'Driver 1B'],
-                  [3, 'Front right', 'Driver 2A'], [4, 'Rear right', 'Driver 2B']];
-  replaceWith(host, wheels.map(([channel, corner, driver]) => {
-    const row = element('div', 'test-row');
-    const label = element('span');
-    label.append(element('strong', null, corner),
-                 element('small', null, `Channel ${channel} · ${driver}`));
-    const button = element('button', 'button hold primary', 'Hold to spin forward');
-    button.type = 'button';
-    bindMotorHold(button, channel, 0.5, {
-      guard: () => Boolean($('#driveEnable')?.checked),
-      warning: 'Enable Test Mecanum first, with the area clear.',
-    });
-    button.addEventListener('contextmenu', event => event.preventDefault());
-    row.append(label, button);
-    return row;
-  }));
 }
 
 /* ------------------------------------------------ dashboard.py telemetry */
@@ -3242,8 +3201,15 @@ function filterParts() {
 }
 $('#partsSearch').addEventListener('input', filterParts);
 
+function renderDriveTest(test = { source: 'Built-in Mecanum', error: '' }) {
+  $('#driveTestSource').textContent = test.error || `Drive Test source: ${test.source}`;
+  $('#driveEnable').disabled = Boolean(test.error);
+  if (test.error) disarmDrive();
+}
+
 function renderHardware(data) {
   configData = data;
+  renderDriveTest(data.drive_test);
   sequence = Math.max(sequence, Number(data.drive_sequence_floor ?? -1) + 1);
   $('#driveWatchdog').textContent = `${data.module.watchdog_ms} MS WATCHDOG`;
   renderHardwareGuide(data.hardware_guide);
@@ -3585,13 +3551,12 @@ async function installGigaFirmware() {
 
 /* ------------------------------------------------------- guarded tests */
 
-/* Test Outputs has its own raised-wheel check; Mecanum Test's wheel check
-   reuses the Mecanum enable, which makes the same promise. */
+/* Individual motor tests require the Test outputs raised-wheel check. */
 const motorSafeGuard = () => $('#motorSafe').checked;
 
-function bindMotorHold(button, channel, power, options = {}) {
-  const guard = options.guard || motorSafeGuard;
-  const warning = options.warning || 'Connect and confirm the raised-wheel check first.';
+function bindMotorHold(button, channel, power) {
+  const guard = motorSafeGuard;
+  const warning = 'Connect and confirm the raised-wheel check first.';
   let holding = false;
   const start = async event => {
     if (event.button !== 0 || holding) return;
@@ -4230,7 +4195,6 @@ if (activePage === 'code') {
 }
 
 if (activePage === 'diagnostics') {
-  renderWheelCheck();
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);

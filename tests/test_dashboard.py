@@ -187,7 +187,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Useful commands", debug)
         self.assertIn(b"Stops outputs, reloads the active robot project", debug)
         self.assertIn(b"Pi reboots automatically", debug)
-        self.assertIn(b"Enable Test Mecanum", self.client.get("/drive").data)
+        self.assertIn(b"Enable Drive Test", self.client.get("/drive").data)
         self.assertNotIn(b">Arm control<", self.client.get("/drive").data)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
@@ -221,14 +221,18 @@ class DashboardTests(unittest.TestCase):
         drive = self.client.get("/drive").data
         self.assertIn(b'data-view="diagnostics"', drive)
         self.assertNotIn(b'data-view="drive"', drive)
-        self.assertIn(b'data-tab="mecanum">Mecanum Test', drive)
+        self.assertIn(b'data-tab="mecanum">Drive Test', drive)
         self.assertIn(b'const activePage = "diagnostics"', drive)
         self.assertIn(b'const requestedTab = "mecanum"', drive)
         self.assertIn(b'id="driveEnable"', drive)
         self.assertIn(b'id="padIdentity"', drive)      # game controller
-        self.assertIn(b'id="wheelCheck"', drive)       # which corner each channel turns
+        self.assertNotIn(b'id="wheelCheck"', drive)
+        self.assertNotIn(b'Which wheel is which?', drive)
+        self.assertNotIn(b'renderWheelCheck', drive)
+        self.assertIn(b'Mecanum test wiring', drive)
+        self.assertIn(b'MyRobot/test.py', drive)
         self.assertIn(b'id="openDriverStation"', drive)
-        self.assertIn(b"/api/mecanum/test", drive)     # built-in mixer, not robot code
+        self.assertIn(b"/api/drive/test", drive)       # test.py, not robot.py
         # Key remapping and project-declared controls belong to the full
         # station, which is the page that runs the deployed project.
         self.assertNotIn(b'id="bindingList"', drive)

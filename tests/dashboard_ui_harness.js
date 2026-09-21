@@ -179,10 +179,10 @@ function browser(now = 1700000000000) {
   });
   const exports = fixture.kind === 'station'
     ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll};'
-    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate};';
+    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate, renderDriveTest};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
-  const driveEndpoint = fixture.kind === 'station' ? '/api/drive' : '/api/mecanum/test';
+  const driveEndpoint = fixture.kind === 'station' ? '/api/drive' : '/api/drive/test';
   const driveRequests = () => requests.filter(item => item.url === driveEndpoint);
   const settle = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
   async function arm() {
@@ -215,7 +215,21 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'station-drive-model') {
+  if (scenario === 'drive-test-load-error') {
+    vm.runInContext("configData = {drive_test: {source: '/robots/MyRobot/test.py', error: 'test.py could not be loaded'}}; dashboard.renderDriveTest(configData.drive_test);", app.context);
+    await app.settle();
+    assert.match(app.$('#driveTestSource').textContent, /could not be loaded/);
+    assert.equal(app.$('#driveEnable').disabled, true);
+    assert.equal(app.$('#driveEnable').checked, false);
+    await app.context.dashboard.refreshStatus();
+    assert.equal(app.$('#driveEnable').disabled, true, 'Status polling must not re-enable a broken hook');
+    const count = app.driveRequests().length;
+    await app.forward();
+    await app.context.dashboard.sendDrive();
+    assert.equal(app.driveRequests().length, count);
+    app.context.dashboard.renderDriveTest({source: '/robots/MyRobot/test.py', error: ''});
+    assert.match(app.$('#driveTestSource').textContent, /MyRobot\/test.py/);
+  } else if (scenario === 'station-drive-model') {
     assert.equal(app.driveRequests().at(-1).payload.drive_model, 'project');
     const selector = app.$('#useMecanumDrive');
     selector.checked = true;

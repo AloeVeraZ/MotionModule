@@ -197,10 +197,11 @@ Three workspace pages plus the separate Driver Station:
   code, and USB inventory), **Parts** (complete reference BOM and missing
   specifications),
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
-  **Mecanum Test** (a built-in four-wheel bench drive on channels 1-4),
+  **Drive Test** (Mecanum by default; customize motor/servo mappings in `test.py`),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
-  (Wi-Fi, hostname, hotspot). The bench drive uses MotionModule's own mixer so
-  it can test a drivetrain before any robot code exists.
+  (Wi-Fi, hostname, hotspot). Drive Test keeps fixed W/S, A/D, Q/E, and Space
+  inputs. The sample ships with `test.py`; without one it uses the same built-in
+  Mecanum mixer. See [custom Drive Test code](docs/CODING.md#optional-debug-drive-test-mapping).
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
 - **Open Driver Station** — launches the operator console, which runs the
@@ -209,10 +210,16 @@ Three workspace pages plus the separate Driver Station:
 
 For the `Mecanum` project, **Use confirmed Mecanum mixer** starts checked in
 the Driver Station. Manual movement then uses exactly the same mixer as
-**Debug → Mecanum Test**, even if the Pi has older custom robot code. Uncheck
+the default **Debug → Drive Test**, even if the Pi has older custom robot code. Uncheck
 it to run the project's own `drive()` instead; changing it stops and disables
 drive. Sensors, extra controls, and autonomous routines remain project-owned.
 Other project names default to their own code. No saved project file is replaced.
+Custom `test.py` mappings affect only Debug, not the full Driver Station.
+
+Updates preserve NetworkManager's saved Wi-Fi profiles and MotionModule's
+preferred-network setting. Updating while on the hotspot or disconnected does
+not forget the saved Wi-Fi. The hotspot remains a fallback if reconnection fails;
+an unavailable saved network cannot guarantee connectivity.
 
 The dashboard and Driver Station share one look: condensed Barlow Condensed
 headings over Inter text on a dark blueprint grid, with green, yellow, and red

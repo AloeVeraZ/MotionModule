@@ -1,10 +1,11 @@
 # Mecanum sample robot
 
-Five small files make the complete sample. Only one is required.
+Six small Python files make the complete sample. Only one is required.
 
 | File | What it does | Required? |
 | --- | --- | --- |
 | `robot.py` | Turns drive commands into wheel power | Yes |
+| `test.py` | Debug Drive Test motor/servo mapping | No — without it, the same built-in Mecanum test runs |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
 | `sensors.py` | Every sensor, read by the Arduino GIGA, by name | No — without a GIGA, remove its import from `robot.py` |
 | `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
@@ -71,7 +72,7 @@ drive, A/D to strafe, Q/E to rotate, and Space to stop. Start with the speed
 limit low.
 
 The sample imports `motion_module.mecanum.mix`, the same confirmed mixer used
-by **Debug → Mecanum Test**. Forward, strafe, rotation, and combined commands
+by the default **Debug → Drive Test**. Forward, strafe, rotation, and combined commands
 therefore have one implementation. `hardware.py` still supplies the names,
 locked pins, and per-motor polarity; no extra inversion is applied in `robot.py`.
 
@@ -80,6 +81,19 @@ to **Use confirmed Mecanum mixer**. This lets older preserved `robot.py` files
 use the proven movement without being overwritten. Unchecking it uses that
 file's own drive method. Sensors and extra controls still come from the project;
 autonomous code is not overridden. Changing the selection stops and disables drive.
+
+## Customize Drive Test
+
+`test.py` is loaded automatically beside `robot.py`, only for **Debug → Drive Test**.
+It returns the existing confirmed Mecanum test by default. To test tank, swerve,
+or other output mappings, replace its `create_test(module)` implementation with
+an object exposing `drive(forward, strafe, rotate, speed)` and `stop()`.
+Use the supplied module for motor and servo commands. W/S, A/D, Q/E, and Space
+stay fixed; only the outputs associated with the inputs change. Space always
+stops all motors and releases servos. Do not move hardware during import or
+construction, and do not start background loops. Redeploy the folder to reload.
+See [the hook contract](../../docs/CODING.md#optional-debug-drive-test-mapping).
+The full Driver Station's `robot.py` behavior is independent of this file.
 
 ## Autonomous
 
@@ -117,8 +131,8 @@ instead of turning for a fixed time. Headings count up turning left, like
 ## Full Driver Station: cameras, IMU, and sensors
 
 `dashboard.py` is discovered automatically when it is beside `robot.py`.
-**Debug → Mecanum Test** remains a built-in bench test and never calls this
-project. Press **Open Driver Station** for the independent operator
+**Debug → Drive Test** uses `test.py`, not this telemetry hook or `robot.py`.
+Press **Open Driver Station** for the independent operator
 console, which does. The sample shows two
 offline camera placeholders, the first IMU in `sensors.py` on the heading dial,
 and every GIGA pin and IMU in the USB controller card. Add browser-readable
@@ -127,7 +141,7 @@ stream URLs for a C920 or C270.
 `driver_bindings()` in the same file decides which keys the Driver Station
 listens for. The sample keeps the usual W/S, A/D, Q/E and space; return only
 what you want to move. This is the robot's own layout and is unrelated to the
-**Debug → Mecanum Test**, whose keys are fixed.
+**Debug → Drive Test**, whose keys are fixed.
 
 The camera selector shows the front feed, rear feed, or both square viewports.
 

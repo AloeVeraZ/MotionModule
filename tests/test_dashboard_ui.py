@@ -95,6 +95,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
 
+    def test_broken_drive_test_shows_error_and_stays_disabled_after_status_refresh(self):
+        self.run_behavior("drive-test-load-error")
+
     def test_releasing_a_drive_key_immediately_sends_zero(self):
         self.run_behavior("key-release-stop")
 
