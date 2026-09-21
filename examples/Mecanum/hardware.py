@@ -40,14 +40,13 @@ HARDWARE = {
     #    4     rear_right    Driver 2 · B      IN3 pin 36/GPIO16   IN4 pin 32/GPIO12
     #    5-8   spare         Drivers 3 and 4   see docs/PINOUT.md
     #
-    # The base driver map already inverts output A (channels 1 and 3). This
-    # Mecanum robot additionally needs output B reversed, so only channels 2
-    # and 4 change polarity from those defaults. No GPIO or wheel assignment
-    # changes: positive power simply uses the other pin in each existing pair.
+    # Match the observed robot: A outputs keep their normal polarity; reverse
+    # only motor 2 (Driver 1B) and motor 4 (Driver 2B). The runtime applies
+    # these settings to both Test outputs and Drive, exactly once.
     "motors": {
-        1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": True},
+        1: {"name": "front_left", "forward_gpio": 26, "reverse_gpio": 19, "inverted": False},
         2: {"name": "rear_left", "forward_gpio": 13, "reverse_gpio": 6, "inverted": True},
-        3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": True},
+        3: {"name": "front_right", "forward_gpio": 21, "reverse_gpio": 20, "inverted": False},
         4: {"name": "rear_right", "forward_gpio": 16, "reverse_gpio": 12, "inverted": True},
         5: {"name": "driver_3a", "forward_gpio": 11, "reverse_gpio": 9, "inverted": True},
         6: {"name": "driver_3b", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},

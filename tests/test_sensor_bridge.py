@@ -4,7 +4,6 @@ The GIGA only moves bytes, so these tests run the real drivers and the real
 heading maths against a simulated board and simulated chips (fake_giga.py).
 """
 
-import json
 import time
 import unittest
 

@@ -65,7 +65,7 @@ def _pin_map_conflicts(module) -> list[dict]:
         "detail": (
             "The active project ships its own hardware.py. "
             + (". ".join(parts) if parts else "Settings differ from the installed map.")
-            + ". The motor bench test always uses the installed map, so the two can disagree."
+            + ". Test outputs and Drive both use this active hardware map."
         ),
     }]
 

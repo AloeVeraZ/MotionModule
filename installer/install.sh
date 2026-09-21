@@ -282,6 +282,11 @@ while IFS= read -r message; do
     say "$message"
 done < <("$release_dir/.venv/bin/python" -m motion_module.retired_wiring "$ROBOT_DIR" "$CONFIG_FILE")
 
+# Legacy Mecanum code can still use the installed map because its folder has
+# no hardware.py. Preserve that code and copy its settings with only 1B/2B
+# inverted; otherwise sample changes never reach either motor-control path.
+"$release_dir/.venv/bin/python" -m motion_module.mecanum_hardware "$active_target" "$CONFIG_FILE"
+
 if [ ! -f "$PROJECT_DIR/README.md" ] || grep -q '^# MotionModule student workspace$' "$PROJECT_DIR/README.md"; then
 cat > "$PROJECT_DIR/README.md" <<EOF
 # MotionModule student workspace

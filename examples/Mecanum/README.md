@@ -35,11 +35,19 @@ above Driver 3. **Debug -> Wiring guide** shows every wire. Wire the same way
 to run the sample unchanged, or change the pins in `hardware.py` to match your
 own wiring.
 
-The base driver map already has inverted polarity for output A (`front_left`
-and `front_right`). This Mecanum sample additionally sets `inverted` on motor
-2 / Driver 1B (`rear_left`) and motor 4 / Driver 2B (`rear_right`). Their pins
-do not move: positive power uses the other input in each existing IN3/IN4
-pair. Never change the math in `mix()` to cancel out one motor.
+The drivetrain uses normal polarity for motors 1 and 3 and inverted polarity
+for motor 2 / Driver 1B (`rear_left`) and motor 4 / Driver 2B (`rear_right`).
+Both Test outputs and Drive use this same `hardware.py`; inversion is applied
+once, when the runtime writes to the GPIOs. Never add another inversion in
+`mix()`.
+
+Older Mecanum projects without a `hardware.py` use the Pi's installed hardware
+file instead. An update now gives that project its own copy of those existing
+settings with inversion enabled for motors 2 and 4, retaining its motor names,
+other motors' polarity, all other settings, and its existing code. The installed
+file remains untouched.
+An existing project `hardware.py` is preserved unless the entire folder is
+recognized as an unmodified shipped sample.
 
 ## Add a mechanism
 

@@ -415,8 +415,13 @@ class UpdateHelperTests(unittest.TestCase):
             "SECRET_FILE": self.secret.as_posix(),
         }
         # Bytes, so the password reaches bash exactly as typed on every system.
+        # Git Bash prepends its own commands when it imports a Windows PATH.
+        # Prepend the stand-ins inside Bash too, with a shell-native path, so
+        # these tests never invoke the real id/systemctl/etc. on that host.
         result = subprocess.run(
-            [BASH, str(self.helper), *arguments], input=stdin.encode("utf-8"), capture_output=True,
+            [BASH, "-c", 'export PATH="$(cd "$STUBS" && pwd):$PATH"; exec bash "$@"',
+             "motionmodule-update-test", str(self.helper), *arguments],
+            input=stdin.encode("utf-8"), capture_output=True,
             env=environment, timeout=30, check=False,
         )
         return result.returncode, result.stdout.decode("utf-8"), result.stderr.decode("utf-8")

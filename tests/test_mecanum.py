@@ -4,7 +4,7 @@ import time
 import unittest
 from pathlib import Path
 
-from motion_module.config import default_config, load_project_config
+from motion_module.config import load_project_config
 from motion_module.controller import MotionModule
 from motion_module.gpio import MockGPIO
 
@@ -32,17 +32,11 @@ class FakeModule:
 
 
 class MecanumTests(unittest.TestCase):
-    def test_mecanum_flips_only_motors_2_and_4_from_the_driver_defaults(self):
-        defaults = default_config()
+    def test_mecanum_inverts_only_the_two_rear_wheels(self):
         mecanum = load_project_config(PROJECT_DIR)
-
-        self.assertEqual(
-            [motor.inverted for motor in defaults.motors[:4]],
-            [True, False, True, False],
-        )
         self.assertEqual(
             [motor.inverted for motor in mecanum.motors[:4]],
-            [True, True, True, True],
+            [False, True, False, True],
         )
 
     def test_forward_commands_all_wheels_together(self):
@@ -109,11 +103,10 @@ class MecanumTests(unittest.TestCase):
         with MotionModule(config, gpio=gpio) as module:
             drive = MecanumDrive(module)
             drive.drive(1, 0, 0, speed=0.25)
-            # The sample flips motors 2 and 4 from the base driver defaults;
-            # all four Mecanum wheel channels therefore use inverted polarity.
-            for gpio_number in (19, 6, 20, 12):
+            # Match the measured baseline: only the rear wheels reverse.
+            for gpio_number in (26, 6, 21, 12):
                 self.assertEqual(gpio.values[gpio_number], 0.25)
-            for gpio_number in (26, 13, 21, 16):
+            for gpio_number in (19, 13, 20, 16):
                 self.assertEqual(gpio.values[gpio_number], 0)
             drive.stop()
             self.assertEqual(set(gpio.values.values()), {0})

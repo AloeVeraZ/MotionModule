@@ -769,7 +769,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(self.module.outputs[5], -0.5)
 
-    def test_motor_bench_plus_turns_all_four_drivetrain_motors_forward(self):
+    def test_bench_and_drive_use_the_same_rear_wheel_polarity_in_both_directions(self):
         config = load_project_config(EXAMPLE_DIR)
         gpio = MockGPIO()
         with MotionModule(config, gpio=gpio) as module:
@@ -777,20 +777,31 @@ class DashboardTests(unittest.TestCase):
             client = app.test_client()
             headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
 
-            # The raised-wheel test established that physical forward uses
-            # the second input of all four fixed A/B driver pairs.
-            for channel, driven, idle in (
-                (1, 19, 26), (2, 6, 13), (3, 20, 21), (4, 12, 16),
-            ):
-                with self.subTest(channel=channel):
-                    response = client.post(
-                        "/api/motors/test", headers=headers,
-                        json={"channel": channel, "power": 0.5, "confirmed": True},
-                    )
-                    self.assertEqual(response.status_code, 200)
+            pairs = ((1, 26, 19), (2, 6, 13), (3, 21, 20), (4, 12, 16))
+            for direction in (1, -1):
+                for channel, positive, negative in pairs:
+                    with self.subTest(direction=direction, channel=channel):
+                        response = client.post(
+                            "/api/motors/test", headers=headers,
+                            json={"channel": channel, "power": direction * 0.5, "confirmed": True},
+                        )
+                        self.assertEqual(response.status_code, 200)
+                        driven, idle = (positive, negative) if direction > 0 else (negative, positive)
+                        self.assertEqual(gpio.values[driven], 0.5)
+                        self.assertEqual(gpio.values[idle], 0)
+                        client.post("/api/stop", headers=headers)
+
+                response = client.post(
+                    "/api/drive", headers=headers,
+                    json={"sequence": 2 - direction, "forward": direction, "speed": 0.5},
+                )
+                self.assertEqual(response.status_code, 200)
+                for _, positive, negative in pairs:
+                    driven, idle = (positive, negative) if direction > 0 else (negative, positive)
                     self.assertEqual(gpio.values[driven], 0.5)
                     self.assertEqual(gpio.values[idle], 0)
-                    client.post("/api/stop", headers=headers)
+                client.post("/api/stop", headers=headers)
+                self.assertTrue(all(gpio.values[pin] == 0 for _, a, b in pairs for pin in (a, b)))
 
     def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
         status = self.client.get("/api/autonomous").get_json()
