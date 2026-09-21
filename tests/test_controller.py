@@ -20,22 +20,26 @@ class ControllerTests(unittest.TestCase):
     def tearDown(self):
         self.module.close()
 
-    def test_positive_drives_the_forward_gpio_of_each_installed_channel(self):
+    def test_positive_drives_each_installed_channel_the_way_it_ships(self):
         self.module.set_motors({1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5})
-        # Nothing ships inverted, so positive drives forward_gpio only.
-        for pin in (26, 13, 21, 16):
+        # Every driver's output A ships inverted, so positive drives its
+        # reverse wire; the output B channels use their forward wire.
+        for pin in (19, 13, 20, 16):
             self.assertEqual(self.gpio.values[pin], 0.5)
-        for pin in (19, 6, 20, 12):
+        for pin in (26, 6, 21, 12):
             self.assertEqual(self.gpio.values[pin], 0)
 
     def test_inversion_swaps_which_gpio_a_positive_command_drives(self):
-        self.module.close()
-        flipped = replace(self.config, motors=(replace(self.config.motors[0], inverted=True), *self.config.motors[1:]))
-        self.gpio = MockGPIO()
-        self.module = MotionModule(flipped, self.gpio, MockServoController(flipped.servos))
-        self.module.set_motors({1: 0.5})
-        self.assertEqual(self.gpio.values[19], 0.5)
-        self.assertEqual(self.gpio.values[26], 0)
+        for inverted, driven, idle in ((False, 26, 19), (True, 19, 26)):
+            with self.subTest(inverted=inverted):
+                self.module.close()
+                config = replace(self.config, motors=(
+                    replace(self.config.motors[0], inverted=inverted), *self.config.motors[1:]))
+                self.gpio = MockGPIO()
+                self.module = MotionModule(config, self.gpio, MockServoController(config.servos))
+                self.module.set_motors({1: 0.5})
+                self.assertEqual(self.gpio.values[driven], 0.5)
+                self.assertEqual(self.gpio.values[idle], 0)
 
     def test_full_direction_change_uses_one_shared_deadtime(self):
         self.module.set_motors({channel: 0.4 for channel in range(1, 5)})
@@ -66,8 +70,9 @@ class ControllerTests(unittest.TestCase):
         motor.set(0.3)
         self.assertEqual(motor.name, "driver_3a")
         self.assertEqual(motor.channel, 5)
-        self.assertEqual(self.gpio.values[11], 0.3)
-        self.assertEqual(self.gpio.values[9], 0)
+        # Driver 3's output A ships inverted, like every other A channel.
+        self.assertEqual(self.gpio.values[9], 0.3)
+        self.assertEqual(self.gpio.values[11], 0)
         servo = self.module.servo("servo_15")
         servo.set_angle(45)
         self.assertEqual((servo.board, servo.channel), (0, 15))

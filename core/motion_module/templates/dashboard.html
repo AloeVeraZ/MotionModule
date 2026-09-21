@@ -3370,6 +3370,17 @@ async function loadConfig() {
 
 let updateTimer = null;
 let updateBusy = false;
+/* Set once this page has seen an update running. The update restarts
+   MotionModule, so this page is left on the old version with a session the
+   robot has forgotten: it reloads itself when the update is over. */
+let updateWatched = false;
+/* The log follows its newest line, like a terminal, until someone scrolls up
+   to read it. Scrolling back to the bottom follows along again. */
+let updateLogFollows = true;
+$('#updateLog')?.addEventListener('scroll', event => {
+  const log = event.target;
+  updateLogFollows = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+});
 
 const UPDATE_STATES = {
   'up-to-date': {label: 'Up to date', tone: 'ready'},
@@ -3411,6 +3422,7 @@ function updateLineCard(line, data) {
 function renderUpdates(data) {
   const job = data.job || {state: 'idle', log: []};
   const running = job.state === 'running';
+  if (running) updateWatched = true;
   const lines = data.lines || [];
   const behind = lines.filter(line => line.status === 'update-available').length;
   $('#updateSummary').textContent = running ? 'Updating…'
@@ -3443,10 +3455,22 @@ function renderUpdates(data) {
   const log = $('#updateLog');
   const recent = job.finished_at && (Date.now() / 1000 - job.finished_at) < 1800;
   log.hidden = !(running || (recent && job.state !== 'idle'));
-  if (!log.hidden) log.textContent = (job.log || []).join('\n') || 'Starting the update…';
+  if (!log.hidden) {
+    log.textContent = (job.log || []).join('\n') || 'Starting the update…';
+    if (updateLogFollows) log.scrollTop = log.scrollHeight;
+  }
   if (running && job.state === 'running') $('#updateSummary').textContent = 'Updating…';
 
   clearTimeout(updateTimer);
+  if (updateWatched && !running) {
+    /* Over, one way or the other. This page came from the release the update
+       replaced, so the newest lines are read on the page that comes back. */
+    $('#updateSummary').textContent = job.state === 'failed'
+      ? 'Update failed. Reloading…'
+      : 'Update finished. Reloading…';
+    updateTimer = setTimeout(() => location.reload(), 1500);
+    return;
+  }
   if (running || data.checking) updateTimer = setTimeout(refreshUpdates, 2000);
 }
 
@@ -3455,6 +3479,15 @@ async function refreshUpdates(force = false) {
   try {
     renderUpdates(await jsonFetch(`/api/updates${force ? '?refresh=1' : ''}`));
   } catch (error) {
+    if (updateWatched) {
+      /* An update restarts MotionModule, the network service and nginx, so
+         the robot stops answering for a moment. Keep asking until it is back
+         and can say whether the update finished. */
+      $('#updateSummary').textContent = 'Waiting for the robot…';
+      clearTimeout(updateTimer);
+      updateTimer = setTimeout(refreshUpdates, 2000);
+      return;
+    }
     $('#updateSummary').textContent = 'Check failed';
     $('#updateNote').textContent = error.message;
   }

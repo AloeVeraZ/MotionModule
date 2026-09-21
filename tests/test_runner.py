@@ -15,7 +15,8 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
             config = default_config()
-            config = replace(config, motors=(replace(config.motors[0], name="left_wheel"), *config.motors[1:]))
+            config = replace(config, motors=(
+                replace(config.motors[0], name="left_wheel", inverted=False), *config.motors[1:]))
             (project / "hardware.py").write_text(hardware_source(config), encoding="utf-8")
             (project / "robot.py").write_text("# Test robot\n", encoding="utf-8")
             observed = []
