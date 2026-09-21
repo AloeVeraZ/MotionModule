@@ -832,6 +832,39 @@ class DashboardTests(unittest.TestCase):
                 client.post("/api/stop", headers=headers)
                 self.assertTrue(all(gpio.values[pin] == 0 for _, a, b in pairs for pin in (a, b)))
 
+    def test_both_rotation_routes_hold_full_selected_power_on_opposite_sides(self):
+        config = load_project_config(EXAMPLE_DIR)
+        gpio = MockGPIO()
+        with MotionModule(config, gpio=gpio) as module:
+            app = create_app(module, MecanumDrive(module), self.network, project_name="Mecanum")
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            sequence = 0
+            # Fixed GPIOs after the existing B-output inversion. For Q,
+            # physical left wheels go backward and right wheels forward.
+            pairs = ((1, 19, 26), (2, 13, 6), (3, 21, 20), (4, 12, 16))
+            for route in ("/api/mecanum/test", "/api/drive"):
+                for rotate in (1, -1):
+                    for tick in range(15):
+                        sequence += 1
+                        with self.subTest(route=route, rotate=rotate, tick=tick):
+                            response = client.post(route, headers=headers, json={
+                                "sequence": sequence, "forward": 0, "strafe": 0,
+                                "rotate": rotate, "speed": 0.4,
+                            })
+                            self.assertEqual(response.status_code, 200)
+                            self.assertNotIn("ignored", response.get_json())
+                            self.assertEqual(
+                                [module.motor_values[c] for c in (1, 2, 3, 4)],
+                                [-0.4 * rotate, -0.4 * rotate, 0.4 * rotate, 0.4 * rotate],
+                            )
+                            for _, positive, negative in pairs:
+                                driven, idle = (positive, negative) if rotate > 0 else (negative, positive)
+                                self.assertEqual(gpio.values[driven], 0.4)
+                                self.assertEqual(gpio.values[idle], 0)
+                    client.post("/api/stop")
+                    self.assertTrue(all(value == 0 for value in module.motor_values.values()))
+
     def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
         status = self.client.get("/api/autonomous").get_json()
         self.assertFalse(status["configured"])

@@ -182,7 +182,8 @@ function browser(now = 1700000000000) {
     : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
-  const driveRequests = () => requests.filter(item => item.url === '/api/drive');
+  const driveEndpoint = fixture.kind === 'station' ? '/api/drive' : '/api/mecanum/test';
+  const driveRequests = () => requests.filter(item => item.url === driveEndpoint);
   const settle = async () => { for (let index = 0; index < 12; index++) await Promise.resolve(); };
   async function arm() {
     await context.dashboard.refreshStatus();
@@ -205,7 +206,7 @@ function browser(now = 1700000000000) {
     await settle();
   }
   function setRobotStatus(patch) { Object.assign(currentStatus.robot, patch); }
-  return {$, context, document, window, requests, failures, intervals, driveRequests, settle, arm, forward, releaseForward, setRobotStatus};
+  return {$, context, document, window, requests, failures, intervals, driveEndpoint, driveRequests, settle, arm, forward, releaseForward, setRobotStatus};
 }
 
 async function run(scenario) {
@@ -214,7 +215,27 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'key-release-stop') {
+  if (scenario === 'rotation-held') {
+    await app.releaseForward();
+    for (const [key, rotate] of [['q', 1], ['e', -1]]) {
+      await app.window.fire('keydown', {key});
+      await app.settle();
+      for (let tick = 0; tick < 15; tick++) {
+        await app.context.dashboard.sendDrive();
+        const request = app.driveRequests().at(-1);
+        assert.equal(request.url, app.driveEndpoint);
+        assert.deepEqual(
+          {forward: request.payload.forward, strafe: request.payload.strafe, rotate: request.payload.rotate},
+          {forward: 0, strafe: 0, rotate},
+          `${key.toUpperCase()} must continuously command pure rotation, not a nudge or strafe`,
+        );
+        assert(request.payload.speed > 0, 'Turning must retain the selected power');
+      }
+      await app.window.fire('keyup', {key});
+      await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.rotate, 0, 'Releasing the turn key stops rotation');
+    }
+  } else if (scenario === 'key-release-stop') {
     await app.releaseForward();
     const last = app.driveRequests().at(-1).payload;
     assert.deepEqual(
@@ -274,7 +295,7 @@ async function run(scenario) {
     await app.context.dashboard.sendDrive();
     assert.equal(app.driveRequests().length, count);
   } else if (scenario === 'drive-error') {
-    app.failures.set('/api/drive', {status: 403, message: 'Dashboard session expired'});
+    app.failures.set(app.driveEndpoint, {status: 403, message: 'Dashboard session expired'});
     await app.context.dashboard.sendDrive();
     await app.settle();
     assert.equal(app.$('#driveEnable').checked, false, 'Rejected drive commands must disarm');
