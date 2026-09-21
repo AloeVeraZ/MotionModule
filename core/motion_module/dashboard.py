@@ -53,10 +53,10 @@ from .updates import PasswordRequired, TooManyPasswordAttempts, UpdateChecker, i
 from .usb import sensor_controllers, usb_devices
 
 
-DASHBOARD_PAGES = {"overview", "diagnostics", "code", "drive"}
-PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics"}
+DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
+PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics", "drive": "diagnostics"}
 # Older links land on the matching tab inside the page that replaced them.
-ALIAS_TABS = {"hardware": "wiring", "network": "network"}
+ALIAS_TABS = {"hardware": "wiring", "network": "network", "drive": "mecanum"}
 STATIC_DIRECTORY = Path(__file__).with_name("static")
 # Stylesheets, scripts and fonts are requested on every page change. Browsers
 # may keep them for a week; the page links them with a content hash, so an
@@ -721,13 +721,13 @@ def create_app(
 
     @app.post("/api/drive")
     def drive_command():
-        return run_drive_command(active_drive)
+        return run_drive_command(active_drive, allow_mecanum_selection=True)
 
     @app.post("/api/mecanum/test")
     def mecanum_test_command():
         return run_drive_command(mecanum_test_drive)
 
-    def run_drive_command(selected_drive):
+    def run_drive_command(selected_drive, *, allow_mecanum_selection=False):
         nonlocal last_sequence
         if not authorized():
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
@@ -738,6 +738,12 @@ def create_app(
             }), 409
         body = request.get_json(silent=True) or {}
         try:
+            if allow_mecanum_selection:
+                drive_model = body.get("drive_model", "project")
+                if drive_model not in ("project", "mecanum"):
+                    raise ValueError("Choose project or mecanum as the drive model")
+                if drive_model == "mecanum":
+                    selected_drive = mecanum_test_drive
             sequence = int(body.get("sequence", -1))
             with command_lock:
                 if sequence <= last_sequence:
@@ -775,7 +781,7 @@ def create_app(
                 module.release_all_servos()
 
     def drive_controls() -> list[dict]:
-        """Extra controls the active project asks the Drive page to show.
+        """Extra controls the active project asks the Driver Station to show.
 
         A project opts in by giving its drive object a `controls()` method that
         returns plain dictionaries. Anything malformed is dropped rather than

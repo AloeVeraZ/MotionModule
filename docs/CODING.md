@@ -87,8 +87,8 @@ be able to import the project before it can serve the dashboard.
 
 ### Optional full Driver Station telemetry
 
-The **Drive** page is deliberately a drivetrain bench test and does not run
-your project at all. Its **Open full Driver Station** button opens
+**Debug → Mecanum Test** is deliberately a drivetrain bench test and does not
+run your project at all. **Open Driver Station** in the top navigation opens
 `/driver-station`, the separate operator console that does. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
 one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
 sensor controller. MotionModule discovers it automatically; no import in
@@ -398,17 +398,30 @@ matched without case; a named key such as `ArrowUp` or `Escape` is matched as
 the browser reports it. If you bind a key another action already owns, that
 other action is left unassigned rather than one key meaning two things.
 
-This has nothing to do with the **Drive** page's **Test Mecanum**, which keeps
+This has nothing to do with **Debug → Mecanum Test**, which keeps
 fixed W/S, A/D, Q/E and space keys because it drives MotionModule's built-in
 mixer rather than your code. Test Mecanum is for checking that a Mecanum base
 moves; the Driver Station is for driving your robot.
 
 ## Manual testing
 
-The **Drive** page calls your `drive()` method, from either the keyboard or a
+The shipped Mecanum `robot.py` uses `motion_module.mecanum.mix`, shared with
+**Debug → Mecanum Test**, so it includes the same physically confirmed turning
+correction. Use that mixer when extending this robot rather than maintaining
+another copy of its wheel equations. It returns normalized powers keyed by
+channels 1–4; motor polarity remains in `hardware.py`.
+
+The Driver Station's **Use confirmed Mecanum mixer** selects that same built-in
+movement for manual commands without editing the project's files. It defaults
+on for a project named `Mecanum`, off for other projects. Uncheck it to call
+your own drive method. Changing it disables and stops outputs, requiring a
+fresh enable. Project controls, telemetry, and autonomous routines still run
+their own code; this selector only changes the keyboard/gamepad movement path.
+
+With that option unchecked, the **Driver Station** calls your `drive()` method, from either the keyboard or a
 game controller. Both send the same `forward`, `strafe` and `rotate` numbers, so
 code written for one works with the other. Keys are remappable under
-**Drive → Controls**.
+**Driver Station → Controls**.
 
 Drive works only while its deliberate-enable box is ticked. Releasing keys, the
 stop key, STOP, leaving the page, or losing communications produces a stop, and

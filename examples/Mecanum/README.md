@@ -66,9 +66,20 @@ claw.release()
 
 ## Driving
 
-After deploying, tick the enable box on the **Drive** page, then use W/S to
+After deploying, open **Driver Station**, tick the enable box, then use W/S to
 drive, A/D to strafe, Q/E to rotate, and Space to stop. Start with the speed
 limit low.
+
+The sample imports `motion_module.mecanum.mix`, the same confirmed mixer used
+by **Debug → Mecanum Test**. Forward, strafe, rotation, and combined commands
+therefore have one implementation. `hardware.py` still supplies the names,
+locked pins, and per-motor polarity; no extra inversion is applied in `robot.py`.
+
+For an existing project named `Mecanum`, the full Driver Station also defaults
+to **Use confirmed Mecanum mixer**. This lets older preserved `robot.py` files
+use the proven movement without being overwritten. Unchecking it uses that
+file's own drive method. Sensors and extra controls still come from the project;
+autonomous code is not overridden. Changing the selection stops and disables drive.
 
 ## Autonomous
 
@@ -106,8 +117,8 @@ instead of turning for a fixed time. Headings count up turning left, like
 ## Full Driver Station: cameras, IMU, and sensors
 
 `dashboard.py` is discovered automatically when it is beside `robot.py`.
-The **Drive** page remains a built-in Mecanum bench test and never calls this
-project. Press **Open full Driver Station** for the independent operator
+**Debug → Mecanum Test** remains a built-in bench test and never calls this
+project. Press **Open Driver Station** for the independent operator
 console, which does. The sample shows two
 offline camera placeholders, the first IMU in `sensors.py` on the heading dial,
 and every GIGA pin and IMU in the USB controller card. Add browser-readable
@@ -116,7 +127,7 @@ stream URLs for a C920 or C270.
 `driver_bindings()` in the same file decides which keys the Driver Station
 listens for. The sample keeps the usual W/S, A/D, Q/E and space; return only
 what you want to move. This is the robot's own layout and is unrelated to the
-**Drive** page's Test Mecanum, whose keys are fixed.
+**Debug → Mecanum Test**, whose keys are fixed.
 
 The camera selector shows the front feed, rear feed, or both square viewports.
 

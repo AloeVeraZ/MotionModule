@@ -1,6 +1,6 @@
-"""The Drive page's built-in Mecanum bench drive.
+"""The Debug page's built-in Mecanum bench drive.
 
-Lock the working translations and the test-only rotation correction separately.
+Lock the working translations and the confirmed rotation correction separately.
 Software assertions are not a substitute for the owner's physical turn check.
 """
 
@@ -73,8 +73,8 @@ class MecanumTestDriveTests(unittest.TestCase):
                 self.assertEqual(signs, expected)
 
     def test_rotation_only_reverses_channels_1_and_4_from_the_previous_test(self):
-        # The physical turn is to be confirmed by the owner. These assertions
-        # lock the requested electrical correction, not a measured motion.
+        # The owner confirmed the physical turn. These assertions preserve
+        # that electrical correction; the test itself does not measure motion.
         self.assertEqual(self.outputs(rotate=1), [1, -1, 1, -1])
         self.assertEqual(self.outputs(rotate=-1), [-1, 1, -1, 1])
 

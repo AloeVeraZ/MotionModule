@@ -29,7 +29,7 @@ class MecanumDashboard(TelemetryDashboard):
 
         This is the competition console's layout and belongs to the robot, so
         it lives here rather than in a browser. It has nothing to do with the
-        Drive debug page, which each browser remaps for itself.
+        fixed bindings in Debug's Mecanum Test.
 
         Return only what you want to move. Anything left out keeps its default:
         W/S drive, A/D strafe, Q/E turn, space disables and stops.

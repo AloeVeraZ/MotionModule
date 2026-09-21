@@ -1,6 +1,6 @@
-"""Built-in Mecanum bench drive, independent of deployed robot code.
+"""The confirmed robot's Mecanum mixer, shared by the test and sample project.
 
-The Drive page's "Test Mecanum" panel posts here instead of to the robot
+The Debug page's "Mecanum Test" panel posts here instead of to the robot
 project, so a four-wheel Mecanum base can be checked before any robot code
 exists, and so a bug in that code cannot be mistaken for a wiring fault.
 
@@ -8,16 +8,13 @@ Channels stay FL=1, RL=2, FR=3, RR=4 — the shipped wiring in AGENTS.md. The
 active hardware configuration applies each motor's ``inverted`` value once,
 inside the controller; this mixer never moves a pin or flips a motor.
 
-Test-only rotation correction
+Confirmed rotation correction
 -----------------------------
-The owner confirmed W/S and A/D work, but Q physically drives both front
-wheels forward and both rear wheels backward. The nominal wheel labels do
-not explain that observed response. Based on those observations, reverse
-only channels 1 and 4's rotation contributions, not their forward/strafe
-contributions or global motor polarity. This is an empirical correction for
-Test Mecanum, pending a raised-wheel check, not a new general Mecanum formula
-or a verified diagnosis of crossed wiring. The full Driver Station and the
-student's robot.py keep their own mixer unchanged.
+The owner physically verified forward, backward, strafe, and rotation after
+reversing channels 1 and 4's rotation contributions, without changing their
+forward/strafe contributions or global motor polarity. Both the built-in
+test and Mecanum sample now call this mixer. This is the confirmed robot's
+calibration, not a new general Mecanum formula or a diagnosis of its wiring.
 """
 
 import math
@@ -40,10 +37,10 @@ WHEELS = (
 # wheel on purpose: it is the direction the robot is known to drive, and the
 # other two moves are written as flips of it.
 MIX = {
-    FRONT_LEFT: (1, 1, -1),  # Test-only rotation correction; W/S and A/D unchanged.
+    FRONT_LEFT: (1, 1, -1),  # Confirmed rotation correction; W/S and A/D unchanged.
     REAR_LEFT: (1, -1, 1),
     FRONT_RIGHT: (1, -1, -1),
-    REAR_RIGHT: (1, 1, 1),   # Test-only rotation correction; W/S and A/D unchanged.
+    REAR_RIGHT: (1, 1, 1),   # Confirmed rotation correction; W/S and A/D unchanged.
 }
 
 
@@ -53,6 +50,19 @@ def clamp(value, low=-1.0, high=1.0):
     if not math.isfinite(value):
         raise ValueError("Mecanum commands must be finite")
     return max(low, min(high, float(value)))
+
+
+def mix(forward, strafe, rotate):
+    """Normalized channel powers; +strafe is right and +rotate turns left."""
+
+    forward, strafe, rotate = map(clamp, (forward, strafe, rotate))
+    moves = (forward, strafe, -rotate)
+    wheels = {
+        channel: sum(sign * move for sign, move in zip(signs, moves))
+        for channel, signs in MIX.items()
+    }
+    scale = max(1.0, *(abs(power) for power in wheels.values()))
+    return {channel: power / scale for channel, power in wheels.items()}
 
 
 class MecanumTestDrive:
@@ -71,17 +81,8 @@ class MecanumTestDrive:
 
     def drive(self, forward, strafe, rotate, speed=0.4):
         self._check_wiring()
-        forward, strafe, rotate = map(clamp, (forward, strafe, rotate))
         limit = clamp(speed, 0.0, 1.0)
-        # Robot code calls a left turn positive, so the table's turn-right
-        # column takes the opposite sign.
-        moves = (forward, strafe, -rotate)
-        wheels = {
-            channel: sum(sign * move for sign, move in zip(signs, moves))
-            for channel, signs in MIX.items()
-        }
-        scale = max(1.0, *(abs(power) for power in wheels.values()))
-        outputs = {channel: power / scale * limit for channel, power in wheels.items()}
+        outputs = {channel: power * limit for channel, power in mix(forward, strafe, rotate).items()}
         self.module.set_motors(outputs)
         return {"outputs": outputs, "speed": limit}
 

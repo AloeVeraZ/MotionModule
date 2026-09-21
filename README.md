@@ -187,7 +187,7 @@ and can rename the robot. A reboot always tries saved Wi-Fi first.
 
 ## Dashboard
 
-Three pages, each split into tabs:
+Three workspace pages plus the separate Driver Station:
 
 - **Overview** — live motor power labelled with your own names, servo commands
   and I2C responses, watchdog state, temperature, memory, disk, uptime, network
@@ -197,17 +197,22 @@ Three pages, each split into tabs:
   code, and USB inventory), **Parts** (complete reference BOM and missing
   specifications),
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
+  **Mecanum Test** (a built-in four-wheel bench drive on channels 1-4),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
-  (Wi-Fi, hostname, hotspot).
-- **Drive** — **Test Mecanum**, a built-in four-wheel Mecanum bench drive
-  that runs from MotionModule's own mixer on channels 1-4, so a drivetrain can
-  be checked by keyboard or game controller before any robot code exists. A
-  wheel check names which corner each channel really turns. **Open full Driver
-  Station** launches the separate operator console, which runs the deployed
-  project's own `drive()` and shows cameras, IMU, Pi inputs, USB sensor
-  controllers, and the project's declared controls.
+  (Wi-Fi, hostname, hotspot). The bench drive uses MotionModule's own mixer so
+  it can test a drivetrain before any robot code exists.
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
+- **Open Driver Station** — launches the operator console, which runs the
+  deployed project's own `drive()` and shows cameras, IMU, Pi inputs, USB
+  sensor controllers, and the project's declared controls.
+
+For the `Mecanum` project, **Use confirmed Mecanum mixer** starts checked in
+the Driver Station. Manual movement then uses exactly the same mixer as
+**Debug → Mecanum Test**, even if the Pi has older custom robot code. Uncheck
+it to run the project's own `drive()` instead; changing it stops and disables
+drive. Sensors, extra controls, and autonomous routines remain project-owned.
+Other project names default to their own code. No saved project file is replaced.
 
 The dashboard and Driver Station share one look: condensed Barlow Condensed
 headings over Inter text on a dark blueprint grid, with green, yellow, and red

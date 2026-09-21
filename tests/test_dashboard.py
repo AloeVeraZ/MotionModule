@@ -217,9 +217,13 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="usbDevices"', debug)
         self.assertIn(b"hostname is this robot", debug)
 
-    def test_drive_page_is_the_built_in_mecanum_test_not_the_full_station(self):
+    def test_mecanum_test_is_a_debug_tab_and_driver_station_is_top_level(self):
         drive = self.client.get("/drive").data
-        self.assertIn(b'data-view="drive"', drive)
+        self.assertIn(b'data-view="diagnostics"', drive)
+        self.assertNotIn(b'data-view="drive"', drive)
+        self.assertIn(b'data-tab="mecanum">Mecanum Test', drive)
+        self.assertIn(b'const activePage = "diagnostics"', drive)
+        self.assertIn(b'const requestedTab = "mecanum"', drive)
         self.assertIn(b'id="driveEnable"', drive)
         self.assertIn(b'id="padIdentity"', drive)      # game controller
         self.assertIn(b'id="wheelCheck"', drive)       # which corner each channel turns
@@ -232,6 +236,8 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn(b'id="cameraStage"', drive)   # telemetry belongs to the full station
         self.assertNotIn(b'id="headingDial"', drive)
         self.assertIn(b"gamepadconnected", drive)
+        self.assertIn(b'<a href="/driver-station">Open Driver Station', drive)
+        self.assertNotIn(b'data-page="drive"', drive)
         station = self.client.get("/driver-station").data
         self.assertIn(b"Competition console", station)
         self.assertIn(b'id="cameraStage"', station)
@@ -239,12 +245,14 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="piSensorList"', station)
         self.assertIn(b'id="usbControllerList"', station)
         self.assertNotIn(b'class="sidebar"', station)
-        # Drive left the Code page entirely.
+        # Mecanum Test lives under Debug, not Code.
         code = self.client.get("/code").data
         self.assertNotIn(b'data-tab="drive"', code)
 
     def test_legacy_dashboard_urls_open_the_consolidated_pages(self):
-        for path, active in (("/hardware", b'data-page="diagnostics"'), ("/network", b'data-page="diagnostics"')):
+        for path, active in (("/hardware", b'data-page="diagnostics"'),
+                             ("/network", b'data-page="diagnostics"'),
+                             ("/drive", b'data-page="diagnostics"')):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200)
             self.assertIn(active, response.data)
@@ -700,8 +708,8 @@ class DashboardTests(unittest.TestCase):
             json={"sequence": 3, "forward": 0, "strafe": 0, "rotate": 1, "speed": 0.4},
         )
         self.assertEqual(response.status_code, 200)
-        # A left turn runs the front-left wheel (channel 1) backward.
-        self.assertEqual(self.module.outputs[1], -0.4)
+        # The sample uses the same confirmed rotation signs as Mecanum Test.
+        self.assertEqual(self.module.outputs[1], 0.4)
 
     def test_mecanum_test_route_uses_the_built_in_mixer_not_the_project(self):
         """Test Mecanum must work on a robot whose own drive() is broken."""
@@ -727,6 +735,52 @@ class DashboardTests(unittest.TestCase):
             [self.module.outputs[channel] for channel in (1, 2, 3, 4)],
             [0.4, -0.4, 0.4, -0.4],
         )
+
+    def test_station_can_use_confirmed_mecanum_without_overwriting_or_calling_legacy_drive(self):
+        class LegacyDrive:
+            def __init__(self):
+                self.calls = 0
+
+            def drive(self, *_args):
+                self.calls += 1
+                return {"source": "project"}
+
+            def stop(self):
+                pass
+
+            def controls(self):
+                return [{"name": "intake", "label": "Intake", "kind": "hold"}]
+
+            def control(self, name, value):
+                return {"name": name, "value": value}
+
+        legacy = LegacyDrive()
+        app = create_app(self.module, legacy, project_name="Mecanum")
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        station = client.get("/driver-station").data
+        self.assertIn(b'id="useMecanumDrive" type="checkbox" checked', station)
+        response = client.post("/api/drive", headers=headers, json={
+            "sequence": 1, "drive_model": "mecanum", "rotate": 1, "speed": 0.4,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([self.module.outputs[c] for c in (1, 2, 3, 4)], [0.4, -0.4, 0.4, -0.4])
+        self.assertEqual(legacy.calls, 0)
+        self.assertEqual(client.get("/api/drive/controls").get_json()["controls"][0]["name"], "intake")
+        control = client.post("/api/drive/control", headers=headers, json={"name": "intake", "value": 1})
+        self.assertEqual(control.status_code, 200)
+        response = client.post("/api/drive", headers=headers, json={"sequence": 2, "drive_model": "project"})
+        self.assertEqual(response.get_json()["source"], "project")
+        self.assertEqual(legacy.calls, 1)
+
+    def test_station_preserves_custom_project_default_and_rejects_unknown_drive_model(self):
+        app = create_app(self.module, MecanumDrive(self.module), project_name="MyRobot")
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        self.assertNotIn(b'id="useMecanumDrive" type="checkbox" checked', client.get("/driver-station").data)
+        response = client.post("/api/drive", headers=headers, json={"sequence": 1, "drive_model": "unknown"})
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(all(value == 0 for value in self.module.outputs.values()))
 
     def test_page_reload_can_resume_above_server_sequence_floor(self):
         first = self.client.post(
@@ -832,7 +886,7 @@ class DashboardTests(unittest.TestCase):
                 client.post("/api/stop", headers=headers)
                 self.assertTrue(all(gpio.values[pin] == 0 for _, a, b in pairs for pin in (a, b)))
 
-    def test_rotation_correction_is_test_only_and_both_routes_hold_selected_power(self):
+    def test_both_rotation_routes_use_confirmed_correction_and_hold_selected_power(self):
         config = load_project_config(EXAMPLE_DIR)
         gpio = MockGPIO()
         with MotionModule(config, gpio=gpio) as module:
@@ -840,15 +894,10 @@ class DashboardTests(unittest.TestCase):
             client = app.test_client()
             headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
             sequence = 0
-            # The empirical rotation correction belongs ONLY to Test Mecanum.
-            # Project code in the full station retains its original signs.
+            # The Mecanum sample and bench now share the confirmed mixer.
             for route in ("/api/mecanum/test", "/api/drive"):
-                if route == "/api/mecanum/test":
-                    signs = (1, -1, 1, -1)
-                    pairs = ((1, 26, 19), (2, 13, 6), (3, 21, 20), (4, 16, 12))
-                else:
-                    signs = (-1, -1, 1, 1)
-                    pairs = ((1, 19, 26), (2, 13, 6), (3, 21, 20), (4, 12, 16))
+                signs = (1, -1, 1, -1)
+                pairs = ((1, 26, 19), (2, 13, 6), (3, 21, 20), (4, 16, 12))
                 for rotate in (1, -1):
                     for tick in range(15):
                         sequence += 1
@@ -869,6 +918,29 @@ class DashboardTests(unittest.TestCase):
                                 self.assertEqual(gpio.values[idle], 0)
                     client.post("/api/stop")
                     self.assertTrue(all(value == 0 for value in module.motor_values.values()))
+
+    def test_mecanum_sample_and_bench_match_all_axes_combinations_at_the_gpio_outputs(self):
+        config = replace(load_project_config(EXAMPLE_DIR), deadtime_ms=0)
+        gpio = MockGPIO()
+        with MotionModule(config, gpio=gpio) as module:
+            app = create_app(module, MecanumDrive(module), self.network, project_name="Mecanum")
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            sequence = 0
+            for forward in (-1, -0.3, 0, 0.6, 1):
+                for strafe in (-1, -0.3, 0, 0.6, 1):
+                    for rotate in (-1, -0.3, 0, 0.6, 1):
+                        for speed in (0, 0.25, 1):
+                            states = []
+                            for route in ("/api/mecanum/test", "/api/drive"):
+                                sequence += 1
+                                response = client.post(route, headers=headers, json={
+                                    "sequence": sequence, "forward": forward,
+                                    "strafe": strafe, "rotate": rotate, "speed": speed,
+                                })
+                                self.assertEqual(response.status_code, 200)
+                                states.append((dict(module.motor_values), dict(gpio.values)))
+                            self.assertEqual(states[0], states[1], (forward, strafe, rotate, speed))
 
     def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
         status = self.client.get("/api/autonomous").get_json()

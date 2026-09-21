@@ -28,7 +28,7 @@
    MotionModule dashboard
 
    Tokens, panels, controls and the grid live in /static/motionmodule.css.
-   This sheet only arranges the four pages.
+   This sheet only arranges the three workspace pages.
 
    Layout   a floating control bar over one scrolling column. Each page is
             one <section class="view">; the sections inside a page are
@@ -894,7 +894,7 @@
       <nav class="nav-links" aria-label="Main navigation">
         <a href="/" data-page="overview">Overview<small>Status &amp; activity</small></a>
         <a href="/diagnostics" data-page="diagnostics">Debug<small>Understand your hardware</small></a>
-        <a href="/drive" data-page="drive">Drive<small>Test Mecanum &amp; driver station</small></a>
+        <a href="/driver-station">Open Driver Station<small>Drive your robot</small></a>
         <a href="/code" data-page="code">Code<small>Build &amp; control</small></a>
       </nav>
       <div class="display-controls">
@@ -1078,6 +1078,7 @@
         <button type="button" data-tab="wiring" class="active">Wiring guide</button>
         <button type="button" data-tab="parts">Parts list</button>
         <button type="button" data-tab="tests">Test outputs</button>
+        <button type="button" data-tab="mecanum">Mecanum Test</button>
         <button type="button" data-tab="checks">Checks &amp; logs</button>
         <button type="button" data-tab="network">Network</button>
       </div>
@@ -1571,13 +1572,9 @@
           </div>
         </div>
       </div>
-    </section>
 
-
-    <!-- =============================================================== -->
-    <!-- DRIVE                                                           -->
-    <!-- =============================================================== -->
-    <section class="view" data-view="drive" hidden>
+      <!-- --------------------------------------------------- Mecanum -->
+      <div data-panel="mecanum" hidden>
       <div class="hero">
         <div>
           <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5h11a4 4 0 0 1 3.9 4.9l-.8 3.6a2 2 0 0 1-3.4.9L14.8 15.5H9.2l-2.4 2.4a2 2 0 0 1-3.4-.9l-.8-3.6a4 4 0 0 1 3.9-4.9z"/><path d="M8.5 11v3M7 12.5h3"/></svg>Driver station</p>
@@ -1697,6 +1694,7 @@
         </div>
       </article>
 
+      </div>
     </section>
 
     <!-- =============================================================== -->
@@ -2083,7 +2081,10 @@ function selectTab(page, name) {
     ? name
     : buttons[0]?.dataset.tab;
   const previous = [...buttons].find(button => button.classList.contains('active'))?.dataset.tab;
-  if (previous && previous !== wanted && (previous === 'drive' || previous === 'tests')) stopAll();
+  if (previous && previous !== wanted) {
+    if (previous === 'mecanum') disarmDrive();
+    else if (previous === 'tests') stopAll();
+  }
   buttons.forEach(button => {
     const selected = button.dataset.tab === wanted;
     button.classList.toggle('active', selected);
@@ -2530,7 +2531,9 @@ function axisBar(label, value) {
 
 const axis = (positive, negative) =>
   (heldKeys.has(bindings[positive]) ? 1 : 0) - (heldKeys.has(bindings[negative]) ? 1 : 0);
-const driveEnabled = () => activePage === 'drive' && Boolean($('#driveEnable')?.checked);
+const driveEnabled = () => activePage === 'diagnostics'
+  && !document.querySelector('[data-panel="mecanum"]')?.hidden
+  && Boolean($('#driveEnable')?.checked);
 
 function setDriveSignals() {
   setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Enabled' : 'Disabled');
@@ -3582,8 +3585,8 @@ async function installGigaFirmware() {
 
 /* ------------------------------------------------------- guarded tests */
 
-/* The Debug page gates these on its own raised-wheel check; the Drive page's
-   wheel check reuses the Test Mecanum enable, which makes the same promise. */
+/* Test Outputs has its own raised-wheel check; Mecanum Test's wheel check
+   reuses the Mecanum enable, which makes the same promise. */
 const motorSafeGuard = () => $('#motorSafe').checked;
 
 function bindMotorHold(button, channel, power, options = {}) {
@@ -4226,14 +4229,11 @@ if (activePage === 'code') {
   setInterval(refreshTerminalStatus, 5000);
 }
 
-if (activePage === 'drive') {
+if (activePage === 'diagnostics') {
   renderWheelCheck();
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);
-}
-
-if (activePage === 'diagnostics') {
   refreshDoctor();
   refreshLogs();
   refreshUsb();

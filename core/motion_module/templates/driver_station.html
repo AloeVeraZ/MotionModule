@@ -418,6 +418,10 @@ kbd.unbound b { color: var(--faint); }
           <small id="autoDetail">autonomous.py has not been run yet.</small>
         </div>
         <div class="robot-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
+        <label class="safety-check"><input id="useMecanumDrive" type="checkbox"{% if project_name == 'Mecanum' %} checked{% endif %}><span>Use confirmed Mecanum mixer</span></label>
+        <p class="empty-copy">For manual driving: checked uses exactly the same movement
+          as Debug's Mecanum Test; unchecked calls your <code>robot.py</code> drive method.
+          Project sensors, extra controls, and autonomous code remain separate.</p>
         <label class="safety-check"><input id="armConfirm" type="checkbox"><span>The area is clear and the physical cutoff is within reach.</span></label>
         <div class="command-pair">
           <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
@@ -505,7 +509,7 @@ let cameraMode = 'both';
 let cameraSignature = '';
 /* The competition console's key layout belongs to the robot project: it comes
    from dashboard.py's driver_bindings(). This is deliberately unrelated to the
-   Drive debug page, which each browser remaps for itself in local storage. */
+   fixed bindings in Debug's Mecanum Test. */
 const DEFAULT_BINDINGS = {forward:'w', back:'s', left:'a', right:'d', turn_left:'q', turn_right:'e', stop:' '};
 const ACTION_LABELS = {forward:'Forward', back:'Back', left:'Left', right:'Right', turn_left:'Turn L', turn_right:'Turn R', stop:'Stop'};
 let bindings = {...DEFAULT_BINDINGS};
@@ -616,6 +620,8 @@ function setArmed(value) {
   if (!armed) stopAll();
 }
 
+$('#useMecanumDrive').addEventListener('change', () => setArmed(false));
+
 async function stopAll() {
   heldKeys.clear();
   paintKeys();
@@ -674,7 +680,8 @@ async function sendDrive() {
   try {
     const response = await fetch('/api/drive', {
       method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({sequence: ++sequence, ...command, speed: Number($('#speed').value) / 100}),
+      body: JSON.stringify({sequence: ++sequence, ...command, speed: Number($('#speed').value) / 100,
+        drive_model: $('#useMecanumDrive').checked ? 'mecanum' : 'project'}),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));

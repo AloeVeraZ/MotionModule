@@ -1,7 +1,7 @@
 """Mecanum drive sample — the only file you have to write for a robot.
 
 `hardware.py` next to this file names the four wheels. This file turns the
-Drive page's forward / strafe / rotate commands into wheel power, and
+Driver Station's forward / strafe / rotate commands into wheel power, and
 `sensors.py` gives it the robot's sensors, all read by the Arduino GIGA.
 
 The same three numbers arrive whether someone is using the keyboard or a game
@@ -17,53 +17,23 @@ MotionModule calls `create_drive(module)` once at startup, then calls
 `drive(...)` on the object it returns every time a control command arrives.
 """
 
-import math
+from motion_module.mecanum import clamp, mix as mix_channels
 
 from sensors import create_sensors  # sensors.py, next to this file
 
 
 # These names stay in physical wheel order. Motor 2 (rear_left / Driver 1B)
 # and motor 4 (rear_right / Driver 2B) reverse their electrical polarity in
-# hardware.py, where that pin-level behavior belongs; the Mecanum equations
-# below therefore remain the standard wheel equations.
+# hardware.py, where that pin-level behavior belongs. Movement uses the same
+# confirmed mixer as Debug's Mecanum Test, including its rotation correction.
 WHEELS = ("front_left", "rear_left", "front_right", "rear_right")
 
 
-def clamp(value, low=-1.0, high=1.0):
-    """Keep a number inside a range, and reject anything that is not a number."""
-
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError("Drive commands must be numbers")
-    value = float(value)
-    if not math.isfinite(value):
-        raise ValueError("Drive commands must be finite")
-    return max(low, min(high, value))
-
-
 def mix(forward, strafe, rotate):
-    """Turn three joystick axes into one power value per wheel.
+    """Give the shared, confirmed channel mix this project's wheel names."""
 
-    forward  positive drives toward the front of the robot
-    strafe   positive slides the robot to the right
-    rotate   positive spins the robot counter-clockwise (a left turn), the
-             same direction an IMU heading counts up
-
-    Turning left runs the left wheels backward and the right wheels forward.
-    Wheel powers are scaled down together when a combined command would
-    exceed full power, so the robot keeps driving in the requested direction.
-    """
-
-    forward = clamp(forward)
-    strafe = clamp(strafe)
-    rotate = clamp(rotate)
-    wheels = {
-        "front_left": forward + strafe - rotate,
-        "rear_left": forward - strafe - rotate,
-        "front_right": forward - strafe + rotate,
-        "rear_right": forward + strafe + rotate,
-    }
-    scale = max(1.0, *(abs(power) for power in wheels.values()))
-    return {name: power / scale for name, power in wheels.items()}
+    powers = mix_channels(forward, strafe, rotate)
+    return {name: powers[channel] for channel, name in enumerate(WHEELS, start=1)}
 
 
 class MecanumDrive:
@@ -94,10 +64,10 @@ class MecanumDrive:
 
         self.module.set_motors({name: 0 for name in self.wheels})
 
-    # ---- optional: extra buttons and sliders on the Drive page -------------
+    # ---- optional: extra buttons and sliders in the Driver Station ----------
 
     def controls(self):
-        """Describe controls for the Drive page. Delete this if you want none."""
+        """Describe Driver Station controls. Delete this if you want none."""
 
         controls = [
             {"name": "spin_test", "label": "Spin in place", "kind": "hold",
@@ -116,7 +86,7 @@ class MecanumDrive:
         return controls
 
     def control(self, name, value):
-        """Handle one control from the Drive page. `value` is a number."""
+        """Handle one Driver Station control. `value` is a number."""
 
         if name == "spin_test":
             return self.drive(0, 0, 1 if value else 0, speed=0.5)

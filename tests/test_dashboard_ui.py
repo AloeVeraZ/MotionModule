@@ -57,8 +57,8 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         template = ROOT / "core" / "motion_module" / "templates" / "dashboard.html"
         rendered = Environment().from_string(template.read_text(encoding="utf-8")).render(
             dashboard_token="ui-test-token",
-            active_page="drive",
-            active_tab="",
+            active_page="diagnostics",
+            active_tab="mecanum",
             project_name="TestRobot",
         )
         dom = DashboardDOM()
@@ -103,6 +103,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
 
     def test_q_and_e_continuously_send_pure_rotation_to_the_full_station(self):
         self.run_behavior("rotation-held", self.station_fixture)
+
+    def test_full_station_mixer_selection_stops_and_requires_reenabling(self):
+        self.run_behavior("station-drive-model", self.station_fixture)
 
     def test_a_disconnected_servo_board_is_red_and_explained(self):
         self.run_behavior("servo-offline")

@@ -120,7 +120,7 @@ class TelemetryDashboard:
         Return only the actions you want to move; anything you leave out keeps
         its default (WASD to drive and strafe, Q/E to turn, space to stop).
         This is the competition console's own layout and has nothing to do with
-        the Drive debug page, which each browser remaps for itself.
+        the fixed bindings in Debug's Mecanum Test.
         """
 
         return {}

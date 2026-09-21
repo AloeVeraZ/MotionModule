@@ -52,11 +52,11 @@ class MecanumTests(unittest.TestCase):
         )
 
     def test_positive_rotation_turns_left(self):
-        """Counter-clockwise, like Q and an IMU heading: left side back, right side forward."""
+        """Use the owner's confirmed Q calibration from Debug's Mecanum Test."""
 
         self.assertEqual(
             mix(0, 0, 1),
-            {"front_left": -1, "rear_left": -1, "front_right": 1, "rear_right": 1},
+            {"front_left": 1, "rear_left": -1, "front_right": 1, "rear_right": -1},
         )
 
     def test_combined_commands_normalize(self):
@@ -70,10 +70,10 @@ class MecanumTests(unittest.TestCase):
         self.assertEqual(
             module.outputs,
             {
-                "front_left": -0.5,
+                "front_left": 0.5,
                 "rear_left": -0.5,
                 "front_right": 0.5,
-                "rear_right": 0.5,
+                "rear_right": -0.5,
             },
         )
 
@@ -135,11 +135,11 @@ class TurningModule(FakeModule):
 
     def set_motors(self, outputs):
         super().set_motors(outputs)
-        # Right wheels forward and left wheels back turn the robot left,
-        # which a heading counts up.
-        left = (outputs["front_left"] + outputs["rear_left"]) / 2
-        right = (outputs["front_right"] + outputs["rear_right"]) / 2
-        self.sensors.value += (right - left) * 20
+        # Simulate the robot's confirmed rotation response, not the old
+        # theoretical wheel labels. Translation cancels out of this sum.
+        turn = (outputs["front_left"] - outputs["rear_left"]
+                + outputs["front_right"] - outputs["rear_right"]) / 2
+        self.sensors.value += turn * 20
 
 
 class MecanumSensorTests(unittest.TestCase):

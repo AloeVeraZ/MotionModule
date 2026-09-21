@@ -215,7 +215,27 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'rotation-held') {
+  if (scenario === 'station-drive-model') {
+    assert.equal(app.driveRequests().at(-1).payload.drive_model, 'project');
+    const selector = app.$('#useMecanumDrive');
+    selector.checked = true;
+    await selector.fire('change');
+    await app.settle();
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED');
+    assert(app.requests.some(item => item.url === '/api/stop'), 'Changing mixers must stop first');
+    const count = app.driveRequests().length;
+    await app.context.dashboard.sendDrive();
+    assert.equal(app.driveRequests().length, count, 'Changing mixers requires re-enabling');
+    await app.arm();
+    await app.forward();
+    assert.equal(app.driveRequests().at(-1).payload.drive_model, 'mecanum');
+    selector.checked = false;
+    await selector.fire('change');
+    await app.settle();
+    await app.arm();
+    await app.forward();
+    assert.equal(app.driveRequests().at(-1).payload.drive_model, 'project');
+  } else if (scenario === 'rotation-held') {
     await app.releaseForward();
     for (const [key, rotate] of [['q', 1], ['e', -1]]) {
       await app.window.fire('keydown', {key});
@@ -263,11 +283,10 @@ async function run(scenario) {
     assert.match(app.$('#servoNote').textContent, /refusing commands/i);
     assert(app.$('#servoSummary').querySelector('.warn'));
   } else if (scenario === 'tab-disarm') {
-    app.document.hidden = true;
-    await app.document.fire('visibilitychange');
+    app.context.dashboard.selectTab('diagnostics', 'wiring');
     await app.settle();
-    assert.equal(app.$('#driveEnable').checked, false, 'Leaving Drive must disarm its checkbox');
-    assert(app.requests.some(item => item.url === '/api/stop'), 'Leaving Drive must request a stop');
+    assert.equal(app.$('#driveEnable').checked, false, 'Leaving Mecanum Test must disarm its checkbox');
+    assert(app.requests.some(item => item.url === '/api/stop'), 'Leaving Mecanum Test must request a stop');
     const count = app.driveRequests().length;
     await app.forward({repeat: true});
     await app.context.dashboard.sendDrive();
