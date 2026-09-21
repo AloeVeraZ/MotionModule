@@ -187,7 +187,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b"Useful commands", debug)
         self.assertIn(b"Stops outputs, reloads the active robot project", debug)
         self.assertIn(b"Pi reboots automatically", debug)
-        self.assertIn(b"Enable drive", self.client.get("/drive").data)
+        self.assertIn(b"Enable Test Mecanum", self.client.get("/drive").data)
         self.assertNotIn(b">Arm control<", self.client.get("/drive").data)
         self.assertNotIn(b'data-page="hardware"', debug)
         self.assertNotIn(b'data-page="network"', debug)
@@ -217,14 +217,18 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="usbDevices"', debug)
         self.assertIn(b"hostname is this robot", debug)
 
-    def test_drive_is_its_own_page_with_bindings_and_a_controller(self):
+    def test_drive_page_is_the_built_in_mecanum_test_not_the_full_station(self):
         drive = self.client.get("/drive").data
         self.assertIn(b'data-view="drive"', drive)
         self.assertIn(b'id="driveEnable"', drive)
-        self.assertIn(b'id="bindingList"', drive)      # remappable keys
         self.assertIn(b'id="padIdentity"', drive)      # game controller
-        self.assertIn(b'id="customControls"', drive)   # project-declared controls
+        self.assertIn(b'id="wheelCheck"', drive)       # which corner each channel turns
         self.assertIn(b'id="openDriverStation"', drive)
+        self.assertIn(b"/api/mecanum/test", drive)     # built-in mixer, not robot code
+        # Key remapping and project-declared controls belong to the full
+        # station, which is the page that runs the deployed project.
+        self.assertNotIn(b'id="bindingList"', drive)
+        self.assertNotIn(b'id="customControls"', drive)
         self.assertNotIn(b'id="cameraStage"', drive)   # telemetry belongs to the full station
         self.assertNotIn(b'id="headingDial"', drive)
         self.assertIn(b"gamepadconnected", drive)
@@ -698,6 +702,31 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         # A left turn runs the front-left wheel (channel 1) backward.
         self.assertEqual(self.module.outputs[1], -0.4)
+
+    def test_mecanum_test_route_uses_the_built_in_mixer_not_the_project(self):
+        """Test Mecanum must work on a robot whose own drive() is broken."""
+
+        class BrokenDrive:
+            def drive(self, *_args, **_kwargs):
+                raise AssertionError("Test Mecanum must not call the project's drive()")
+
+            def stop(self):
+                pass
+
+        app = create_app(self.module, BrokenDrive(), project_name="Mecanum")
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        self.assertEqual(client.post("/api/mecanum/test", json={"sequence": 1}).status_code, 403)
+        response = client.post(
+            "/api/mecanum/test", headers=headers,
+            json={"sequence": 1, "forward": 0, "strafe": 0, "rotate": 1, "speed": 0.4},
+        )
+        self.assertEqual(response.status_code, 200)
+        # A left turn runs both left wheels back and both right wheels forward.
+        self.assertEqual(
+            [self.module.outputs[channel] for channel in (1, 2, 3, 4)],
+            [-0.4, -0.4, 0.4, 0.4],
+        )
 
     def test_page_reload_can_resume_above_server_sequence_floor(self):
         first = self.client.post(

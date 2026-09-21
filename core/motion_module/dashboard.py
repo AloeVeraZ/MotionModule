@@ -42,6 +42,7 @@ from .errors import MotionModuleError
 from .giga_firmware import bundled_firmware, flash_giga
 from .hardware_guide import hardware_guide
 from .input import available_input_gpios
+from .mecanum import MecanumTestDrive
 from .network import NetworkClient
 from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .runner import load_project
@@ -312,6 +313,7 @@ def create_app(
     asset_version = static_asset_version()
     build_ref = install_ref()
     active_drive = drive or IdleDrive(module)
+    mecanum_test_drive = MecanumTestDrive(module)
     network = network_client or NetworkClient()
     terminal = terminal_manager or TerminalManager()
     command_lock = threading.Lock()
@@ -719,6 +721,13 @@ def create_app(
 
     @app.post("/api/drive")
     def drive_command():
+        return run_drive_command(active_drive)
+
+    @app.post("/api/mecanum/test")
+    def mecanum_test_command():
+        return run_drive_command(mecanum_test_drive)
+
+    def run_drive_command(selected_drive):
         nonlocal last_sequence
         if not authorized():
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
@@ -734,7 +743,7 @@ def create_app(
                 if sequence <= last_sequence:
                     return jsonify({"ok": True, "ignored": "stale sequence"})
                 last_sequence = sequence
-                result = active_drive.drive(
+                result = selected_drive.drive(
                     body.get("forward", 0),
                     body.get("strafe", 0),
                     body.get("rotate", 0),

@@ -8,7 +8,7 @@ Five small files make the complete sample. Only one is required.
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
 | `sensors.py` | Every sensor, read by the Arduino GIGA, by name | No — without a GIGA, remove its import from `robot.py` |
 | `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
-| `dashboard.py` | Driver Station cameras, sensors, and key layout | No — delete it without affecting Drive |
+| `dashboard.py` | Driver Station cameras, sensors, and key layout | No — delete it without affecting driving |
 
 ## Try it
 
@@ -99,14 +99,16 @@ does the rest. `robot.py` imports this file, and the drive object carries it as
 3. Delete any IMU or pin in `sensors.py` that this robot does not have.
 
 With an IMU streaming, **Zero heading** and **Calibrate gyro** appear among the
-Drive page's controls, and autonomous turns a measured quarter turn instead of
-turning for a fixed time. Headings count up turning left, like `rotate`.
+full Driver Station's controls, and autonomous turns a measured quarter turn
+instead of turning for a fixed time. Headings count up turning left, like
+`rotate`.
 
 ## Full Driver Station: cameras, IMU, and sensors
 
 `dashboard.py` is discovered automatically when it is beside `robot.py`.
-The compact **Drive** page remains a drivetrain debugger. Press **Open full
-Driver Station** for the independent operator console. The sample shows two
+The **Drive** page remains a built-in Mecanum bench test and never calls this
+project. Press **Open full Driver Station** for the independent operator
+console, which does. The sample shows two
 offline camera placeholders, the first IMU in `sensors.py` on the heading dial,
 and every GIGA pin and IMU in the USB controller card. Add browser-readable
 stream URLs for a C920 or C270.
@@ -114,7 +116,7 @@ stream URLs for a C920 or C270.
 `driver_bindings()` in the same file decides which keys the Driver Station
 listens for. The sample keeps the usual W/S, A/D, Q/E and space; return only
 what you want to move. This is the robot's own layout and is unrelated to the
-**Drive** page, which each browser remaps for itself.
+**Drive** page's Test Mecanum, whose keys are fixed.
 
 The camera selector shows the front feed, rear feed, or both square viewports.
 

@@ -894,7 +894,7 @@
       <nav class="nav-links" aria-label="Main navigation">
         <a href="/" data-page="overview">Overview<small>Status &amp; activity</small></a>
         <a href="/diagnostics" data-page="diagnostics">Debug<small>Understand your hardware</small></a>
-        <a href="/drive" data-page="drive">Drive<small>Keys, controller, tests</small></a>
+        <a href="/drive" data-page="drive">Drive<small>Test Mecanum &amp; driver station</small></a>
         <a href="/code" data-page="code">Code<small>Build &amp; control</small></a>
       </nav>
       <div class="display-controls">
@@ -938,7 +938,10 @@
           <h1>System overview</h1>
           <p>Live outputs, connections, and controller health without the noise.</p>
         </div>
-        <div class="hero-side"><span class="pill good" id="safetyPill">OUTPUTS IDLE</span></div>
+        <div class="hero-side">
+          <span class="pill good" id="safetyPill">OUTPUTS IDLE</span>
+          <a class="button primary" id="overviewDriverStation" href="/driver-station">Open Driver Station&nbsp;&nearr;</a>
+        </div>
       </div>
 
       <div class="notice page-notice" id="simulationNotice" hidden><strong>Simulation mode.</strong> Explore the dashboard without moving hardware. Device responses below are simulated.</div>
@@ -1578,10 +1581,10 @@
       <div class="hero">
         <div>
           <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 8.5h11a4 4 0 0 1 3.9 4.9l-.8 3.6a2 2 0 0 1-3.4.9L14.8 15.5H9.2l-2.4 2.4a2 2 0 0 1-3.4-.9l-.8-3.6a4 4 0 0 1 3.9-4.9z"/><path d="M8.5 11v3M7 12.5h3"/></svg>Driver station</p>
-          <h1>Drive it.</h1>
-          <p>Keyboard or game controller, straight to the robot code you
-            deployed. Every control here stops the moment you let go, leave the
-            page, or lose connection.</p>
+          <h1>Test Mecanum</h1>
+          <p>A built-in sample to test a four-wheel Mecanum drive, independent
+            of your deployed robot code. Open the full Driver Station to run
+            your own project's drive logic and controls.</p>
         </div>
         <div class="hero-side">
           <span class="pill" id="driveWatchdog">500 MS WATCHDOG</span>
@@ -1600,115 +1603,100 @@
           <div><small>Outputs</small><strong>Idle</strong></div></div>
       </div>
 
-      <div class="tabs" role="tablist">
-        <button type="button" data-tab="pilot" class="active">Pilot</button>
-        <button type="button" data-tab="bindings">Controls</button>
+      <div class="notice danger page-notice">
+        <strong>Clear the area first.</strong> This moves the real robot
+        using the built-in Mecanum test. Raise the wheels for the first test
+        and keep the physical cutoff in reach. Release controls to stop.
       </div>
 
-      <!-- ----------------------------------------------------- pilot -->
-      <div data-panel="pilot">
-        <div class="notice danger page-notice">
-          <strong>Clear the area first.</strong> This moves the real robot
-          through your own <code>drive()</code> code. Keep a hand on the
-          physical cutoff.
-        </div>
-
-        <div class="grid equal">
-          <article class="card">
-            <div class="panel-head">
-              <h2>Enable drive</h2>
-              <span>Hold-to-move · releases stop</span>
-            </div>
-            <div class="panel-body stack">
-              <label class="check">
-                <input id="driveEnable" type="checkbox">
-                <span>I am deliberately enabling drive, the area is clear, and
-                  the physical cutoff is in reach.</span>
-              </label>
-              <label class="speed">Maximum speed <output id="speedLabel">40%</output>
-                <input id="speed" type="range" min="10" max="100" step="5" value="40">
-              </label>
-              <div class="keys" id="driveKeys"></div>
-              <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
-            </div>
-          </article>
-
-          <article class="card">
-            <div class="panel-head">
-              <h2>Game controller</h2>
-              <span id="padSummary">No controller detected</span>
-            </div>
-            <p class="lead">Plug in or pair any gamepad, then press a button on
-              it so the browser can see it. Left stick drives and strafes;
-              right stick turns.</p>
-            <div class="panel-body stack">
-              <div class="kv-grid" id="padIdentity">
-                <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
-              </div>
-              <div id="padAxes" class="stack"></div>
-              <p class="muted small">Detected from the browser's gamepad list.
-                A controller reporting the standard layout is mapped
-                automatically; anything else still shows its raw sticks so you
-                can check it is alive.</p>
-            </div>
-          </article>
-        </div>
-
-        <article class="card spaced">
+      <div class="grid equal">
+        <article class="card">
           <div class="panel-head">
-            <h2>Project controls</h2>
-            <span id="customControlSummary">Checking the robot project&hellip;</span>
+            <h2>Test Mecanum</h2>
+            <span>Hold-to-move · releases stop</span>
           </div>
-          <p class="lead">Extra buttons and sliders this robot's own code asks
-            for. Define <code>controls()</code> and <code>control(name, value)</code>
-            in your drive object and they appear here.</p>
-          <div class="panel-body" id="customControls"></div>
+          <div class="panel-body stack">
+            <label class="check">
+              <input id="driveEnable" type="checkbox">
+              <span>Enable Test Mecanum. The area is clear and
+                the physical cutoff is in reach.</span>
+            </label>
+            <label class="speed">Maximum speed <output id="speedLabel">40%</output>
+              <input id="speed" type="range" min="10" max="100" step="5" value="40">
+            </label>
+            <div class="keys" id="driveKeys"></div>
+            <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
+            <p class="small">W/S: forward/back. A/D: strafe left/right.
+              Q/E: turn left/right in place, with both left wheels moving
+              opposite to both right wheels. Assumes an X-pattern roller layout.</p>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="panel-head">
+            <h2>Game controller</h2>
+            <span id="padSummary">No controller detected</span>
+          </div>
+          <p class="lead">Plug in or pair any gamepad, then press a button on
+            it so the browser can see it. Left stick drives and strafes;
+            right stick turns.</p>
+          <div class="panel-body stack">
+            <div class="kv-grid" id="padIdentity">
+              <div class="kv"><small>Controller</small><strong>Not connected</strong></div>
+            </div>
+            <div id="padAxes" class="stack"></div>
+            <p class="muted small">Detected from the browser's gamepad list.
+              A controller reporting the standard layout is mapped
+              automatically; anything else still shows its raw sticks so you
+              can check it is alive.</p>
+          </div>
         </article>
       </div>
 
-      <!-- -------------------------------------------------- bindings -->
-      <div data-panel="bindings" hidden>
-        <div class="grid equal">
-          <article class="card">
-            <div class="panel-head">
-              <h2>Key bindings</h2>
-              <button class="button" id="resetBindings" type="button">Reset to defaults</button>
-            </div>
-            <p class="lead">Click a key, then press the one you want. Bindings
-              are saved in this browser.</p>
-            <div class="panel-body" id="bindingList"></div>
-          </article>
-
-          <article class="card">
-            <div class="panel-head">
-              <h2>How a command is built</h2>
-              <span>Same shape for keys and sticks</span>
-            </div>
-            <div class="panel-body stack">
-              <div class="snippet">
-                <button class="button copy" type="button" data-copy="#driveSnippet">Copy</button>
-<pre id="driveSnippet">def drive(self, forward, strafe, rotate, speed=0.5):
-    # forward  +1 ahead, -1 back      (left stick Y / W and S)
-    # strafe   +1 right, -1 left      (left stick X / D and A)
-    # rotate   +1 counter-clockwise   (right stick X / Q and E)
-    # speed    0.0 to 1.0 limit from the slider
-    ...
-
-def controls(self):
-    # optional: adds buttons and sliders to the Drive page
-    return [{"name": "intake", "label": "Intake", "kind": "hold"}]
-
-def control(self, name, value):
-    if name == "intake":
-        self.module.motor("driver_3a").set(value)</pre>
-              </div>
-              <p class="muted small">Both input methods call the same
-                <code>drive()</code>, so code written for the keyboard works
-                with a controller without changes.</p>
-            </div>
-          </article>
+      <article class="card spaced">
+        <div class="panel-head">
+          <h2>Mecanum test wiring</h2>
+          <span>Fixed motor assignments · BCM GPIO numbers</span>
         </div>
-      </div>
+        <div class="panel-body stack">
+          <p>This sample commands channels 1–4 directly, regardless of their
+            names in your project. It keeps the active <code>hardware.py</code>
+            polarity settings used by Test outputs; no pins are changed.</p>
+          <table class="data-table">
+            <thead><tr><th>Wheel</th><th>Motor / driver</th><th>First input wire</th><th>Second input wire</th></tr></thead>
+            <tbody>
+              <tr><td>Front left</td><td>1 / Driver 1A</td><td>IN1 · pin 37 / GPIO26</td><td>IN2 · pin 35 / GPIO19</td></tr>
+              <tr><td>Rear left</td><td>2 / Driver 1B</td><td>IN3 · pin 33 / GPIO13</td><td>IN4 · pin 31 / GPIO6</td></tr>
+              <tr><td>Front right</td><td>3 / Driver 2A</td><td>IN1 · pin 40 / GPIO21</td><td>IN2 · pin 38 / GPIO20</td></tr>
+              <tr><td>Rear right</td><td>4 / Driver 2B</td><td>IN3 · pin 36 / GPIO16</td><td>IN4 · pin 32 / GPIO12</td></tr>
+            </tbody>
+          </table>
+          <p class="small muted">These are the existing wires, not a rewiring
+            instruction. The test refuses a different motor pin map. Custom
+            buttons, sensors, and robot behavior belong in the full Driver Station.</p>
+        </div>
+      </article>
+
+      <article class="card spaced">
+        <div class="panel-head">
+          <h2>Which wheel is which?</h2>
+          <span>Enable Test Mecanum first · 50% power</span>
+        </div>
+        <div class="panel-body stack">
+          <p>Hold a button and watch which corner of the robot turns. The
+            mix above only works if each channel really drives the corner it
+            is named after.</p>
+          <div id="wheelCheck" class="stack"></div>
+          <p class="small muted">Driving and strafing look correct even when
+            two opposite corners are crossed &mdash; front&#8209;left with
+            rear&#8209;right, or front&#8209;right with rear&#8209;left.
+            Turning in place is the only move that shows it: the front pair
+            fights the rear pair and the robot twitches instead of spinning.
+            If a button turns the wrong corner, swap those two motors' leads
+            at the driver board. Never change a pin.</p>
+        </div>
+      </article>
+
     </section>
 
     <!-- =============================================================== -->
@@ -1974,7 +1962,9 @@ def create_drive(module):
      GET  /api/logs          service log
      GET  /api/projects/*    installed robot folders, sample download
      GET  /api/network/*     Wi-Fi status and scan
-     POST /api/drive, /api/stop, /api/motors/test, /api/servos/*,
+     POST /api/mecanum/test  the built-in Mecanum bench drive (this page)
+     POST /api/drive         the deployed project's drive() (full Driver Station)
+     POST /api/stop, /api/motors/test, /api/servos/*,
           /api/terminal/*, /api/network/*, /api/projects/deploy,
           /api/giga/firmware, /api/updates
 
@@ -2425,8 +2415,8 @@ function markDisconnected() {
 
 /* ----------------------------------------------------------- driver station */
 
-/* Two input paths, one command shape. Keys and sticks both resolve to
-   forward / strafe / rotate, so robot code never learns which was used. */
+/* The built-in test uses fixed keys; project bindings belong to the full
+   Driver Station. Old browser key overrides must not change this test. */
 
 const DEFAULT_BINDINGS = {
   forward: 'w', back: 's', left: 'a', right: 'd',
@@ -2436,30 +2426,13 @@ const AXIS_LABELS = {
   forward: 'Forward', back: 'Back', left: 'Strafe left', right: 'Strafe right',
   turnLeft: 'Turn left', turnRight: 'Turn right', stop: 'Stop everything',
 };
-const BINDINGS_KEY = 'motionmodule-bindings';
 const STICK_DEADZONE = 0.12;
 
-let bindings = { ...DEFAULT_BINDINGS };
-let capturing = null;
+const bindings = DEFAULT_BINDINGS;
 const heldKeys = new Set();
 let padIndex = null;
 let padCommand = null;
 let lastInputKind = 'none';
-
-function loadBindings() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(BINDINGS_KEY) || '{}');
-    for (const action of Object.keys(DEFAULT_BINDINGS)) {
-      if (typeof saved[action] === 'string' && saved[action]) bindings[action] = saved[action];
-    }
-  } catch (error) { /* defaults are fine */ }
-}
-
-function saveBindings() {
-  try {
-    localStorage.setItem(BINDINGS_KEY, JSON.stringify(bindings));
-  } catch (error) { /* the binding still applies for this page */ }
-}
 
 const keyLabel = key => key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
 const boundAction = key => Object.keys(bindings).find(
@@ -2479,33 +2452,6 @@ function renderDriveKeys() {
     return key;
   }));
 }
-
-function renderBindings() {
-  const list = $('#bindingList');
-  if (!list) return;
-  replaceWith(list, Object.keys(DEFAULT_BINDINGS).map(action => {
-    const row = element('div', 'test-row');
-    const label = element('span');
-    label.append(element('strong', null, AXIS_LABELS[action]),
-                 element('small', null, `Currently ${keyLabel(bindings[action])}`));
-    const button = element('button', 'button', capturing === action ? 'Press a key…' : 'Change');
-    button.type = 'button';
-    button.addEventListener('click', () => {
-      capturing = capturing === action ? null : action;
-      renderBindings();
-    });
-    row.append(label, button);
-    return row;
-  }));
-}
-
-$('#resetBindings')?.addEventListener('click', () => {
-  bindings = { ...DEFAULT_BINDINGS };
-  saveBindings();
-  renderBindings();
-  renderDriveKeys();
-  toast('Key bindings reset.');
-});
 
 /* ------------------------------------------------------------- game pads */
 
@@ -2617,7 +2563,7 @@ async function sendDrive() {
   lastInputKind = usingKeys ? 'keys' : pad ? 'pad' : 'none';
   setDriveSignals();
   try {
-    const response = await fetch('/api/drive', {
+    const response = await fetch('/api/mecanum/test', {
       method: 'POST',
       headers: apiHeaders,
       body: JSON.stringify({
@@ -2632,7 +2578,7 @@ async function sendDrive() {
     }
   } catch (error) {
     markDisconnected();
-    disarmDrive('Lost contact with the robot. Enable drive again when it is back.');
+    disarmDrive('Lost contact with the robot. Enable Test Mecanum again when it is back.');
   }
 }
 
@@ -2666,15 +2612,6 @@ async function stopAll() {
 }
 
 addEventListener('keydown', event => {
-  if (capturing) {
-    event.preventDefault();
-    bindings[capturing] = event.key;
-    capturing = null;
-    saveBindings();
-    renderBindings();
-    renderDriveKeys();
-    return;
-  }
   if (!driveEnabled() || !boundAction(event.key)) return;
   if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
   event.preventDefault();
@@ -2705,7 +2642,7 @@ $$('[data-stop]').forEach(button => button.addEventListener('click', () => {
 
 $('#driveEnable')?.addEventListener('change', event => {
   if (!event.target.checked) stopAll();
-  else toast('Drive enabled. Release everything to stop.');
+  else toast('Test Mecanum enabled. Release everything to stop.');
   setDriveSignals();
 });
 
@@ -2716,68 +2653,31 @@ if ($('#speed')) {
   });
 }
 
-/* ------------------------------------------------- project-declared controls */
+/* ------------------------------------------------------ wheel identity */
 
-async function loadCustomControls() {
-  const host = $('#customControls');
+/* Forward and strafe cannot tell a crossed diagonal apart; one wheel at a
+   time can. Pulsed through the same guarded motor test the Debug page uses. */
+
+function renderWheelCheck() {
+  const host = $('#wheelCheck');
   if (!host) return;
-  try {
-    const data = await jsonFetch('/api/drive/controls');
-    const summary = $('#customControlSummary');
-    if (!data.controls.length) {
-      if (summary) summary.textContent = 'None declared';
-      replaceWith(host, [element('p', 'muted small',
-        `${data.project} declares no extra controls. Add a controls() method to your drive object and they show up here.`)]);
-      return;
-    }
-    if (summary) summary.textContent = `${data.controls.length} from ${data.project}`;
-    replaceWith(host, data.controls.map(control => {
-      const row = element('div', 'test-row');
-      const label = element('span');
-      label.append(element('strong', null, control.label),
-                   element('small', null, control.detail || control.name));
-      row.append(label);
-      if (control.kind === 'slider') {
-        const slider = element('input');
-        slider.type = 'range';
-        slider.min = control.minimum; slider.max = control.maximum; slider.step = control.step;
-        slider.value = 0;
-        slider.addEventListener('input', () => sendCustomControl(control.name, slider.value));
-        row.append(slider);
-      } else if (control.kind === 'hold') {
-        const button = element('button', 'button hold primary', 'Hold');
-        button.type = 'button';
-        button.addEventListener('pointerdown', () => sendCustomControl(control.name, 1));
-        ['pointerup', 'pointercancel', 'pointerleave'].forEach(event =>
-          button.addEventListener(event, () => sendCustomControl(control.name, 0)));
-        row.append(button);
-      } else {
-        const button = element('button', 'button', control.kind === 'toggle' ? 'Toggle' : 'Run');
-        button.type = 'button';
-        let on = false;
-        button.addEventListener('click', () => {
-          on = control.kind === 'toggle' ? !on : true;
-          button.classList.toggle('primary', on);
-          sendCustomControl(control.name, on ? 1 : 0);
-        });
-        row.append(button);
-      }
-      return row;
-    }));
-  } catch (error) {
-    replaceWith(host, [element('p', 'muted small', error.message)]);
-  }
-}
-
-async function sendCustomControl(name, value) {
-  try {
-    await jsonFetch('/api/drive/control', {
-      method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ name, value: Number(value) }),
+  const wheels = [[1, 'Front left', 'Driver 1A'], [2, 'Rear left', 'Driver 1B'],
+                  [3, 'Front right', 'Driver 2A'], [4, 'Rear right', 'Driver 2B']];
+  replaceWith(host, wheels.map(([channel, corner, driver]) => {
+    const row = element('div', 'test-row');
+    const label = element('span');
+    label.append(element('strong', null, corner),
+                 element('small', null, `Channel ${channel} · ${driver}`));
+    const button = element('button', 'button hold primary', 'Hold to spin forward');
+    button.type = 'button';
+    bindMotorHold(button, channel, 0.5, {
+      guard: () => Boolean($('#driveEnable')?.checked),
+      warning: 'Enable Test Mecanum first, with the area clear.',
     });
-  } catch (error) {
-    toast(error.message, true);
-  }
+    button.addEventListener('contextmenu', event => event.preventDefault());
+    row.append(label, button);
+    return row;
+  }));
 }
 
 /* ------------------------------------------------ dashboard.py telemetry */
@@ -2959,9 +2859,7 @@ async function refreshTelemetry() {
   }
 }
 
-loadBindings();
 renderDriveKeys();
-renderBindings();
 
 /* ------------------------------------------------- hardware map + names */
 
@@ -3684,19 +3582,25 @@ async function installGigaFirmware() {
 
 /* ------------------------------------------------------- guarded tests */
 
-function bindMotorHold(button, channel, power) {
+/* The Debug page gates these on its own raised-wheel check; the Drive page's
+   wheel check reuses the Test Mecanum enable, which makes the same promise. */
+const motorSafeGuard = () => $('#motorSafe').checked;
+
+function bindMotorHold(button, channel, power, options = {}) {
+  const guard = options.guard || motorSafeGuard;
+  const warning = options.warning || 'Connect and confirm the raised-wheel check first.';
   let holding = false;
   const start = async event => {
     if (event.button !== 0 || holding) return;
     event.preventDefault();
-    if (!connected || !$('#motorSafe').checked) { toast('Connect and confirm the raised-wheel check first.', true); return; }
+    if (!connected || !guard()) { toast(warning, true); return; }
     holding = true;
     button.setPointerCapture?.(event.pointerId);
     const stop = stopAll();
     const generation = motorGeneration;
     if (!await stop || !holding || generation !== motorGeneration) { holding = false; return; }
     const pulse = async () => {
-      if (!holding || generation !== motorGeneration || !connected || !$('#motorSafe').checked) return;
+      if (!holding || generation !== motorGeneration || !connected || !guard()) return;
       const pending = jsonFetch('/api/motors/test', {method: 'POST', headers: apiHeaders, body: JSON.stringify({channel, power, confirmed: true})});
       testInFlight = pending;
       try { await pending; }
@@ -4323,7 +4227,7 @@ if (activePage === 'code') {
 }
 
 if (activePage === 'drive') {
-  loadCustomControls();
+  renderWheelCheck();
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);

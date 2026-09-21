@@ -87,9 +87,9 @@ be able to import the project before it can serve the dashboard.
 
 ### Optional full Driver Station telemetry
 
-The normal **Drive** page is deliberately a drivetrain debugger. Its **Open
-full Driver Station** button opens `/driver-station`, a separate operator
-console. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
+The **Drive** page is deliberately a drivetrain bench test and does not run
+your project at all. Its **Open full Driver Station** button opens
+`/driver-station`, the separate operator console that does. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
 one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
 sensor controller. MotionModule discovers it automatically; no import in
 `robot.py` is required, and deleting the file does not affect driving.
@@ -398,9 +398,10 @@ matched without case; a named key such as `ArrowUp` or `Escape` is matched as
 the browser reports it. If you bind a key another action already owns, that
 other action is left unassigned rather than one key meaning two things.
 
-This has nothing to do with the **Drive** debug page, which each browser remaps
-for itself and stores locally. Drive is for checking that a robot moves;
-the Driver Station is for driving it.
+This has nothing to do with the **Drive** page's **Test Mecanum**, which keeps
+fixed W/S, A/D, Q/E and space keys because it drives MotionModule's built-in
+mixer rather than your code. Test Mecanum is for checking that a Mecanum base
+moves; the Driver Station is for driving your robot.
 
 ## Manual testing
 
@@ -420,7 +421,8 @@ waiting for the watchdog, so a tap is a tap. Your `drive()` is called at roughly
 12 Hz whether or not anything is moving; keep it cheap and free of blocking
 calls.
 
-A drive object may also declare extra buttons and sliders for that page:
+A drive object may also declare extra buttons and sliders, which appear in the
+full Driver Station:
 
 ```python
 def controls(self):

@@ -199,10 +199,13 @@ Three pages, each split into tabs:
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
   (Wi-Fi, hostname, hotspot).
-- **Drive** — a compact drivetrain debugging tool: arm keyboard or
-  game-controller control, remap keys, and test project-declared controls.
-  **Open full Driver Station** launches the separate operator console with
-  cameras, IMU, Pi inputs, and USB sensor controllers.
+- **Drive** — **Test Mecanum**, a built-in four-wheel Mecanum bench drive
+  that runs from MotionModule's own mixer on channels 1-4, so a drivetrain can
+  be checked by keyboard or game controller before any robot code exists. A
+  wheel check names which corner each channel really turns. **Open full Driver
+  Station** launches the separate operator console, which runs the deployed
+  project's own `drive()` and shows cameras, IMU, Pi inputs, USB sensor
+  controllers, and the project's declared controls.
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
 
