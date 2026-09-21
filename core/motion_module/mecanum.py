@@ -8,39 +8,16 @@ Channels stay FL=1, RL=2, FR=3, RR=4 — the shipped wiring in AGENTS.md. The
 active hardware configuration applies each motor's ``inverted`` value once,
 inside the controller; this mixer never moves a pin or flips a motor.
 
-goBILDA's mecanum reference
----------------------------
-Forward is the baseline every other move is built from: all four wheels turn
-the same way, which is what a working robot already does. The other moves
-are that same forward value with some wheels' signs flipped.
-
-                          front_left  rear_left  front_right  rear_right
-    forward        (W)         +           +           +           +
-    backward       (S)         -           -           -           -
-    strafe right   (D)         +           -           -           +
-    strafe left    (A)         -           +           +           -
-    turn left  (Q)  CCW        -           -           +           +
-    turn right (E)  CW         +           +           -           -
-
-Strafe flips one diagonal. Turning flips one side: both left wheels oppose
-both right wheels, which is what spins the robot on the spot. Combining two
-of them cancels a wheel to zero, which is how the diagonal moves come out —
-forward plus strafe-left leaves the front-left and rear-right stopped while
-the other diagonal drives.
-
-Reading a fault from the robot
-------------------------------
-Those three patterns are what makes a wheel-position mix-up readable from the
-robot's behavior. Forward is blind to any channel swap. Strafe survives a
-diagonal swap (FL with RR, or FR with RL) because each diagonal already
-shares a sign, but it breaks loudly if a side or an axle is swapped. Turning
-is the only one a diagonal swap breaks: the front pair ends up fighting the
-rear pair, every axis cancels, and the robot twitches instead of spinning.
-
-So a base that drives and strafes correctly but will not turn in place has
-its two diagonal channels crossed somewhere between the driver board and the
-wheels. The Drive page's wheel check names which corner each channel really
-turns; fix the mix-up at the motor leads, never by renumbering pins here.
+Test-only rotation correction
+-----------------------------
+The owner confirmed W/S and A/D work, but Q physically drives both front
+wheels forward and both rear wheels backward. The nominal wheel labels do
+not explain that observed response. Based on those observations, reverse
+only channels 1 and 4's rotation contributions, not their forward/strafe
+contributions or global motor polarity. This is an empirical correction for
+Test Mecanum, pending a raised-wheel check, not a new general Mecanum formula
+or a verified diagnosis of crossed wiring. The full Driver Station and the
+student's robot.py keep their own mixer unchanged.
 """
 
 import math
@@ -59,14 +36,14 @@ WHEELS = (
 )
 
 # One row per wheel, as (forward, strafe-right, turn-right) signs. Read it
-# down a column to get one column of the table above. Forward is +1 for every
+# down a column to get the channel command signs. Forward is +1 for every
 # wheel on purpose: it is the direction the robot is known to drive, and the
 # other two moves are written as flips of it.
 MIX = {
-    FRONT_LEFT: (1, 1, 1),
+    FRONT_LEFT: (1, 1, -1),  # Test-only rotation correction; W/S and A/D unchanged.
     REAR_LEFT: (1, -1, 1),
     FRONT_RIGHT: (1, -1, -1),
-    REAR_RIGHT: (1, 1, -1),
+    REAR_RIGHT: (1, 1, 1),   # Test-only rotation correction; W/S and A/D unchanged.
 }
 
 

@@ -1,8 +1,7 @@
 """The Drive page's built-in Mecanum bench drive.
 
-These lock the three mixing patterns the Drive page relies on, because two of
-them look identical on a robot whose diagonal channels are crossed and only
-the third one gives that away. See core/motion_module/mecanum.py.
+Lock the working translations and the test-only rotation correction separately.
+Software assertions are not a substitute for the owner's physical turn check.
 """
 
 import unittest
@@ -45,7 +44,7 @@ class MecanumTestDriveTests(unittest.TestCase):
         self.assertGreater(front_left, 0)
         self.assertLess(front_right, 0)
 
-    def test_every_panel_of_the_gobilda_mecanum_reference(self):
+    def test_translation_panels_of_the_gobilda_mecanum_reference_are_unchanged(self):
         """goBILDA's arrow chart, one row per panel: 1 up, -1 down, 0 stopped.
 
         Forward is the row a working robot already proves; every other row is
@@ -59,8 +58,6 @@ class MecanumTestDriveTests(unittest.TestCase):
             "backward":          ((    -1,     0,     0), ( down, down, down, down)),
             "strafe right":      ((     0,     1,     0), (   up, down, down,   up)),
             "strafe left":       ((     0,    -1,     0), ( down,   up,   up, down)),
-            "turn left (Q)":     ((     0,     0,     1), ( down, down,   up,   up)),
-            "turn right (E)":    ((     0,     0,    -1), (   up,   up, down, down)),
             "diagonal up-left":  ((     1,    -1,     0), (  off,   up,   up,  off)),
             "diagonal up-right": ((     1,     1,     0), (   up,  off,  off,   up)),
             "diagonal down-left":((    -1,    -1,     0), ( down,  off,  off, down)),
@@ -75,15 +72,18 @@ class MecanumTestDriveTests(unittest.TestCase):
                 signs = tuple(0 if value == 0 else (1 if value > 0 else -1) for value in measured)
                 self.assertEqual(signs, expected)
 
-    def test_turning_in_place_opposes_the_left_side_to_the_right_side(self):
-        # The regression this page exists to catch: if the front pair opposes
-        # the rear pair instead, every axis cancels and the robot only twitches.
-        front_left, rear_left, front_right, rear_right = self.outputs(rotate=1)
-        self.assertEqual(front_left, rear_left)
-        self.assertEqual(front_right, rear_right)
-        self.assertEqual(front_left, -front_right)
-        # Positive rotate is a left turn, so the left wheels run backward.
-        self.assertLess(front_left, 0)
+    def test_rotation_only_reverses_channels_1_and_4_from_the_previous_test(self):
+        # The physical turn is to be confirmed by the owner. These assertions
+        # lock the requested electrical correction, not a measured motion.
+        self.assertEqual(self.outputs(rotate=1), [1, -1, 1, -1])
+        self.assertEqual(self.outputs(rotate=-1), [-1, 1, -1, 1])
+
+    def test_all_translation_combinations_are_identical_to_the_previous_mixer(self):
+        for forward in (-1, -0.3, 0, 0.6, 1):
+            for strafe in (-1, -0.3, 0, 0.6, 1):
+                before = [forward + strafe, forward - strafe, forward - strafe, forward + strafe]
+                scale = max(1, *(abs(power) for power in before))
+                self.assertEqual(self.outputs(forward, strafe), [power / scale for power in before])
 
     def test_speed_limits_the_command_and_combinations_stay_in_range(self):
         self.assertEqual(self.outputs(forward=1, speed=0.4), [0.4] * 4)

@@ -722,10 +722,10 @@ class DashboardTests(unittest.TestCase):
             json={"sequence": 1, "forward": 0, "strafe": 0, "rotate": 1, "speed": 0.4},
         )
         self.assertEqual(response.status_code, 200)
-        # A left turn runs both left wheels back and both right wheels forward.
+        # Test Mecanum's rotation-only correction does not use project code.
         self.assertEqual(
             [self.module.outputs[channel] for channel in (1, 2, 3, 4)],
-            [-0.4, -0.4, 0.4, 0.4],
+            [0.4, -0.4, 0.4, -0.4],
         )
 
     def test_page_reload_can_resume_above_server_sequence_floor(self):
@@ -832,7 +832,7 @@ class DashboardTests(unittest.TestCase):
                 client.post("/api/stop", headers=headers)
                 self.assertTrue(all(gpio.values[pin] == 0 for _, a, b in pairs for pin in (a, b)))
 
-    def test_both_rotation_routes_hold_full_selected_power_on_opposite_sides(self):
+    def test_rotation_correction_is_test_only_and_both_routes_hold_selected_power(self):
         config = load_project_config(EXAMPLE_DIR)
         gpio = MockGPIO()
         with MotionModule(config, gpio=gpio) as module:
@@ -840,10 +840,15 @@ class DashboardTests(unittest.TestCase):
             client = app.test_client()
             headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
             sequence = 0
-            # Fixed GPIOs after the existing B-output inversion. For Q,
-            # physical left wheels go backward and right wheels forward.
-            pairs = ((1, 19, 26), (2, 13, 6), (3, 21, 20), (4, 12, 16))
+            # The empirical rotation correction belongs ONLY to Test Mecanum.
+            # Project code in the full station retains its original signs.
             for route in ("/api/mecanum/test", "/api/drive"):
+                if route == "/api/mecanum/test":
+                    signs = (1, -1, 1, -1)
+                    pairs = ((1, 26, 19), (2, 13, 6), (3, 21, 20), (4, 16, 12))
+                else:
+                    signs = (-1, -1, 1, 1)
+                    pairs = ((1, 19, 26), (2, 13, 6), (3, 21, 20), (4, 12, 16))
                 for rotate in (1, -1):
                     for tick in range(15):
                         sequence += 1
@@ -856,7 +861,7 @@ class DashboardTests(unittest.TestCase):
                             self.assertNotIn("ignored", response.get_json())
                             self.assertEqual(
                                 [module.motor_values[c] for c in (1, 2, 3, 4)],
-                                [-0.4 * rotate, -0.4 * rotate, 0.4 * rotate, 0.4 * rotate],
+                                [0.4 * rotate * sign for sign in signs],
                             )
                             for _, positive, negative in pairs:
                                 driven, idle = (positive, negative) if rotate > 0 else (negative, positive)
