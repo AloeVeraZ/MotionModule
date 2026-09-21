@@ -35,11 +35,12 @@ above Driver 3. **Debug -> Wiring guide** shows every wire. Wire the same way
 to run the sample unchanged, or change the pins in `hardware.py` to match your
 own wiring.
 
-On this robot every driver's output A turns its motor backward on forward
-power, so `hardware.py` sets `inverted` on `front_left`, `front_right` and the
-two spare A channels. If one wheel spins backward, change only that motor's
-`inverted` value in `hardware.py`. Never change the math in `mix()` to cancel
-out one bad motor.
+The raised-wheel motor bench on this robot shows that all four drivetrain
+motors need `inverted` set in `hardware.py`. With that configuration,
+**Hold +** in the bench turns every wheel toward the front and one positive
+forward command turns all four wheels forward together. If one wheel spins
+backward, change only that motor's `inverted` value in `hardware.py`. Never
+change the math in `mix()` to cancel out one bad motor.
 
 ## Add a mechanism
 

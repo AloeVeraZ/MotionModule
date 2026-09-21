@@ -20,13 +20,13 @@ class ControllerTests(unittest.TestCase):
     def tearDown(self):
         self.module.close()
 
-    def test_positive_drives_each_installed_channel_the_way_it_ships(self):
+    def test_positive_uses_the_bench_confirmed_direction_for_the_drivetrain(self):
         self.module.set_motors({1: 0.5, 2: 0.5, 3: 0.5, 4: 0.5})
-        # Every driver's output A ships inverted, so positive drives its
-        # reverse wire; the output B channels use their forward wire.
-        for pin in (19, 13, 20, 16):
+        # All four reference drivetrain motors are inverted, so dashboard
+        # Hold + drives the second input of each A/B pair.
+        for pin in (19, 6, 20, 12):
             self.assertEqual(self.gpio.values[pin], 0.5)
-        for pin in (26, 6, 21, 12):
+        for pin in (26, 13, 21, 16):
             self.assertEqual(self.gpio.values[pin], 0)
 
     def test_inversion_swaps_which_gpio_a_positive_command_drives(self):
@@ -70,7 +70,7 @@ class ControllerTests(unittest.TestCase):
         motor.set(0.3)
         self.assertEqual(motor.name, "driver_3a")
         self.assertEqual(motor.channel, 5)
-        # Driver 3's output A ships inverted, like every other A channel.
+        # Spare output 3A retains its shipped inversion.
         self.assertEqual(self.gpio.values[9], 0.3)
         self.assertEqual(self.gpio.values[11], 0)
         servo = self.module.servo("servo_15")

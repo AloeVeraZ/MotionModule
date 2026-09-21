@@ -96,11 +96,11 @@ class MecanumTests(unittest.TestCase):
         with MotionModule(config, gpio=gpio) as module:
             drive = MecanumDrive(module)
             drive.drive(1, 0, 0, speed=0.25)
-            # The front wheels are inverted, so forward runs them on their
-            # reverse wires and the rear wheels on their forward wires.
-            for gpio_number in (19, 13, 20, 16):
+            # The motor bench established that all four drivetrain wheels are
+            # inverted, so one positive command turns all four forward.
+            for gpio_number in (19, 6, 20, 12):
                 self.assertEqual(gpio.values[gpio_number], 0.25)
-            for gpio_number in (26, 6, 21, 12):
+            for gpio_number in (26, 13, 21, 16):
                 self.assertEqual(gpio.values[gpio_number], 0)
             drive.stop()
             self.assertEqual(set(gpio.values.values()), {0})

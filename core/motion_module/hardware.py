@@ -92,17 +92,17 @@ HARDWARE = {
     #    7     driver_4a   Driver 4 · A      IN1 pin 15/GPIO22   IN2 pin 13/GPIO27   pin 14
     #    8     driver_4b   Driver 4 · B      IN3 pin 18/GPIO24   IN4 pin 16/GPIO23   pin 14
     #
-    # On the reference robot every driver's output A turns its motor backward
-    # on forward power, so channels 1, 3, 5 and 7 are inverted here and the
-    # output B channels are not. Run the raised-wheel test in Debug -> Test
-    # outputs, and flip `inverted` on any motor that turns the wrong way.
-    # Never fix direction in the drive math.
+    # On the reference robot, the raised-wheel motor bench confirms that
+    # drivetrain channels 1-4 need inversion so Hold + turns every wheel
+    # toward the front. The spare channels keep their existing A/B defaults.
+    # Flip only `inverted` if a mounted motor turns the wrong way; never move
+    # a pin or compensate for one motor in the drive math.
     # ------------------------------------------------------------------
     "motors": {
         1: {"name": "driver_1a", "forward_gpio": 26, "reverse_gpio": 19, "inverted": True},
-        2: {"name": "driver_1b", "forward_gpio": 13, "reverse_gpio": 6, "inverted": False},
+        2: {"name": "driver_1b", "forward_gpio": 13, "reverse_gpio": 6, "inverted": True},
         3: {"name": "driver_2a", "forward_gpio": 21, "reverse_gpio": 20, "inverted": True},
-        4: {"name": "driver_2b", "forward_gpio": 16, "reverse_gpio": 12, "inverted": False},
+        4: {"name": "driver_2b", "forward_gpio": 16, "reverse_gpio": 12, "inverted": True},
         5: {"name": "driver_3a", "forward_gpio": 11, "reverse_gpio": 9, "inverted": True},
         6: {"name": "driver_3b", "forward_gpio": 7, "reverse_gpio": 8, "inverted": False},
         7: {"name": "driver_4a", "forward_gpio": 22, "reverse_gpio": 27, "inverted": True},

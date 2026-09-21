@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import hardware_source, load_hardware_file, load_project_config
+from motion_module.controller import MotionModule
 from motion_module.dashboard import (
     STATIC_MAX_AGE_SECONDS,
     create_app,
@@ -19,6 +20,7 @@ from motion_module.dashboard import (
     load_drive,
     static_asset_version,
 )
+from motion_module.gpio import MockGPIO
 from motion_module.servo import MockServoController, Servo
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
@@ -763,6 +765,29 @@ class DashboardTests(unittest.TestCase):
         )
         self.assertEqual(accepted.status_code, 200)
         self.assertEqual(self.module.outputs[5], -0.5)
+
+    def test_motor_bench_plus_turns_all_four_drivetrain_motors_forward(self):
+        config = load_project_config(EXAMPLE_DIR)
+        gpio = MockGPIO()
+        with MotionModule(config, gpio=gpio) as module:
+            app = create_app(module, MecanumDrive(module), self.network, project_name="Mecanum")
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+
+            # The raised-wheel test established that physical forward uses
+            # the second input of all four fixed A/B driver pairs.
+            for channel, driven, idle in (
+                (1, 19, 26), (2, 6, 13), (3, 20, 21), (4, 12, 16),
+            ):
+                with self.subTest(channel=channel):
+                    response = client.post(
+                        "/api/motors/test", headers=headers,
+                        json={"channel": channel, "power": 0.5, "confirmed": True},
+                    )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(gpio.values[driven], 0.5)
+                    self.assertEqual(gpio.values[idle], 0)
+                    client.post("/api/stop", headers=headers)
 
     def test_a_project_without_autonomous_py_reports_it_and_cannot_start_one(self):
         status = self.client.get("/api/autonomous").get_json()
