@@ -8,6 +8,7 @@ import sys
 import zipfile
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from motion_module.config import hardware_source, load_hardware_file, load_project_config
@@ -22,6 +23,12 @@ from motion_module.dashboard import (
 )
 from motion_module.gpio import MockGPIO
 from motion_module.servo import MockServoController, Servo
+from motion_module.telemetry import (
+    DEFAULT_DRIVER_BINDINGS,
+    DEFAULT_GAMEPAD_STICKS,
+    DEFAULT_TOUCH_STICKS,
+    TelemetryDashboard,
+)
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(EXAMPLE_DIR) not in sys.path:
@@ -325,6 +332,27 @@ class DashboardTests(unittest.TestCase):
             self.assertIn(f'data-theme-choice="{theme}"', station)
         self.assertIn('id="mobileStop"', station)
 
+    def test_driver_station_has_touch_sticks_and_a_header_that_scrolls_away(self):
+        station = self.client.get("/driver-station").data.decode()
+        self.assertIn(f'src="/static/touch-sticks.js?v={static_asset_version()}"', station)
+        for control in ('id="leftStickPad"', 'id="rightStickPad"', 'data-turn="turn_left"',
+                        'data-turn="turn_right"', 'id="keyGrid"'):
+            self.assertIn(control, station)
+        # A touchscreen can add these; robot control, sticks and cameras always show.
+        for panel in ("status", "mechanisms", "imu", "pi_inputs", "usb_controllers"):
+            self.assertIn(f'data-touch-panel="{panel}"', station)
+        self.assertNotIn('data-touch-panel="cameras"', station)
+        # The header stays at the top of the page instead of covering a phone's screen.
+        self.assertNotIn("sticky", station)
+        self.assertNotIn("data-bar", station)
+        # Only the Driver Station has sticks; the workspace pages are unchanged.
+        self.assertNotIn("touch-sticks.js", self.client.get("/drive").data.decode())
+        script = self.client.get("/static/touch-sticks.js")
+        body = script.data
+        script.close()
+        self.assertEqual(script.status_code, 200)
+        self.assertIn(b"function createTouchStick", body)
+
     def test_static_assets_are_cacheable_but_downloads_are_not(self):
         response = self.client.get("/static/motionmodule.js")
         response.close()
@@ -606,6 +634,48 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual([item["kind"] for item in data["sensors"]], ["analog", "digital"])
         self.assertEqual(data["pi_inputs"], data["sensors"])
         self.assertTrue(data["pi_gpio"]["digital_only"])
+
+    def test_telemetry_carries_the_project_s_sticks_and_touchscreen_panels(self):
+        class Dashboard(TelemetryDashboard):
+            def touch_sticks(self):
+                return {"strafe": None, "rotate": "buttons"}
+
+            def gamepad_sticks(self):
+                return {"rotate": "-right_x", "curve": 2}
+
+            def touch_panels(self):
+                return ["imu"]
+
+        data = create_app(self.module, dashboard_telemetry=Dashboard()).test_client().get(
+            "/api/drive/telemetry").get_json()
+        self.assertEqual((data["touch_sticks"]["strafe"], data["touch_sticks"]["rotate"]), (None, "buttons"))
+        self.assertEqual((data["gamepad_sticks"]["rotate"], data["gamepad_sticks"]["curve"]), ("-right_x", 2.0))
+        self.assertEqual(data["touch_panels"], ["imu"])
+
+        # Without a dashboard.py the station still gets the default layout.
+        data = create_app(self.module).test_client().get("/api/drive/telemetry").get_json()
+        self.assertFalse(data["configured"])
+        self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
+        self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
+        self.assertEqual(data["touch_panels"], [])
+
+    def test_the_mecanum_sample_dashboard_loads_and_spells_out_the_default_controls(self):
+        # The sample keeps drive.sensors as self.sensors. That once made every
+        # snapshot fail, so the console never saw its cameras, IMU or keys.
+        giga = SimpleNamespace(snapshot=lambda: {"name": "Arduino GIGA R1 WiFi", "board_id": "arduino_giga_r1_wifi"})
+        for sensors in (None, SimpleNamespace(imus=[], giga=giga)):
+            with self.subTest(sensors=sensors):
+                drive = MecanumDrive(self.module, sensors=sensors)
+                telemetry = load_dashboard_telemetry(self.module, drive, EXAMPLE_DIR / "robot.py")
+                app = create_app(self.module, drive, dashboard_telemetry=telemetry, project_name="Mecanum")
+                response = app.test_client().get("/api/drive/telemetry")
+                data = response.get_json()
+                self.assertEqual(response.status_code, 200, data.get("error"))
+                self.assertEqual([camera["name"] for camera in data["cameras"]], ["Front camera", "Rear camera"])
+                self.assertEqual(data["driver_bindings"], DEFAULT_DRIVER_BINDINGS)
+                self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
+                self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
+                self.assertEqual(data["touch_panels"], [])
 
     def test_giga_is_auto_discovered_and_merged_with_project_pin_data(self):
         class Dashboard:

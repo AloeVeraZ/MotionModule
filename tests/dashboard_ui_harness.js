@@ -90,6 +90,11 @@ class Element {
     this.fire('close');
   }
   setPointerCapture() {}
+  // Tests give an element a size by setting rect; everything else is empty.
+  getBoundingClientRect() {
+    const {left = 0, top = 0, width = 0, height = 0} = this.rect || {};
+    return {left, top, width, height, right: left + width, bottom: top + height};
+  }
   get childElementCount() { return this.children.length; }
 }
 
@@ -206,7 +211,29 @@ function browser(now = 1700000000000) {
     await settle();
   }
   function setRobotStatus(patch) { Object.assign(currentStatus.robot, patch); }
-  return {$, context, document, window, requests, failures, intervals, driveEndpoint, driveRequests, settle, arm, forward, releaseForward, setRobotStatus};
+  function setTelemetry(patch) { Object.assign(currentTelemetry, patch); }
+  // One on-screen stick on a 200px pad. A round stick travels 40px each way;
+  // a one-way stick's track travels 56px along its length.
+  function stick(side) {
+    const pad = $(`#${side}StickPad`);
+    const sizes = {xy: [120, 120], x: [152, 56], y: [56, 152]};
+    const [width, height] = sizes[pad.dataset.axes] || [0, 0];
+    pad.rect = {left: 0, top: 0, width: 200, height: 200};
+    pad.querySelector('.stick-base').rect = {width, height};
+    pad.querySelector('.stick-knob').rect = {width: 40, height: 40};
+    const send = async (type, pointerId, clientX = 0, clientY = 0) => {
+      await pad.fire(type, {pointerId, pointerType: 'touch', button: 0, clientX, clientY});
+      await settle();
+    };
+    return {
+      pad,
+      down: (id, x, y) => send('pointerdown', id, x, y),
+      move: (id, x, y) => send('pointermove', id, x, y),
+      up: id => send('pointerup', id),
+    };
+  }
+  const motion = payload => ({forward: payload.forward, strafe: payload.strafe, rotate: payload.rotate});
+  return {$, context, document, window, requests, failures, intervals, driveEndpoint, driveRequests, settle, arm, forward, releaseForward, setRobotStatus, setTelemetry, stick, motion};
 }
 
 async function run(scenario) {
@@ -390,6 +417,140 @@ async function run(scenario) {
     await app.$('#cameraControls').querySelectorAll('button')[2].fire('click');
     assert(stage.classList.contains('single'), 'Choosing one camera expands it to a single square view');
     assert.equal(stage.querySelectorAll('[data-camera-id]').filter(frame => !frame.hidden).length, 1);
+  } else if (scenario === 'station-touch-sticks') {
+    await app.releaseForward();
+    const html = app.document.documentElement;
+    const tick = async () => {
+      await app.context.dashboard.sendDrive();
+      await app.settle();
+      return app.motion(app.driveRequests().at(-1).payload);
+    };
+    assert.equal(html.dataset.input, 'keys', 'A computer starts with the keys');
+    assert.equal(app.$('[data-touch-panel="imu"]').hidden, false, 'A computer shows every panel');
+    // The first touch anywhere brings up the sticks and the touchscreen layout.
+    await app.window.fire('pointerdown', {pointerType: 'touch', pointerId: 90});
+    assert.equal(html.dataset.input, 'touch');
+    for (const panel of ['status', 'mechanisms', 'imu', 'pi_inputs', 'usb_controllers']) {
+      assert.equal(app.$(`[data-touch-panel="${panel}"]`).hidden, true, `A touchscreen leaves out ${panel}`);
+    }
+    assert.equal(app.$('.right-column').hidden, true, 'An empty column folds away');
+    assert.equal(app.$('#controllerSummary').textContent, 'Touch sticks');
+    const left = app.stick('left');
+    const right = app.stick('right');
+    assert.equal(left.pad.dataset.axes, 'xy', 'The drive stick moves all the way round');
+    assert.equal(right.pad.dataset.axes, 'x', 'The turning stick only goes left and right');
+
+    // Touching down centres the stick under the thumb, so nothing moves yet.
+    await left.down(1, 100, 100);
+    assert.deepEqual(await tick(), {forward: 0, strafe: 0, rotate: 0});
+    await left.move(1, 100, 60);
+    assert.deepEqual(await tick(), {forward: 1, strafe: 0, rotate: 0}, 'Up drives forward');
+    await left.move(1, 140, 100);
+    assert.deepEqual(await tick(), {forward: 0, strafe: 1, rotate: 0}, 'Right strafes right');
+    await left.move(1, 100, 60);
+    await right.down(2, 100, 100);
+    await right.move(2, 72, 180);
+    const both = await tick();
+    assert.equal(both.forward, 1, 'Two thumbs work two sticks');
+    assert(both.rotate > 0.4 && both.rotate < 0.5, `Half way left turns left, past the deadzone: ${both.rotate}`);
+    assert.equal(both.strafe, 0, 'The turning stick ignores up and down');
+
+    // Lifting a thumb stops its stick at once, without waiting for the tick.
+    const count = app.driveRequests().length;
+    await left.up(1);
+    assert.equal(app.driveRequests().length, count + 1);
+    assert.equal(app.driveRequests().at(-1).payload.forward, 0);
+    assert(app.driveRequests().at(-1).payload.rotate > 0, 'The other thumb keeps turning');
+
+    // Stop lets go of a held stick, and that thumb stays inert after re-enabling.
+    await app.$('#mobileStop').fire('click');
+    await app.settle();
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED');
+    await app.arm();
+    await right.move(2, 44, 100);
+    assert.equal((await tick()).rotate, 0, 'A thumb held through Stop cannot drive');
+    await right.up(2);
+    await right.down(3, 100, 100);
+    await right.move(3, 170, 100);
+    assert.equal((await tick()).rotate, -1, 'A fresh touch pushed right turns right');
+    await right.up(3);
+
+    // A thumb that lands while the robot is disabled stays inert too.
+    await app.$('#disableButton').fire('click');
+    await app.settle();
+    await left.down(4, 100, 100);
+    await app.arm();
+    await left.move(4, 100, 60);
+    assert.equal((await tick()).forward, 0, 'A thumb that landed while disabled cannot drive');
+    await left.up(4);
+
+    // A bound key brings the keys back and lets go of the sticks.
+    await left.down(5, 100, 100);
+    await left.move(5, 60, 100);
+    await app.window.fire('keydown', {key: 's'});
+    await app.settle();
+    assert.equal(html.dataset.input, 'keys');
+    assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: -1, strafe: 0, rotate: 0},
+      'The stick let go when the keys came back');
+    assert.equal(app.$('[data-touch-panel="imu"]').hidden, false, 'Every panel is back');
+    assert.equal(app.$('#controllerSummary').textContent, 'Keyboard');
+  } else if (scenario === 'station-stick-layout') {
+    await app.releaseForward();
+    // The first telemetry sets the default layouts; then the robot is enabled.
+    await app.context.dashboard.refreshTelemetry();
+    await app.settle();
+    await app.arm();
+    app.setTelemetry({
+      touch_sticks: {forward: 'left_y', strafe: null, rotate: 'buttons', deadzone: 0, curve: 1},
+      gamepad_sticks: {forward: '-right_y', strafe: 'left_x', rotate: null, deadzone: 0.2, curve: 2},
+      touch_panels: ['imu', 'mechanisms'],
+    });
+    const stops = app.requests.filter(item => item.url === '/api/stop').length;
+    await app.context.dashboard.refreshTelemetry();
+    await app.settle();
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED', 'A new stick layout disables');
+    assert(app.requests.filter(item => item.url === '/api/stop').length > stops, 'and stops the outputs');
+    await app.window.fire('pointerdown', {pointerType: 'touch', pointerId: 90});
+
+    // touch_sticks(): forward and back on the left stick, Turn buttons on the right.
+    assert.equal(app.$('#leftStickPad').dataset.axes, 'y');
+    assert.equal(app.$('#rightStickPad').hidden, true);
+    assert.equal(app.$('#rightStick').hidden, false);
+    assert.equal(app.$('#rightStick').querySelector('.turn-buttons').hidden, false);
+    assert.equal(app.$('#leftStick').querySelector('.turn-buttons').hidden, true);
+    assert.equal(app.$('#rightStick').querySelector('.stick-caption strong').textContent, 'Turn');
+    assert.match(app.$('#touchLegend').textContent, /^Left stick drives, the Turn buttons turn\./);
+    // touch_panels(): the IMU and mechanisms join robot control, sticks and cameras.
+    assert.equal(app.$('[data-touch-panel="imu"]').hidden, false);
+    assert.equal(app.$('[data-touch-panel="mechanisms"]').hidden, false);
+    assert.equal(app.$('[data-touch-panel="pi_inputs"]').hidden, true);
+    assert.equal(app.$('[data-touch-panel="status"]').hidden, true);
+    assert.equal(app.$('.right-column').hidden, false, 'The IMU keeps its column');
+
+    await app.arm();
+    const left = app.stick('left');
+    await left.down(1, 100, 100);
+    await left.move(1, 160, 72);
+    const turnLeft = app.$('#rightStick').querySelector('[data-turn="turn_left"]');
+    await turnLeft.fire('pointerdown', {pointerId: 2, pointerType: 'touch', button: 0});
+    await app.settle();
+    assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 0.5, strafe: 0, rotate: 1},
+      'Half way up drives at half; sideways does nothing; Turn left turns left');
+    assert(turnLeft.classList.contains('active'));
+    await turnLeft.fire('pointerup', {pointerId: 2});
+    await app.settle();
+    assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 0.5, strafe: 0, rotate: 0});
+    await left.up(1);
+
+    // gamepad_sticks(): the right stick drives, flipped, past a deadzone and along a curve.
+    app.context.navigator.getGamepads = () => [
+      {index: 0, id: 'Test pad (STANDARD GAMEPAD)', mapping: 'standard', axes: [0.6, 0, 0.9, 0.6]},
+    ];
+    await app.context.dashboard.sendDrive();
+    await app.settle();
+    assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 0.25, strafe: 0.25, rotate: 0});
+    assert.equal(app.$('#controllerSummary').textContent, 'Touch + gamepad');
+    assert.match(app.$('#keyLegend').textContent, /Controller: left stick strafes, right stick drives\./);
   } else if (scenario === 'update-password') {
     const line = {ref: 'testing', label: 'Testing line', current: true, action: 'Update now'};
     const dialog = app.$('#updatePasswordDialog');

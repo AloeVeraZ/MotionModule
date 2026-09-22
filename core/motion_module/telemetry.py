@@ -31,6 +31,30 @@ DEFAULT_DRIVER_BINDINGS = {
     "turn_right": "e",
     "stop": " ",
 }
+
+# The Driver Station's sticks: a game controller's, and the on-screen pair a
+# phone or tablet drives with. Both use these four axis names, and each of
+# drive()'s three motions takes one of them. Pushing a stick up or right
+# drives forward, strafes right or turns right.
+STICK_AXES = ("left_x", "left_y", "right_x", "right_y")
+STICK_MOTIONS = ("forward", "strafe", "rotate")
+DEFAULT_GAMEPAD_STICKS = {
+    "forward": "left_y",
+    "strafe": "left_x",
+    "rotate": "right_x",
+    "deadzone": 0.12,
+    "curve": 1.0,
+}
+DEFAULT_TOUCH_STICKS = {
+    "forward": "left_y",
+    "strafe": "left_x",
+    "rotate": "right_x",
+    "deadzone": 0.1,
+    "curve": 1.0,
+}
+# A touchscreen always shows robot control, the sticks and the cameras. These
+# are the panels a project can add to that.
+TOUCH_PANELS = ("status", "mechanisms", "imu", "pi_inputs", "usb_controllers")
 SENSOR_KINDS = {"analog", "digital", "text"}
 STATUSES = {"ok", "warning", "fault", "offline", "unknown"}
 
@@ -109,7 +133,11 @@ class TelemetryDashboard:
         return ()
 
     def pi_inputs(self):
-        return self.sensors()
+        # A dashboard that keeps its robot's sensor object in self.sensors,
+        # as the Mecanum sample does, hides the legacy sensors() method. It
+        # has no Raspberry Pi inputs of its own then, and must not fail.
+        legacy = self.sensors
+        return legacy() if callable(legacy) else ()
 
     def usb_controllers(self):
         return ()
@@ -125,6 +153,40 @@ class TelemetryDashboard:
 
         return {}
 
+    def gamepad_sticks(self):
+        """Which game-controller stick drives, strafes and turns.
+
+        Give a motion one of "left_x", "left_y", "right_x" or "right_y".
+        Pushing that stick up or right drives forward, strafes right or turns
+        right; a "-" in front flips it, and None switches the motion off.
+        "deadzone" (0 to 0.5) ignores wobble near the middle, and a "curve"
+        above 1 (up to 3) gives finer control there. Anything left out keeps
+        its default: left stick drives and strafes, right stick turns.
+        """
+
+        return {}
+
+    def touch_sticks(self):
+        """The on-screen sticks a phone or tablet drives with.
+
+        The same form as gamepad_sticks(). A stick with two motions moves all
+        the way round and a stick with one moves only that way, so by default
+        the right stick only goes left and right. "rotate": "buttons" gives
+        Turn left and Turn right buttons instead of a turning stick.
+        """
+
+        return {}
+
+    def touch_panels(self):
+        """Extra panels a touchscreen shows.
+
+        A phone or tablet shows robot control, the sticks and the cameras.
+        List any of "status", "mechanisms", "imu", "pi_inputs" and
+        "usb_controllers" to show those as well.
+        """
+
+        return ()
+
     def snapshot(self) -> dict[str, Any]:
         pi_inputs = self.pi_inputs()
         return {
@@ -133,6 +195,9 @@ class TelemetryDashboard:
             "pi_inputs": pi_inputs,
             "usb_controllers": self.usb_controllers(),
             "driver_bindings": self.driver_bindings(),
+            "gamepad_sticks": self.gamepad_sticks(),
+            "touch_sticks": self.touch_sticks(),
+            "touch_panels": self.touch_panels(),
             # Kept for projects and clients written for MotionModule 0.10.
             "sensors": pi_inputs,
         }
@@ -145,6 +210,9 @@ def empty_snapshot() -> dict[str, Any]:
         "pi_inputs": [],
         "usb_controllers": [],
         "driver_bindings": dict(DEFAULT_DRIVER_BINDINGS),
+        "gamepad_sticks": dict(DEFAULT_GAMEPAD_STICKS),
+        "touch_sticks": dict(DEFAULT_TOUCH_STICKS),
+        "touch_panels": [],
         "sensors": [],
     }
 
@@ -355,6 +423,62 @@ def _driver_bindings(value: Any) -> dict[str, str]:
     return bindings
 
 
+def _sticks(value: Any, defaults: Mapping[str, Any], *, turn_buttons: bool = False) -> dict[str, Any]:
+    """Fill in the defaults around the stick axes a project chose.
+
+    The same two passes as the keys, because one axis must never move the
+    robot two ways: what the project asked for is placed first, then each
+    remaining motion takes its default axis if nobody claimed it, and is
+    switched off if somebody did. None, False or "off" switches a motion off
+    on purpose. Only the on-screen sticks can turn with "buttons".
+    """
+
+    chosen = _mapping(value) or {}
+    sticks: dict[str, Any] = {}
+    taken: set[str] = set()
+    for motion in STICK_MOTIONS:
+        if motion not in chosen:
+            continue
+        raw = chosen.get(motion)
+        axis = "" if raw is None or raw is False else _text(raw, 16).casefold().replace(" ", "")
+        if axis in {"", "none", "off"}:
+            sticks[motion] = None
+            continue
+        if turn_buttons and motion == "rotate" and axis == "buttons":
+            sticks[motion] = axis
+            continue
+        name = axis[1:] if axis.startswith("-") else axis
+        if name not in STICK_AXES or name in taken:
+            continue
+        taken.add(name)
+        sticks[motion] = axis
+    for motion in STICK_MOTIONS:
+        if motion in sticks:
+            continue
+        axis = defaults[motion]
+        if axis in taken:
+            sticks[motion] = None
+            continue
+        taken.add(axis)
+        sticks[motion] = axis
+    deadzone = _number(chosen.get("deadzone"))
+    curve = _number(chosen.get("curve"))
+    sticks["deadzone"] = defaults["deadzone"] if deadzone is None else min(max(deadzone, 0.0), 0.5)
+    sticks["curve"] = defaults["curve"] if curve is None else min(max(curve, 1.0), 3.0)
+    return sticks
+
+
+def _touch_panels(value: Any) -> list[str]:
+    """The panels a project added to the touchscreen layout, each once."""
+
+    if isinstance(value, str):
+        value = (value,)
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        return []
+    named = {_text(candidate, 24).casefold() for candidate in value}
+    return [panel for panel in TOUCH_PANELS if panel in named]
+
+
 def normalize_snapshot(value: Any) -> dict[str, Any]:
     """Return a bounded, JSON-safe Driver Station snapshot."""
 
@@ -391,6 +515,9 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
         "pi_inputs": sensors,
         "usb_controllers": controllers,
         "driver_bindings": _driver_bindings(item.get("driver_bindings")),
+        "gamepad_sticks": _sticks(item.get("gamepad_sticks"), DEFAULT_GAMEPAD_STICKS),
+        "touch_sticks": _sticks(item.get("touch_sticks"), DEFAULT_TOUCH_STICKS, turn_buttons=True),
+        "touch_panels": _touch_panels(item.get("touch_panels")),
         "sensors": sensors,
     }
 

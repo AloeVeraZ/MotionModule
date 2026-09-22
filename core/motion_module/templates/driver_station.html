@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
 <script src="/static/hold-controls.js?v={{ asset_version }}"></script>
+<script src="/static/touch-sticks.js?v={{ asset_version }}"></script>
 <style>
 /* ==========================================================================
    MotionModule Driver Station
@@ -29,12 +30,18 @@
    /static/motionmodule.css; this sheet lays out a three-column console for a
    laptop, which folds to two columns on a tablet or the Pi's own screen and
    to one on a phone. Light, dark, and system themes share the same tokens.
+
+   A touchscreen drives with two on-screen sticks instead of keys and shows
+   only robot control, the sticks and the cameras, plus any panels the
+   project's dashboard.py adds. A phone turned on its side keeps the sticks
+   under the thumbs at the bottom corners.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- header */
 
+/* The header stays at the top of the page instead of following the scroll:
+   on a phone it would cover a third of the screen. */
 .station-header {
-  position: sticky; top: .5rem; z-index: 40;
   display: flex; align-items: center; justify-content: space-between; gap: 1rem;
   min-height: 3.5rem;
   margin: .5rem .75rem 0;
@@ -43,9 +50,7 @@
   border-top-color: var(--edge-top);
   border-radius: var(--radius);
   background: var(--surface-2);
-  transition: box-shadow .25s ease;
 }
-.station-header.scrolled { box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .8); }
 .station-brand { display: flex; align-items: center; gap: .625rem; min-width: 0; }
 .station-mark {
   display: grid; place-items: center;
@@ -205,6 +210,73 @@ kbd.unbound b { color: var(--faint); }
 .axis-track { height: 5px; overflow: hidden; border-radius: 99px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-soft); }
 .axis-track i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); }
 .axis output { font: 700 .875rem/1 var(--font-display); text-align: right; }
+
+/* ----------------------------------------------------------- touch sticks */
+
+/* The page sets html[data-input] to "touch" on a touch-first device or once
+   the screen is touched, and to "keys" when a bound key is pressed. */
+.touch-drive, .touch-legend { display: none; }
+html[data-input="touch"] .touch-drive { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+html[data-input="touch"] .touch-drive.single { grid-template-columns: minmax(0, 1fr); }
+html[data-input="touch"] .touch-legend { display: block; }
+html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display: none; }
+.stick-zone { display: grid; grid-template-rows: minmax(0, 1fr); grid-auto-rows: auto; gap: .5rem; min-width: 0; }
+.stick-pad {
+  position: relative;
+  display: grid; place-items: center;
+  min-height: 11.5rem;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-sm);
+  background: var(--well);
+  cursor: grab;
+  touch-action: none;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.stick-pad.held { cursor: grabbing; }
+.stick-base {
+  display: grid; place-items: center;
+  width: min(7.5rem, calc(100% - .5rem)); aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background:
+    linear-gradient(var(--line-soft), var(--line-soft)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line-soft), var(--line-soft)) center / 100% 1px no-repeat,
+    var(--surface);
+  box-shadow: inset 0 2px 12px rgba(0, 0, 0, .3);
+  transition: transform .18s var(--ease);
+}
+/* A stick given one motion moves only that way. */
+.stick-pad[data-axes="x"] .stick-base { width: min(9.5rem, calc(100% - .5rem)); height: 3.5rem; aspect-ratio: auto; border-radius: 999px; }
+.stick-pad[data-axes="y"] .stick-base { width: 3.5rem; height: min(9.5rem, calc(100% - .5rem)); aspect-ratio: auto; border-radius: 999px; }
+.stick-knob {
+  width: 3rem; height: 3rem;
+  border: 1px solid var(--edge-top);
+  border-radius: 50%;
+  background: var(--control);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .12);
+  transition: transform .14s var(--ease), background-color .15s ease;
+}
+.stick-pad.held .stick-base, .stick-pad.held .stick-knob { transition: none; }
+.stick-pad.held .stick-knob { border-color: transparent; background: var(--accent-fill); box-shadow: var(--accent-glow); }
+.touch-drive.locked .stick-base, .touch-drive.locked .turn-buttons .drive-key { opacity: .45; }
+.touch-drive.locked .stick-pad::after {
+  content: "Enable to drive";
+  position: absolute; left: 0; right: 0; bottom: .5rem;
+  color: var(--faint);
+  font: 700 .6875rem/1 var(--font-display);
+  letter-spacing: var(--tracking-label);
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.stick-caption { display: grid; gap: .25rem; min-width: 0; text-align: center; }
+.stick-caption strong { overflow: hidden; font: 700 .875rem/1.1 var(--font-display); letter-spacing: var(--tracking-label); text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.stick-caption output { overflow: hidden; color: var(--muted); font: 600 .6875rem/1.1 var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.turn-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.turn-buttons .drive-key { min-height: 5.5rem; }
+.turn-buttons svg { width: 1.625rem; height: 1.625rem; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* --------------------------------------------------------------- cameras */
 
@@ -414,7 +486,7 @@ kbd.unbound b { color: var(--faint); }
   .right-column { grid-column: 2; grid-row: 2; }
 }
 @media (max-width: 700px) {
-  .station-header { position: relative; top: auto; margin: .75rem 1rem 0; padding: .75rem; gap: .75rem; }
+  .station-header { margin: .75rem 1rem 0; padding: .75rem; gap: .75rem; }
   .station-brand { flex-basis: 100%; }
   .station-brand strong { white-space: normal; line-height: 1.15; font-size: 1.25rem; }
   .header-center { order: 0; width: auto; }
@@ -446,10 +518,78 @@ kbd.unbound b { color: var(--faint); }
   .station-tools .theme-switch, .station-tools .exit-link { flex: 1; }
   .theme-labeled button { flex: 1; }
 }
+
+/* ------------------------------------------------------------ touchscreen */
+
+/* The sticks need more room than the key grid on a wide tablet, and the
+   right column folds away when no panel of it is shown. */
+@media (min-width: 1101px) {
+  html[data-input="touch"] .station-grid { grid-template-columns: minmax(20rem, 24rem) minmax(24rem, 1fr) 19.5rem; }
+  html[data-input="touch"] .station-grid.no-right { grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr); }
+}
+
+/* A phone on its side. The header keeps to one line where it can; it
+   scrolls away like the rest of the page. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .station-header { flex-wrap: wrap; margin: .5rem .75rem 0; padding: .375rem .5rem .375rem .75rem; gap: .5rem .75rem; }
+  .station-brand { flex-basis: auto; }
+  .station-brand strong { white-space: nowrap; font-size: 1.125rem; }
+  .station-brand small, .clock-chip, .project-chip span, .exit-long { display: none; }
+  .exit-short { display: inline; }
+  .header-center { order: 0; width: auto; }
+  .station-tools { width: auto; margin-left: auto; justify-content: flex-end; }
+  .theme-labeled button { min-width: 44px; padding-inline: .5rem; }
+  .camera-frame { aspect-ratio: 16 / 9; }
+
+  /* Driving by touch: the sticks sit under the thumbs in the bottom
+     corners, and the page scrolls between them. */
+  html[data-input="touch"] {
+    --hud-zone: clamp(9rem, 24vw, 14rem);
+    --hud-left: max(1.25rem, env(safe-area-inset-left));
+    --hud-right: max(1.25rem, env(safe-area-inset-right));
+    --hud-bottom: max(.75rem, env(safe-area-inset-bottom));
+    --hud-side-left: calc(var(--hud-left) + var(--hud-zone) + .75rem);
+    --hud-side-right: calc(var(--hud-right) + var(--hud-zone) + .75rem);
+  }
+  html[data-input="touch"] .station-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem;
+    padding: .75rem var(--hud-side-right) calc(4.5rem + var(--hud-bottom)) var(--hud-side-left);
+  }
+  html[data-input="touch"] .station-grid > .column { grid-column: 1; grid-row: auto; }
+  html[data-input="touch"] .signal-strip { padding-left: var(--hud-side-left); padding-right: var(--hud-side-right); }
+  html[data-input="touch"] .connection-banner { margin-left: var(--hud-side-left); margin-right: var(--hud-side-right); }
+  html[data-input="touch"] .input-panel,
+  html[data-input="touch"] .input-panel > .panel-body,
+  html[data-input="touch"] .touch-drive { display: contents; }
+  html[data-input="touch"] .input-panel > .panel-head,
+  html[data-input="touch"] .input-panel > .panel-body > :not(.touch-drive) { display: none; }
+  html[data-input="touch"] .stick-zone {
+    position: fixed; z-index: 60; bottom: var(--hud-bottom);
+    width: var(--hud-zone); height: min(15rem, calc(100vh - 9rem));
+    padding: .5rem;
+    border: 1px solid var(--line);
+    border-top-color: var(--edge-top);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: 0 16px 36px -18px rgba(0, 0, 0, .75);
+  }
+  html[data-input="touch"] .stick-zone[data-side="left"] { left: var(--hud-left); }
+  html[data-input="touch"] .stick-zone[data-side="right"] { right: var(--hud-right); }
+  html[data-input="touch"] .stick-pad { min-height: 0; }
+  html[data-input="touch"] .turn-buttons .drive-key { min-height: 0; height: 100%; }
+  html[data-input="touch"] .camera-stage { grid-template-columns: minmax(0, 1fr); }
+  html[data-input="touch"] #stopButton { display: none; } /* The fixed Stop stays in reach. */
+  html[data-input="touch"] .station-mobile-stop {
+    display: flex; position: fixed; z-index: 70;
+    left: var(--hud-side-left); right: var(--hud-side-right); bottom: var(--hud-bottom);
+    min-height: 48px; justify-content: center; font-size: 1rem;
+  }
+}
 </style>
 </head>
 <body>
-<header class="station-header" data-bar>
+<header class="station-header">
   <div class="station-brand">
     <span class="station-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7l6 10 6-10v10M21 7v10"/></svg></span>
     <div><strong>MotionModule Driver Station</strong><small>Competition console</small></div>
@@ -468,7 +608,7 @@ kbd.unbound b { color: var(--faint); }
   </div>
 </header>
 
-<div class="signal-strip" aria-label="Robot status">
+<div class="signal-strip" aria-label="Robot status" data-touch-panel="status">
   <div class="signal" id="commsSignal"><i></i><small>Communications</small><strong>Connecting</strong></div>
   <div class="signal" id="codeSignal"><i></i><small>Robot code</small><strong>Checking</strong></div>
   <div class="signal" id="inputSignal"><i></i><small>Driver input</small><strong>None</strong></div>
@@ -509,13 +649,32 @@ kbd.unbound b { color: var(--faint); }
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel input-panel">
       <div class="panel-head"><h2>Driver input</h2><span id="controllerSummary">Keyboard</span></div>
       <div class="panel-body stack">
         <div class="controller-name" id="controllerName">No game controller detected</div>
         <div id="axisList" class="stack"></div>
+        <div class="touch-drive locked" id="touchDrive">
+          <div class="stick-zone" id="leftStick" data-side="left" role="group" aria-label="Left stick">
+            <div class="stick-pad" id="leftStickPad" data-axes="xy"><div class="stick-base"><i class="stick-knob"></i></div></div>
+            <div class="turn-buttons" hidden>
+              <button type="button" class="drive-key" data-turn="turn_left" aria-label="Hold to turn left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17v-3a6 6 0 0 0-6-6H5"/><path d="M9 4 5 8l4 4"/></svg>Turn left</button>
+              <button type="button" class="drive-key" data-turn="turn_right" aria-label="Hold to turn right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17v-3a6 6 0 0 1 6-6h9"/><path d="m15 4 4 4-4 4"/></svg>Turn right</button>
+            </div>
+            <div class="stick-caption"><strong>Drive · Strafe</strong><output>0.00</output></div>
+          </div>
+          <div class="stick-zone" id="rightStick" data-side="right" role="group" aria-label="Right stick">
+            <div class="stick-pad" id="rightStickPad" data-axes="x"><div class="stick-base"><i class="stick-knob"></i></div></div>
+            <div class="turn-buttons" hidden>
+              <button type="button" class="drive-key" data-turn="turn_left" aria-label="Hold to turn left"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 17v-3a6 6 0 0 0-6-6H5"/><path d="M9 4 5 8l4 4"/></svg>Turn left</button>
+              <button type="button" class="drive-key" data-turn="turn_right" aria-label="Hold to turn right"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17v-3a6 6 0 0 1 6-6h9"/><path d="m15 4 4 4-4 4"/></svg>Turn right</button>
+            </div>
+            <div class="stick-caption"><strong>Turn</strong><output>0.00</output></div>
+          </div>
+        </div>
         <div class="key-grid" id="keyGrid"></div>
         <p class="empty-copy" id="keyLegend">Loading this project's key layout&hellip;</p>
+        <p class="empty-copy touch-legend" id="touchLegend">Left stick drives and strafes, right stick turns. Lift your thumb to stop.</p>
       </div>
     </section>
   </aside>
@@ -528,14 +687,14 @@ kbd.unbound b { color: var(--faint); }
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-touch-panel="mechanisms">
       <div class="panel-head"><h2>Mechanism controls</h2><span id="controlSummary">Checking project</span></div>
       <div class="panel-body control-list" id="controlList"><p class="empty-copy">Project controls will appear here.</p></div>
     </section>
   </div>
 
   <aside class="column right-column">
-    <section class="panel">
+    <section class="panel" data-touch-panel="imu">
       <div class="panel-head"><h2>Gyroscope / IMU</h2><span id="imuStatus">Not configured</span></div>
       <div class="panel-body imu-body">
         <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
@@ -548,7 +707,7 @@ kbd.unbound b { color: var(--faint); }
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-touch-panel="pi_inputs">
       <div class="panel-head"><h2>Raspberry Pi inputs</h2><span id="piSensorSummary">0 / 20</span></div>
       <div class="panel-body">
         <p class="pin-note" id="piInputNote">Unused BCM pins are detected from the active motor map. Pi header inputs are digital.</p>
@@ -557,7 +716,7 @@ kbd.unbound b { color: var(--faint); }
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-touch-panel="usb_controllers">
       <div class="panel-head"><h2>USB sensor controllers</h2><span id="usbControllerSummary">Scanning</span></div>
       <div class="panel-body controller-list" id="usbControllerList"><p class="empty-copy">Plug in a supported USB controller such as an Arduino GIGA R1 WiFi.</p></div>
     </section>
@@ -582,14 +741,59 @@ let connected = false;
 let armed = false;
 let heldKeys = new Set();
 const touchActions = new Set();
+const canDrive = () => armed && connected && mode === 'teleop';
+const stopFromControl = () => { $('#armConfirm').checked = false; setArmed(false); };
 const touchDrive = createHoldControls({
-  enabled: () => armed && connected && mode === 'teleop',
+  enabled: canDrive,
   change: (action, held) => {
     held ? touchActions.add(action) : touchActions.delete(action);
     paintKeys(); sendDrive();
   },
-  stop: () => { $('#armConfirm').checked = false; setArmed(false); },
+  stop: stopFromControl,
 });
+/* The on-screen sticks a touchscreen drives with. What each stick axis does
+   comes from dashboard.py's touch_sticks(), and a game controller's from its
+   gamepad_sticks(); both name the same four axes, with up and right
+   positive. */
+const DEFAULT_TOUCH_STICKS = {forward: 'left_y', strafe: 'left_x', rotate: 'right_x', deadzone: .1, curve: 1};
+const DEFAULT_GAMEPAD_STICKS = {forward: 'left_y', strafe: 'left_x', rotate: 'right_x', deadzone: .12, curve: 1};
+// Up or right drives forward, strafes right or turns right. drive() counts
+// rotate up turning left, so a turn is sent the other way round.
+const MOTIONS = {
+  forward: {label: 'Drive', verb: 'drives', sign: 1},
+  strafe: {label: 'Strafe', verb: 'strafes', sign: 1},
+  rotate: {label: 'Turn', verb: 'turns', sign: -1},
+};
+let touchSticks = {...DEFAULT_TOUCH_STICKS};
+let gamepadSticks = {...DEFAULT_GAMEPAD_STICKS};
+let touchPanels = [];
+let stickSignature = '';
+let inputMode = '';
+const stickState = {left: {x: 0, y: 0}, right: {x: 0, y: 0}};
+const turnActions = new Set();
+const turnButtons = createHoldControls({
+  enabled: canDrive,
+  change: (action, held) => {
+    held ? turnActions.add(action) : turnActions.delete(action);
+    paintTurnButtons(); paintStickReadouts(); sendDrive();
+  },
+  stop: stopFromControl,
+});
+const sticks = {};
+for (const side of ['left', 'right']) {
+  sticks[side] = createTouchStick($(`#${side}StickPad`), {
+    enabled: canDrive,
+    change: next => {
+      const was = stickState[side];
+      stickState[side] = next;
+      paintStickReadouts();
+      // Starting and letting go are sent at once; the drag in between rides
+      // the regular command tick instead of flooding the robot.
+      if (!(was.x || was.y) || !(next.x || next.y)) sendDrive();
+    },
+  });
+}
+$$('[data-turn]').forEach(button => turnButtons.bind(button, button.dataset.turn));
 let padIndex = null;
 let cameraMode = 'both';
 let cameraSignature = '';
@@ -628,6 +832,7 @@ function updateEnableButton() {
   // label, so the choice is locked while the robot is enabled.
   $('#modeTeleop').disabled = armed;
   $('#modeAuto').disabled = armed || !autoState.configured;
+  $('#touchDrive').classList.toggle('locked', !canDrive());
 }
 
 function setMode(next) {
@@ -712,6 +917,11 @@ async function stopAll() {
   heldKeys.clear();
   touchActions.clear();
   touchDrive.clear();
+  turnActions.clear();
+  turnButtons.clear();
+  paintTurnButtons();
+  // A thumb still on a stick is let go, and does nothing until it lifts.
+  Object.values(sticks).forEach(stick => stick.clear());
   paintKeys();
   // /api/stop also ends a running autonomous routine, so every path that
   // disables the robot - button, stop key, blur, lost link - stops the script.
@@ -737,22 +947,61 @@ function axisBar(label, value) {
   return row;
 }
 
+/* One stick layout turned into drive()'s three numbers. read(axis) gives a
+   stick position from -1 to 1 with up and right positive. The deadzone is
+   cut out and the rest stretched back to the full range, then the curve
+   softens the middle. */
+function stickCommand(layout, read) {
+  const shape = value => {
+    const size = Math.abs(value);
+    if (!(size > layout.deadzone)) return 0;
+    return Math.sign(value) * Math.min(1, (size - layout.deadzone) / (1 - layout.deadzone)) ** layout.curve;
+  };
+  const command = {};
+  for (const [motion, {sign}] of Object.entries(MOTIONS)) {
+    const axis = layout[motion];
+    const flipped = typeof axis === 'string' && axis.startsWith('-');
+    const value = typeof axis === 'string' && axis !== 'buttons'
+      ? shape(read(flipped ? axis.slice(1) : axis)) * (flipped ? -sign : sign) : 0;
+    command[motion] = Math.round(value * 1000) / 1000 || 0;
+  }
+  return command;
+}
+const moving = command => Boolean(command.forward || command.strafe || command.rotate);
+
+function renderInputSummary(pad = activePad()) {
+  const name = pad ? (pad.id || 'Game controller').split('(')[0].trim() || 'Game controller' : 'No game controller detected';
+  $('#controllerName').textContent = name;
+  $('#controllerName').hidden = inputMode === 'touch' && !pad;
+  $('#controllerSummary').textContent = inputMode === 'touch' ? (pad ? 'Touch + gamepad' : 'Touch sticks')
+    : pad ? (pad.mapping === 'standard' ? 'Standard gamepad' : 'Raw gamepad') : 'Keyboard';
+}
+
 function readPad() {
   const pad = activePad();
+  renderInputSummary(pad);
   if (!pad) {
-    $('#controllerName').textContent = 'No game controller detected';
-    $('#controllerSummary').textContent = 'Keyboard';
     replaceWith($('#axisList'), []);
     return null;
   }
-  const deadzone = value => Math.abs(value) < .12 ? 0 : value;
+  // Browsers count a stick's Y axis up as negative.
   const axes = pad.axes || [];
-  const command = {forward: -deadzone(axes[1] || 0), strafe: deadzone(axes[0] || 0), rotate: -deadzone(axes[2] || 0)};
-  const raw = (pad.id || 'Game controller').split('(')[0].trim() || 'Game controller';
-  $('#controllerName').textContent = raw;
-  $('#controllerSummary').textContent = pad.mapping === 'standard' ? 'Standard gamepad' : 'Raw gamepad';
+  const reading = {left_x: axes[0], left_y: -axes[1], right_x: axes[2], right_y: -axes[3]};
+  const command = stickCommand(gamepadSticks, axis => Number(reading[axis]) || 0);
   replaceWith($('#axisList'), [axisBar('Forward', command.forward), axisBar('Strafe', command.strafe), axisBar('Turn', command.rotate)]);
-  return command.forward || command.strafe || command.rotate ? command : null;
+  return moving(command) ? command : null;
+}
+
+function touchCommand() {
+  if (inputMode !== 'touch') return IDLE;
+  const command = stickCommand(touchSticks, axis => {
+    const [side, direction] = axis.split('_');
+    return (stickState[side] || {})[direction] || 0;
+  });
+  if (touchSticks.rotate === 'buttons') {
+    command.rotate = (turnActions.has('turn_left') ? 1 : 0) - (turnActions.has('turn_right') ? 1 : 0);
+  }
+  return command;
 }
 
 const keyAxis = (positive, negative) =>
@@ -761,10 +1010,14 @@ const keyAxis = (positive, negative) =>
 
 async function sendDrive() {
   if (!armed || !connected || mode !== 'teleop') return;
+  // A held key wins, then the on-screen sticks, then a game controller.
   const keys = {forward: keyAxis('forward','back'), strafe: keyAxis('right','left'), rotate: keyAxis('turn_left','turn_right')};
-  const keyboardMoving = keys.forward || keys.strafe || keys.rotate;
-  const command = keyboardMoving ? keys : readPad() || IDLE;
-  setSignal('#inputSignal', 'good', keyboardMoving ? (touchActions.size ? 'Touch / mouse' : 'Keyboard') : command === IDLE ? 'Ready' : 'Controller');
+  const keyboardMoving = moving(keys);
+  const touch = keyboardMoving ? IDLE : touchCommand();
+  const touchMoving = moving(touch);
+  const command = keyboardMoving ? keys : touchMoving ? touch : readPad() || IDLE;
+  setSignal('#inputSignal', 'good', keyboardMoving ? (touchActions.size ? 'Touch / mouse' : 'Keyboard')
+    : touchMoving ? 'Touch sticks' : command === IDLE ? 'Ready' : 'Controller');
   try {
     const response = await fetch('/api/drive', {
       method: 'POST', headers: apiHeaders,
@@ -801,14 +1054,129 @@ function renderKeys() {
     key.append(element('b', null, keyLabel(bound)), document.createTextNode(ACTION_LABELS[action]));
     return key;
   }));
-  const legend = $('#keyLegend');
-  if (legend) {
-    const named = action => bindings[action] ? keyLabel(bindings[action]) : 'unassigned';
-    legend.textContent =
-      `${named('forward')}/${named('back')} drive, ${named('left')}/${named('right')} strafe, `
-      + `${named('turn_left')}/${named('turn_right')} turn, ${named('stop')} disables and stops. `
-      + 'Hold an on-screen button to move; release to stop. Keyboard bindings come from dashboard.py. Controller: left stick drive and strafe, right stick turn.';
+  renderLegend();
+}
+
+/* Which motions a layout gives one stick, in drive() order. */
+const stickMotions = (layout, side) => Object.keys(MOTIONS).filter(motion =>
+  typeof layout[motion] === 'string' && layout[motion].replace(/^-/, '').startsWith(`${side}_`));
+// Turn buttons go under the right stick, or on the left when only the right
+// side has a stick.
+const turnButtonSide = () => stickMotions(touchSticks, 'right').length && !stickMotions(touchSticks, 'left').length ? 'left' : 'right';
+
+function describeSticks(layout) {
+  const words = list => list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0];
+  const parts = ['left', 'right']
+    .map(side => [side, stickMotions(layout, side).map(motion => MOTIONS[motion].verb)])
+    .filter(([, verbs]) => verbs.length)
+    .map(([side, verbs]) => `${side} stick ${words(verbs)}`);
+  if (layout.rotate === 'buttons') parts.push('the Turn buttons turn');
+  return parts.join(', ') || 'no stick drives';
+}
+
+function renderLegend() {
+  const named = action => bindings[action] ? keyLabel(bindings[action]) : 'unassigned';
+  $('#keyLegend').textContent =
+    `${named('forward')}/${named('back')} drive, ${named('left')}/${named('right')} strafe, `
+    + `${named('turn_left')}/${named('turn_right')} turn, ${named('stop')} disables and stops. `
+    + 'Hold an on-screen button to move; release to stop. Keys and sticks come from dashboard.py. '
+    + `Controller: ${describeSticks(gamepadSticks)}.`;
+  const touch = describeSticks(touchSticks);
+  $('#touchLegend').textContent = `${touch[0].toUpperCase()}${touch.slice(1)}. `
+    + 'Lift your thumb to stop; the red button disables everything.';
+}
+
+/* Shape the two sticks for touch_sticks(): a stick with two motions moves
+   all the way round, a stick with one moves only that way, and a stick
+   with none is hidden. */
+function renderSticks() {
+  const buttons = touchSticks.rotate === 'buttons';
+  const buttonSide = turnButtonSide();
+  for (const side of ['left', 'right']) {
+    const motions = stickMotions(touchSticks, side);
+    const axes = {x: false, y: false};
+    motions.forEach(motion => { axes[touchSticks[motion].endsWith('_x') ? 'x' : 'y'] = true; });
+    sticks[side].configure(axes);
+    const zone = $(`#${side}Stick`);
+    const withButtons = buttons && buttonSide === side;
+    $(`#${side}StickPad`).hidden = !motions.length;
+    zone.querySelector('.turn-buttons').hidden = !withButtons;
+    zone.hidden = !motions.length && !withButtons;
+    zone.querySelector('.stick-caption strong').textContent =
+      [...motions, ...(withButtons ? ['rotate'] : [])].map(motion => MOTIONS[motion].label).join(' · ');
   }
+  $('#touchDrive').classList.toggle('single', $('#leftStick').hidden || $('#rightStick').hidden);
+  paintStickReadouts();
+}
+
+function paintStickReadouts() {
+  const command = touchCommand();
+  const signed = value => `${value > 0 ? '+' : value < 0 ? '−' : ''}${Math.abs(value).toFixed(2)}`;
+  const buttonSide = touchSticks.rotate === 'buttons' ? turnButtonSide() : null;
+  for (const side of ['left', 'right']) {
+    const motions = [...stickMotions(touchSticks, side), ...(buttonSide === side ? ['rotate'] : [])];
+    $(`#${side}Stick`).querySelector('.stick-caption output').textContent =
+      motions.map(motion => signed(command[motion])).join(' · ');
+  }
+}
+function paintTurnButtons() { $$('[data-turn]').forEach(button => button.classList.toggle('active', turnActions.has(button.dataset.turn))); }
+
+/* The layout comes with the telemetry, four times a second; it only
+   changes when a project is deployed. Like a new key layout, a new stick
+   layout never inherits a moving stick. */
+function applyStickLayout(data) {
+  const layout = (value, defaults) => {
+    const merged = {...defaults, ...(value && typeof value === 'object' ? value : {})};
+    merged.deadzone = Math.min(.5, Math.max(0, Number(merged.deadzone) || 0));
+    merged.curve = Math.min(3, Math.max(1, Number(merged.curve) || 1));
+    return merged;
+  };
+  const touch = layout(data.touch_sticks, DEFAULT_TOUCH_STICKS);
+  const pad = layout(data.gamepad_sticks, DEFAULT_GAMEPAD_STICKS);
+  const panels = Array.isArray(data.touch_panels) ? data.touch_panels.map(String) : [];
+  const signature = JSON.stringify([touch, pad, panels]);
+  if (signature === stickSignature) return;
+  stickSignature = signature;
+  touchSticks = touch;
+  gamepadSticks = pad;
+  touchPanels = panels;
+  turnActions.clear();
+  turnButtons.clear();
+  paintTurnButtons();
+  if (armed) setArmed(false);
+  renderSticks();
+  applyTouchPanels();
+  renderLegend();
+}
+
+/* A touchscreen shows robot control, the sticks and the cameras, plus the
+   panels touch_panels() names. A computer shows everything. */
+function applyTouchPanels() {
+  const touch = inputMode === 'touch';
+  $$('[data-touch-panel]').forEach(node => { node.hidden = touch && !touchPanels.includes(node.dataset.touchPanel); });
+  const right = $('.right-column');
+  right.hidden = [...right.querySelectorAll('[data-touch-panel]')].every(node => node.hidden);
+  $('.station-grid').classList.toggle('no-right', right.hidden);
+}
+
+/* Keys on a computer, sticks on a touchscreen. A touch-first device starts
+   with the sticks; touching the screen brings them up, and pressing a bound
+   key brings the keys back. */
+function setInputMode(next) {
+  if (next === inputMode) return;
+  inputMode = next;
+  document.documentElement.dataset.input = next;
+  // Nothing held on the controls that are going away may keep driving.
+  touchActions.clear();
+  touchDrive.clear();
+  turnActions.clear();
+  turnButtons.clear();
+  Object.values(sticks).forEach(stick => stick.clear());
+  paintKeys();
+  paintTurnButtons();
+  applyTouchPanels();
+  renderInputSummary();
+  paintStickReadouts();
 }
 
 /* Only rebuild when the layout actually changed; the telemetry poll runs at
@@ -973,7 +1341,7 @@ function renderSensors(data) {
 }
 
 async function refreshTelemetry() {
-  try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); renderCameras(data); renderImu(data.imu); renderSensors(data); }
+  try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); applyStickLayout(data); renderCameras(data); renderImu(data.imu); renderSensors(data); }
   catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; }
 }
 
@@ -1016,6 +1384,27 @@ $('#speed').addEventListener('input', () => { $('#speedValue').textContent=`${$(
    case, a named key such as ArrowUp is compared as-is. */
 const eventKey = event => event.key.length === 1 ? event.key.toLowerCase() : event.key;
 
+/* Touching the screen brings up the sticks; pressing a bound key on a
+   keyboard brings the keys back. */
+addEventListener('pointerdown', event => {
+  if (inputMode === 'touch' || !['touch', 'pen'].includes(event.pointerType)) return;
+  setInputMode('touch');
+  // The key under the finger is on its way out and must not start a hold.
+  if (event.target?.closest?.('#keyGrid')) { event.preventDefault(); event.stopPropagation(); }
+}, true);
+addEventListener('keydown', event => {
+  if (inputMode !== 'keys' && boundKeys().has(eventKey(event))) setInputMode('keys');
+}, true);
+const touchFirst = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
+touchFirst?.addEventListener?.('change', () => setInputMode(touchFirst.matches ? 'touch' : 'keys'));
+// Turning the phone moves the sticks out from under the thumbs, so they let go.
+let viewportWidth = window.innerWidth;
+addEventListener('resize', () => {
+  if (window.innerWidth === viewportWidth) return;
+  viewportWidth = window.innerWidth;
+  Object.values(sticks).forEach(stick => stick.clear());
+});
+
 addEventListener('keydown', event => {
   if (!armed || ['INPUT','BUTTON'].includes(document.activeElement.tagName)) return;
   const key = eventKey(event);
@@ -1034,6 +1423,8 @@ addEventListener('keyup', event => {
 addEventListener('blur',()=>setArmed(false)); addEventListener('pagehide',stopAll); document.addEventListener('visibilitychange',()=>{if(document.hidden)setArmed(false);});
 addEventListener('gamepaddisconnected',()=>{padIndex=null;setArmed(false);});
 
+setInputMode(touchFirst && touchFirst.matches ? 'touch' : 'keys');
+renderSticks();
 renderKeys();
 loadControls();
 refreshStatus();

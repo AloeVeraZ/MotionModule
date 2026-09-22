@@ -80,7 +80,8 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         station_dom.feed(station_rendered)
         station_script = re.search(r"<script>(.*?)</script>", station_rendered, re.DOTALL).group(1)
         station_script = station_script[:station_script.rfind("renderKeys();")]
-        station_script = hold_script + "\n" + station_script
+        sticks_script = (ROOT / "core/motion_module/static/touch-sticks.js").read_text(encoding="utf-8")
+        station_script = hold_script + "\n" + sticks_script + "\n" + station_script
         cls.station_fixture = {"nodes": station_dom.nodes, "script": station_script, "kind": "station"}
 
     def run_behavior(self, scenario, fixture=None):
@@ -154,6 +155,12 @@ class DashboardUIBehaviorTests(unittest.TestCase):
 
     def test_full_station_renders_cameras_imu_pi_inputs_and_usb_controller(self):
         self.run_behavior("station-telemetry-layout", self.station_fixture)
+
+    def test_a_touchscreen_drives_with_two_sticks_that_let_go_safely(self):
+        self.run_behavior("station-touch-sticks", self.station_fixture)
+
+    def test_dashboard_py_lays_out_the_sticks_panels_and_game_controller(self):
+        self.run_behavior("station-stick-layout", self.station_fixture)
 
 
 if __name__ == "__main__":

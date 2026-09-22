@@ -9,7 +9,7 @@ Six small Python files make the complete sample. Only one is required.
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
 | `sensors.py` | Every sensor, read by the Arduino GIGA, by name | No — without a GIGA, remove its import from `robot.py` |
 | `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
-| `dashboard.py` | Driver Station cameras, sensors, and key layout | No — delete it without affecting driving |
+| `dashboard.py` | Driver Station cameras, sensors, keys, and sticks | No — delete it without affecting driving |
 
 ## Try it
 
@@ -70,6 +70,12 @@ claw.release()
 After deploying, open **Driver Station**, tick the enable box, then use W/S to
 drive, A/D to strafe, Q/E to rotate, and Space to stop. Start with the speed
 limit low.
+
+On a phone or tablet the keys give way to two on-screen sticks: the left one
+drives and strafes all the way round, the right one turns left and right. Lift
+your thumbs to stop; the red button disables everything. Turned on its side, a
+phone keeps the sticks in the bottom corners, and the page shows only robot
+control, the sticks and the cameras.
 
 The sample imports `motion_module.mecanum.mix`, the same confirmed mixer used
 by the default **Debug → Drive Test**. Forward, strafe, rotation, and combined commands
@@ -140,8 +146,12 @@ stream URLs for a C920 or C270.
 
 `driver_bindings()` in the same file decides which keys the Driver Station
 listens for. The sample keeps the usual W/S, A/D, Q/E and space; return only
-what you want to move. This is the robot's own layout and is unrelated to the
-**Debug → Drive Test**, whose keys are fixed.
+what you want to move. `gamepad_sticks()` and `touch_sticks()` decide which
+stick of a game controller, and of the on-screen pair, drives, strafes and
+turns, and `touch_panels()` adds panels to a phone's layout. The sample spells
+out every default; see [the Driver Station's controls](../../docs/CODING.md#the-driver-stations-controls).
+This is the robot's own layout and is unrelated to the **Debug → Drive Test**,
+whose keys are fixed.
 
 The camera selector shows the front feed, rear feed, or both square viewports.
 

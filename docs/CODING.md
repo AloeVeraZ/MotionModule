@@ -25,7 +25,7 @@ MyRobot/
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
 ├── sensors.py     # optional: what is wired to the Arduino GIGA, by name
 ├── autonomous.py  # optional: the routine the robot runs by itself
-├── dashboard.py   # optional: Driver Station cameras, sensors, key layout
+├── dashboard.py   # optional: Driver Station cameras, sensors, keys, sticks
 └── helpers.py     # optional: any other Python files you want
 ```
 
@@ -124,8 +124,8 @@ Keep Space as a safety stop, not an actuator command. Releasing servo pulses
 does not mechanically hold a loaded mechanism: support it safely before testing.
 
 This file affects only Debug. The full Driver Station still uses `robot.py`
-(or its explicitly selected confirmed Mecanum mixer). `dashboard.py` key
-remapping and autonomous code do not change Drive Test.
+(or its explicitly selected confirmed Mecanum mixer). `dashboard.py` key and
+stick layouts and autonomous code do not change Drive Test.
 
 ### Optional full Driver Station telemetry
 
@@ -424,24 +424,82 @@ Three things are worth knowing:
 While autonomous is running, manual drive commands are refused rather than
 queued, so the driver and the routine can never fight over the motors.
 
-## The Driver Station's keyboard
+## The Driver Station's controls
 
-The competition console's key layout belongs to the robot, so it comes from
-`dashboard.py`:
+The competition console's controls belong to the robot, so they come from
+`dashboard.py`. A computer drives with the keys, or a game controller when one
+is plugged in. A phone or tablet drives with two on-screen sticks instead: the
+page shows them on a touch-first device, or as soon as the screen is touched,
+and brings the keys back when a bound key is pressed. Every method below is
+optional, and each returns only what you want to change.
+
+### Keys
 
 ```python
 def driver_bindings(self):
     return {"turn_left": "z", "turn_right": "c", "stop": "Escape"}
 ```
 
-Return only what you want to move; anything left out keeps its default — W/S
-drive, A/D strafe, Q/E turn, space disables and stops. A single character is
-matched without case; a named key such as `ArrowUp` or `Escape` is matched as
-the browser reports it. If you bind a key another action already owns, that
-other action is left unassigned rather than one key meaning two things.
+Anything left out keeps its default — W/S drive, A/D strafe, Q/E turn, space
+disables and stops. A single character is matched without case; a named key
+such as `ArrowUp` or `Escape` is matched as the browser reports it. If you bind
+a key another action already owns, that other action is left unassigned rather
+than one key meaning two things.
 
-This has nothing to do with **Debug → Drive Test**, which keeps fixed W/S,
-A/D, Q/E and Space keys. Change its motor/servo mapping in `test.py`, not its keys.
+### Game controller and touch sticks
+
+`gamepad_sticks()` says which game-controller stick drives, strafes and turns;
+`touch_sticks()` says the same for the on-screen sticks. Both name the same
+four axes, `left_x`, `left_y`, `right_x` and `right_y`:
+
+```python
+def gamepad_sticks(self):
+    # A tank drive: left stick forward and back, right stick turns.
+    return {"strafe": None, "deadzone": 0.15, "curve": 2}
+
+def touch_sticks(self):
+    # One stick to drive, and Turn left / Turn right buttons to turn.
+    return {"rotate": "buttons"}
+```
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `forward` | `"left_y"` | Pushing this axis up drives forward |
+| `strafe` | `"left_x"` | Pushing this axis right strafes right |
+| `rotate` | `"right_x"` | Pushing this axis right turns right; the touch sticks also take `"buttons"` |
+| `deadzone` | `0.12` controller, `0.1` touch | How far a stick moves, from 0 to 0.5, before it counts |
+| `curve` | `1.0` | Above 1, up to 3, gives finer control near the middle |
+
+Put `-` in front of an axis to flip it (`"-left_y"`), or use `None` to switch a
+motion off. One axis never moves the robot two ways: if you give a motion an
+axis another motion has by default, that other motion is switched off. On the
+screen, a stick given two motions moves all the way round and a stick given one
+moves only that way, so by default the left stick drives and strafes and the
+right stick only goes left and right. Whatever the layout, the numbers reach
+`drive()` exactly as the keys' do, from -1 to 1.
+
+A touched stick centres itself under the thumb, so touching down never moves
+the robot; dragging does, and lifting the thumb stops it at once. A thumb that
+was on a stick when the robot was disabled does nothing until it lifts and
+touches again. A held key wins over the sticks, and the sticks over a game
+controller.
+
+### Touchscreen panels
+
+A phone or tablet shows only robot control, the sticks and the cameras. Turned
+on its side, a phone keeps the sticks under the thumbs in the bottom corners.
+`touch_panels()` adds any of the other panels:
+
+```python
+def touch_panels(self):
+    return ["mechanisms", "imu"]
+```
+
+The names are `status` (the four status lights), `mechanisms`, `imu`,
+`pi_inputs` and `usb_controllers`. A computer always shows every panel.
+
+None of this changes **Debug → Drive Test**, which keeps fixed W/S, A/D, Q/E
+and Space keys. Change its motor/servo mapping in `test.py`, not its keys.
 
 ## Manual testing
 
@@ -458,13 +516,14 @@ your own drive method. Changing it disables and stops outputs, requiring a
 fresh enable. Project controls, telemetry, and autonomous routines still run
 their own code; this selector only changes the keyboard/gamepad movement path.
 
-With that option unchecked, the **Driver Station** calls your `drive()` method, from either the keyboard or a
-game controller. Both send the same `forward`, `strafe` and `rotate` numbers, so
-code written for one works with the other. Keys are remappable under
-**Driver Station → Controls**.
+With that option unchecked, the **Driver Station** calls your `drive()` method, from the keyboard, a
+game controller or the touch sticks. All three send the same `forward`, `strafe`
+and `rotate` numbers, so code written for one works with the others. Keys and
+sticks are laid out in `dashboard.py`; see
+[The Driver Station's controls](#the-driver-stations-controls).
 
-Drive works only while its deliberate-enable box is ticked. Releasing keys, the
-stop key, STOP, leaving the page, or losing communications produces a stop, and
+Drive works only while its deliberate-enable box is ticked. Releasing keys or
+sticks, the stop key, STOP, leaving the page, or losing communications produces a stop, and
 a lost connection also disarms the box so you have to re-arm on purpose. The
 hardware watchdog is the final backstop.
 

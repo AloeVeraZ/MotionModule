@@ -206,7 +206,10 @@ Three workspace pages plus the separate Driver Station:
   **Terminal**.
 - **Open Driver Station** — launches the operator console, which runs the
   deployed project's own `drive()` and shows cameras, IMU, Pi inputs, USB
-  sensor controllers, and the project's declared controls.
+  sensor controllers, and the project's declared controls. A computer drives
+  with the keys or a game controller; a phone or tablet drives with two
+  on-screen sticks and shows only robot control, the sticks and the cameras,
+  upright or on its side.
 
 For the `Mecanum` project, **Use confirmed Mecanum mixer** starts checked in
 the Driver Station. Manual movement then uses exactly the same mixer as
@@ -286,7 +289,7 @@ MyRobot/
 ├── hardware.py       # optional: your own names, pins, and inversions
 ├── sensors.py        # optional: what is wired to the Arduino GIGA, by name
 ├── autonomous.py     # optional: the routine the robot runs by itself
-├── dashboard.py      # optional: full Driver Station cameras and sensors
+├── dashboard.py      # optional: Driver Station cameras, sensors, keys, sticks
 ├── drivetrain.py     # optional Python modules
 ├── mechanisms.py
 └── README.md         # optional project notes
@@ -353,7 +356,8 @@ this file during startup.
 An optional sibling `dashboard.py` can define
 `create_dashboard(module, drive)` to supply two camera feeds, one gyro/IMU,
 Raspberry Pi digital inputs, and USB-controller analog/digital inputs to the
-separate full Driver Station at `/driver-station`. It is discovered
+separate full Driver Station at `/driver-station`, and to lay out its keys,
+game-controller sticks, touch sticks and phone panels. It is discovered
 automatically and is not required for drivetrain debugging or robot control.
 The complete contract and copyable example are in
 [docs/CODING.md](docs/CODING.md#optional-full-driver-station-telemetry).
