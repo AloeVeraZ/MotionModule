@@ -23,6 +23,7 @@
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
+<script src="/static/hold-controls.js?v={{ asset_version }}"></script>
 <style>
 /* ==========================================================================
    MotionModule dashboard
@@ -807,7 +808,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .page-name { display: inline; }
   .topbar-tools { margin-left: auto; }
   .nav-toggle { display: grid; }
@@ -872,6 +873,42 @@
 @media (max-width: 420px) {
   .page-name { display: none; }
 }
+
+/* Keep the mobile layout deliberate rather than a scaled-down desktop. */
+.hero-side, .panel-head, .button-row { flex-wrap: wrap; }
+.nav-panel { max-height: calc(100dvh - 6rem); overflow-y: auto; }
+.panel-head > *, .hero-side > *, .test-row > *, .kv, .usb-meta dd { min-width: 0; }
+.panel-body p, .hero p, .kv strong, .usb-meta dd, .notice { overflow-wrap: anywhere; }
+.snippet .copy { min-height: 44px; }
+.snippet pre { padding-top: 3.5rem; }
+@media (max-width: 700px) {
+  .topbar { padding-inline: max(.75rem, env(safe-area-inset-left)); }
+  .content { padding-inline: max(1rem, env(safe-area-inset-left)); }
+  .hero { gap: 1rem; margin-bottom: 1.25rem; }
+  .hero h1 { font-size: clamp(2.75rem, 11vw, 4rem); }
+  .hero > div:first-child { flex-basis: 100%; }
+  .hero-side { width: 100%; align-items: stretch; }
+  .hero-side .button { flex: 1; white-space: normal; text-align: center; }
+  .tabs { border-radius: var(--radius-sm); gap: .25rem; padding: .25rem; scrollbar-width: thin; }
+  .tabs button { flex: 0 0 auto; min-height: 48px; }
+  .panel-head { align-items: flex-start; gap: .5rem; }
+  .panel-head > span { line-height: 1.4; }
+  .button.hold { min-height: 52px; }
+  .servo-outputs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .test-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .driver-status { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+  .driver-signal { padding: .75rem; }
+  .keys { max-width: none; gap: .5rem; }
+  .password-dialog { max-height: calc(100dvh - 2rem); overflow-y: auto; }
+  .mobile-stop { left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); }
+}
+@media (max-width: 360px) {
+  .brand { gap: .375rem; font-size: 1rem; }
+  .topbar-tools { gap: .5rem; }
+  .stats { grid-template-columns: minmax(0, 1fr); }
+  .test-row { grid-template-columns: 1fr 1fr; }
+  .test-row > span { grid-column: 1 / -1; }
+}
 </style>
 </head>
 <body>
@@ -894,8 +931,8 @@
       <nav class="nav-links" aria-label="Main navigation">
         <a href="/" data-page="overview">Overview<small>Status &amp; activity</small></a>
         <a href="/diagnostics" data-page="diagnostics">Debug<small>Understand your hardware</small></a>
-        <a href="/driver-station">Open Driver Station<small>Drive your robot</small></a>
         <a href="/code" data-page="code">Code<small>Build &amp; control</small></a>
+        <a href="/driver-station">Open Driver Station<small>Drive your robot</small></a>
       </nav>
       <div class="display-controls">
         <span class="display-label">Theme</span>
@@ -1625,7 +1662,7 @@
               <input id="speed" type="range" min="10" max="100" step="5" value="40">
             </label>
             <div class="keys" id="driveKeys"></div>
-            <p class="muted small" id="driveKeyHint">Hold a key to move. Space stops everything.</p>
+            <p class="muted small" id="driveKeyHint">Hold a button or key to move. Release to stop. Space stops everything.</p>
             <p class="small">W/S: forward/back. A/D: strafe left/right.
               Q/E: turn left/right. Space always stops motors and releases
               servos. These inputs stay fixed; <code>test.py</code> chooses
@@ -2417,6 +2454,15 @@ const STICK_DEADZONE = 0.12;
 
 const bindings = DEFAULT_BINDINGS;
 const heldKeys = new Set();
+const touchActions = new Set();
+const touchDrive = createHoldControls({
+  enabled: () => connected && driveEnabled(),
+  change: (action, held) => {
+    held ? touchActions.add(action) : touchActions.delete(action);
+    paintKeys(); sendDrive();
+  },
+  stop: () => disarmDrive(),
+});
 let padIndex = null;
 let padCommand = null;
 let lastInputKind = 'none';
@@ -2432,9 +2478,12 @@ function renderDriveKeys() {
   if (!grid) return;
   const layout = [null, 'forward', null, 'left', 'back', 'right', 'turnLeft', 'stop', 'turnRight'];
   replaceWith(grid, layout.map(action => {
-    const key = element('kbd');
-    if (!action) return key;
+    if (!action) return element('span');
+    const key = element('button', 'drive-key');
+    key.type = 'button';
+    key.setAttribute('aria-label', action === 'stop' ? 'Stop everything' : `Hold to ${AXIS_LABELS[action].toLowerCase()}`);
     key.dataset.action = action;
+    touchDrive.bind(key, action);
     key.append(element('b', null, keyLabel(bindings[action])), document.createTextNode(AXIS_LABELS[action]));
     return key;
   }));
@@ -2516,7 +2565,8 @@ function axisBar(label, value) {
 /* -------------------------------------------------------------- commands */
 
 const axis = (positive, negative) =>
-  (heldKeys.has(bindings[positive]) ? 1 : 0) - (heldKeys.has(bindings[negative]) ? 1 : 0);
+  (heldKeys.has(bindings[positive]) || touchActions.has(positive) ? 1 : 0)
+  - (heldKeys.has(bindings[negative]) || touchActions.has(negative) ? 1 : 0);
 const driveEnabled = () => activePage === 'diagnostics'
   && !document.querySelector('[data-panel="mecanum"]')?.hidden
   && Boolean($('#driveEnable')?.checked) && !configData?.drive_test?.error;
@@ -2524,7 +2574,7 @@ const driveEnabled = () => activePage === 'diagnostics'
 function setDriveSignals() {
   setDriverSignal('#driveSignalArmed', driveEnabled() ? 'good' : '', driveEnabled() ? 'Enabled' : 'Disabled');
   setDriverSignal('#driveSignalInput', lastInputKind === 'none' ? '' : 'good',
-    lastInputKind === 'pad' ? 'Controller' : lastInputKind === 'keys' ? 'Keyboard' : 'None');
+    lastInputKind === 'pad' ? 'Controller' : lastInputKind === 'touch' ? 'Touch / mouse' : lastInputKind === 'keys' ? 'Keyboard' : 'None');
 }
 
 function disarmDrive(reason) {
@@ -2549,7 +2599,7 @@ async function sendDrive() {
   const keys = { forward: axis('forward', 'back'), strafe: axis('right', 'left'), rotate: axis('turnLeft', 'turnRight') };
   const usingKeys = keys.forward || keys.strafe || keys.rotate;
   const command = usingKeys ? keys : pad || IDLE_COMMAND;
-  lastInputKind = usingKeys ? 'keys' : pad ? 'pad' : 'none';
+  lastInputKind = usingKeys ? (touchActions.size ? 'touch' : 'keys') : pad ? 'pad' : 'none';
   setDriveSignals();
   try {
     const response = await fetch('/api/drive/test', {
@@ -2573,7 +2623,7 @@ async function sendDrive() {
 
 function paintKeys() {
   $$('[data-action]').forEach(key =>
-    key.classList.toggle('active', heldKeys.has(bindings[key.dataset.action])));
+    key.classList.toggle('active', heldKeys.has(bindings[key.dataset.action]) || touchActions.has(key.dataset.action)));
 }
 
 async function requestStop() {
@@ -2588,6 +2638,8 @@ async function requestStop() {
    waits for that before it sends any power, and every stop ends one. */
 async function stopAll() {
   heldKeys.clear();
+  touchActions.clear();
+  touchDrive.clear();
   motorGeneration++;
   clearInterval(motorTimer);
   motorTimer = null;

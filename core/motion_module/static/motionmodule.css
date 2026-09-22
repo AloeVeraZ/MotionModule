@@ -538,7 +538,7 @@ kbd:empty { border: 0; background: transparent; box-shadow: none; }
 }
 .theme-switch button {
   display: grid; place-items: center;
-  width: 30px; height: 26px;
+  min-width: 44px; min-height: 44px;
   border: 0; border-radius: 999px;
   background: transparent;
   color: var(--faint);
@@ -547,6 +547,50 @@ kbd:empty { border: 0; background: transparent; box-shadow: none; }
 .theme-switch svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .theme-switch button:hover { color: var(--ink); }
 .theme-switch button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
+
+.theme-labeled button { padding: 0 .75rem; font-size: .75rem; font-weight: 600; }
+
+/* Touch targets remain usable on a phone, a Pi display, or a hybrid laptop.
+   Only hold controls suppress panning; the rest of the page still zooms/scrolls. */
+button, .button, .nav-links a, summary { touch-action: manipulation; }
+.button, .mini-button, .tabs button, .camera-controls button, .mode-switch button {
+  min-height: 44px;
+}
+.check, .safety-check { min-height: 44px; align-items: center; }
+input[type="range"] { min-height: 44px; margin-block: 0; }
+input, select, textarea { max-width: 100%; min-width: 0; }
+img, svg { max-width: 100%; }
+.table-overflow { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.table-overflow > table { min-width: 32rem; }
+.data-table { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.data-table th, .data-table td { padding: .75rem; border-bottom: 1px solid var(--line-soft); text-align: left; }
+.data-table th { color: var(--muted); font-weight: 600; background: var(--well); }
+.data-table tr:last-child td { border-bottom: 0; }
+.drive-key {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .375rem; min-width: 0; min-height: 64px; padding: .5rem .25rem;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--control); color: var(--muted);
+  font: 600 .6875rem/1.2 var(--font-text); text-transform: uppercase;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.drive-key b { font: 700 1.375rem/1 var(--font-display); text-transform: none; color: var(--ink); }
+.drive-key.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.drive-key.active b { color: inherit; }
+.drive-key[data-action="stop"] { border-color: var(--red-line); color: var(--red); background: var(--red-soft); }
+.drive-key[data-action="stop"] b { color: inherit; }
+
+@media (max-width: 700px), (any-pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+    font-size: 16px; /* Prevent iOS from zooming in when a field receives focus. */
+  }
+  .button, .mini-button, .tabs button, .camera-controls button, .mode-switch button { min-height: 48px; }
+  .check input, .safety-check input { width: 22px; height: 22px; }
+}
+
+/* Low-effects presentation: static blueprint grid and immediate status lights. */
+.dot.online::after { animation: none; display: none; }
+html .view:not([hidden]), html [data-panel]:not([hidden]), html .station-grid, html .signal-strip { animation: none; }
 
 /* The connection light pulses while the robot is answering. The pulse is a
    scaled, fading copy of the dot, so it never repaints. */

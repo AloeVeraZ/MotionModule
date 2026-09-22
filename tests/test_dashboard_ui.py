@@ -67,6 +67,8 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         # Startup polling is driven explicitly by the tests so timing and
         # connection failures are deterministic. All production handlers run.
         script = script[:script.index("/* ------------------------------------------------------------ startup */")]
+        hold_script = (ROOT / "core/motion_module/static/hold-controls.js").read_text(encoding="utf-8")
+        script = hold_script + "\n" + script
         cls.fixture = {"nodes": dom.nodes, "script": script}
 
         station_template = ROOT / "core" / "motion_module" / "templates" / "driver_station.html"
@@ -78,6 +80,7 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         station_dom.feed(station_rendered)
         station_script = re.search(r"<script>(.*?)</script>", station_rendered, re.DOTALL).group(1)
         station_script = station_script[:station_script.rfind("renderKeys();")]
+        station_script = hold_script + "\n" + station_script
         cls.station_fixture = {"nodes": station_dom.nodes, "script": station_script, "kind": "station"}
 
     def run_behavior(self, scenario, fixture=None):
@@ -94,6 +97,24 @@ class DashboardUIBehaviorTests(unittest.TestCase):
 
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
+
+    def test_shared_themes_follow_system_and_work_with_blocked_storage(self):
+        result = subprocess.run(
+            [NODE, str(ROOT / "tests/appearance_ui_harness.js"),
+             str(ROOT / "core/motion_module/static/motionmodule.js")],
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_touch_drive_hold_release_cancel_and_multitouch(self):
+        for fixture in (self.fixture, self.station_fixture):
+            with self.subTest(kind=fixture.get("kind", "debug")):
+                self.run_behavior("touch-drive", fixture)
+
+    def test_touch_stop_invalidates_old_fingers_and_requires_reenable(self):
+        for fixture in (self.fixture, self.station_fixture):
+            with self.subTest(kind=fixture.get("kind", "debug")):
+                self.run_behavior("touch-stop", fixture)
 
     def test_broken_drive_test_shows_error_and_stays_disabled_after_status_refresh(self):
         self.run_behavior("drive-test-load-error")

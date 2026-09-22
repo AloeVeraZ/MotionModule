@@ -30,10 +30,12 @@
   /* ---- theme: dark by default, light, or whatever the system asks for ---- */
 
   const themeButtons = [...document.querySelectorAll('[data-theme-choice]')];
-  const themeChoice = () => {
+  const savedThemeChoice = () => {
     const saved = read(THEME_KEY);
     return saved === 'light' || saved === 'system' ? saved : 'dark';
   };
+  let currentTheme = savedThemeChoice();
+  const themeChoice = () => currentTheme;
 
   function applyTheme(choice) {
     const resolved = choice === 'system'
@@ -48,12 +50,19 @@
     });
   }
 
-  // A page without the switch (the Driver Station) keeps the theme it ships.
+  // Both workspace and Driver Station share the same preference.
   if (themeButtons.length) {
     themeButtons.forEach(button => button.addEventListener('click', () => {
+      currentTheme = button.dataset.themeChoice;
       write(THEME_KEY, button.dataset.themeChoice);
       applyTheme(button.dataset.themeChoice);
     }));
+    addEventListener('storage', event => {
+      if (event.key === THEME_KEY || event.key === null) {
+        currentTheme = savedThemeChoice();
+        applyTheme(currentTheme);
+      }
+    });
     applyTheme(themeChoice());
     if (lightScheme) {
       const follow = () => { if (themeChoice() === 'system') applyTheme('system'); };
@@ -61,6 +70,18 @@
       else if (lightScheme.addListener) lightScheme.addListener(follow);
     }
   }
+
+  // Wide reference tables scroll locally instead of shrinking the whole page.
+  document.querySelectorAll('.data-table').forEach(table => {
+    if (table.closest('.table-scroll, .parts-scroll, .table-overflow')) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'table-overflow';
+    wrap.tabIndex = 0;
+    wrap.setAttribute('role', 'region');
+    wrap.setAttribute('aria-label', 'Reference table; scroll sideways for all columns');
+    table.before(wrap);
+    wrap.append(table);
+  });
 
   /* ---- the bar lifts once the page scrolls beneath it --------------------- */
 
@@ -98,7 +119,7 @@
   const PRESSABLE = '.button, .stop-button, .tabs button, .command, .stop-command, .mini-button, .mode-switch button, .camera-controls button';
 
   document.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || (reducedMotion && reducedMotion.matches)) return;
+    if (event.button !== 0 || event.pointerType === 'touch' || (reducedMotion && reducedMotion.matches)) return;
     const target = event.target && event.target.closest ? event.target.closest(PRESSABLE) : null;
     if (!target || target.disabled) return;
     const box = target.getBoundingClientRect();

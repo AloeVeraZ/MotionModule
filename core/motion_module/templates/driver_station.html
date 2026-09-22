@@ -4,12 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#080808">
+<script id="appearance-boot">
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('motionmodule-theme'); } catch (_) {}
+  if (theme === 'system') {
+    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  }
+  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
+})();
+</script>
 <title>MotionModule Driver Station</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
+<script src="/static/hold-controls.js?v={{ asset_version }}"></script>
 <style>
 /* ==========================================================================
    MotionModule Driver Station
@@ -17,7 +28,7 @@
    The competition console. Tokens, panels and controls come from
    /static/motionmodule.css; this sheet lays out a three-column console for a
    laptop, which folds to two columns on a tablet or the Pi's own screen and
-   to one on a phone. Always dark: it is used at the field.
+   to one on a phone. Light, dark, and system themes share the same tokens.
    ========================================================================== */
 
 /* ---------------------------------------------------------------- header */
@@ -377,8 +388,63 @@ kbd.unbound b { color: var(--faint); }
   .signal-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .station-grid { grid-template-columns: minmax(0, 1fr); }
   .station-grid > .column { grid-column: 1; grid-row: auto; }
-  .center-column { grid-row: 1 !important; }
+  .left-column { grid-row: 1 !important; }
   .camera-stage { grid-template-columns: minmax(0, 1fr); }
+}
+
+.station-tools { display: flex; align-items: center; justify-content: flex-end; gap: .625rem; flex-wrap: wrap; }
+.station-brand > div { min-width: 0; }
+.station-header { flex-wrap: wrap; }
+.station-tools .exit-link { min-height: 44px; }
+.panel-head { flex-wrap: wrap; }
+.station-mobile-stop { display: none; }
+.exit-short { display: none; }
+.drive-help { font-size: .75rem; color: var(--muted); }
+.drive-help summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; gap: .5rem; }
+.drive-help summary::before { content: '+'; color: var(--accent-text); }
+.drive-help[open] summary::before { content: '−'; }
+.control-copy, .controller-head > div { min-width: 0; overflow-wrap: anywhere; }
+.mode-switch button, .camera-controls button { min-height: 44px; }
+.safety-check { min-height: 44px; align-items: center; }
+.key-grid { gap: .5rem; }
+@media (min-width: 701px) and (max-width: 1100px) {
+  .station-grid { grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.2fr); }
+  .left-column { grid-column: 1; grid-row: 1 / span 2; }
+  .center-column { grid-column: 2; grid-row: 1; }
+  .right-column { grid-column: 2; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .station-header { position: relative; top: auto; margin: .75rem 1rem 0; padding: .75rem; gap: .75rem; }
+  .station-brand { flex-basis: 100%; }
+  .station-brand strong { white-space: normal; line-height: 1.15; font-size: 1.25rem; }
+  .header-center { order: 0; width: auto; }
+  .project-chip { max-width: 100%; min-height: 2rem; padding-inline: .625rem; }
+  .station-tools { width: 100%; justify-content: space-between; gap: .5rem; }
+  .station-tools .exit-link { padding-inline: .625rem; font-size: .625rem; }
+  .exit-long { display: none; }
+  .exit-short { display: inline; }
+  #stopButton { display: none; } /* The fixed mobile Stop stays in reach. */
+  .theme-labeled button { min-width: 44px; padding-inline: .5rem; }
+  .signal-strip { padding: .75rem 1rem 0; }
+  .station-grid { padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom)); gap: 1rem; }
+  .column { gap: 1rem; }
+  .panel-head, .panel-body { padding: 1rem; }
+  .empty-copy, .safety-check, .range-label { font-size: .8125rem; }
+  .camera-frame { aspect-ratio: 4 / 3; }
+  .camera-controls { width: 100%; }
+  .camera-controls button { flex: 1; min-height: 44px; }
+  .control-row input[type="range"] { width: min(8rem, 30vw); }
+  .station-mobile-stop {
+    display: flex; position: fixed; z-index: 70;
+    bottom: calc(1rem + env(safe-area-inset-bottom));
+    left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right));
+    min-height: 52px; justify-content: center; font-size: 1rem;
+  }
+}
+@media (max-width: 360px) {
+  .station-tools { justify-content: stretch; }
+  .station-tools .theme-switch, .station-tools .exit-link { flex: 1; }
+  .theme-labeled button { flex: 1; }
 }
 </style>
 </head>
@@ -392,7 +458,14 @@ kbd.unbound b { color: var(--faint); }
     <div class="project-chip"><span>ROBOT</span><strong>{{ project_name }}</strong></div>
     <div class="clock-chip" id="localClock">--:--:--</div>
   </div>
-  <a class="button exit-link" href="/drive">Exit to MotionModule&nbsp;&nearr;</a>
+  <div class="station-tools">
+    <div class="theme-switch theme-labeled" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="light" aria-label="Light theme">Light</button>
+      <button type="button" data-theme-choice="dark" aria-label="Dark theme">Dark</button>
+      <button type="button" data-theme-choice="system" aria-label="System theme">System</button>
+    </div>
+    <a class="button exit-link" href="/drive" aria-label="Exit to MotionModule"><span class="exit-long">Exit to MotionModule</span><span class="exit-short">Exit</span>&nbsp;&nearr;</a>
+  </div>
 </header>
 
 <div class="signal-strip" aria-label="Robot status">
@@ -403,6 +476,7 @@ kbd.unbound b { color: var(--faint); }
 </div>
 <div class="notice danger connection-banner" id="connectionBanner" role="alert"><strong>Robot connection lost.</strong> Controls are disabled until telemetry returns and the operator deliberately enables again.</div>
 
+<button type="button" class="stop-button station-mobile-stop" id="mobileStop">Stop all outputs</button>
 <main class="station-grid">
   <aside class="column left-column">
     <section class="panel">
@@ -419,10 +493,12 @@ kbd.unbound b { color: var(--faint); }
         </div>
         <div class="robot-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
         <label class="safety-check"><input id="useMecanumDrive" type="checkbox"{% if project_name == 'Mecanum' %} checked{% endif %}><span>Use confirmed Mecanum mixer</span></label>
+        <details class="drive-help"><summary>About the drive mixer</summary>
         <p class="empty-copy">For manual driving: checked uses exactly the same movement
           as the default Mecanum Drive Test; unchecked calls your <code>robot.py</code> drive method.
           Debug's custom <code>test.py</code> does not change this console.
           Project sensors, extra controls, and autonomous code remain separate.</p>
+        </details>
         <label class="safety-check"><input id="armConfirm" type="checkbox"><span>The area is clear and the physical cutoff is within reach.</span></label>
         <div class="command-pair">
           <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
@@ -505,6 +581,15 @@ let sequence = Date.now() * 1000;
 let connected = false;
 let armed = false;
 let heldKeys = new Set();
+const touchActions = new Set();
+const touchDrive = createHoldControls({
+  enabled: () => armed && connected && mode === 'teleop',
+  change: (action, held) => {
+    held ? touchActions.add(action) : touchActions.delete(action);
+    paintKeys(); sendDrive();
+  },
+  stop: () => { $('#armConfirm').checked = false; setArmed(false); },
+});
 let padIndex = null;
 let cameraMode = 'both';
 let cameraSignature = '';
@@ -625,6 +710,8 @@ $('#useMecanumDrive').addEventListener('change', () => setArmed(false));
 
 async function stopAll() {
   heldKeys.clear();
+  touchActions.clear();
+  touchDrive.clear();
   paintKeys();
   // /api/stop also ends a running autonomous routine, so every path that
   // disables the robot - button, stop key, blur, lost link - stops the script.
@@ -669,15 +756,15 @@ function readPad() {
 }
 
 const keyAxis = (positive, negative) =>
-  (bindings[positive] && heldKeys.has(bindings[positive]) ? 1 : 0)
-  - (bindings[negative] && heldKeys.has(bindings[negative]) ? 1 : 0);
+  ((bindings[positive] && heldKeys.has(bindings[positive])) || touchActions.has(positive) ? 1 : 0)
+  - ((bindings[negative] && heldKeys.has(bindings[negative])) || touchActions.has(negative) ? 1 : 0);
 
 async function sendDrive() {
   if (!armed || !connected || mode !== 'teleop') return;
   const keys = {forward: keyAxis('forward','back'), strafe: keyAxis('right','left'), rotate: keyAxis('turn_left','turn_right')};
   const keyboardMoving = keys.forward || keys.strafe || keys.rotate;
   const command = keyboardMoving ? keys : readPad() || IDLE;
-  setSignal('#inputSignal', 'good', keyboardMoving ? 'Keyboard' : command === IDLE ? 'Ready' : 'Controller');
+  setSignal('#inputSignal', 'good', keyboardMoving ? (touchActions.size ? 'Touch / mouse' : 'Keyboard') : command === IDLE ? 'Ready' : 'Controller');
   try {
     const response = await fetch('/api/drive', {
       method: 'POST', headers: apiHeaders,
@@ -698,8 +785,12 @@ async function sendDrive() {
 function renderKeys() {
   const layout = [null,'forward',null,'left','back','right','turn_left','stop','turn_right'];
   replaceWith($('#keyGrid'), layout.map(action => {
-    const key = element('kbd');
-    if (!action) return key;
+    if (!action) return element('span');
+    const key = element('button', 'drive-key');
+    key.type = 'button';
+    key.dataset.action = action;
+    key.setAttribute('aria-label', action === 'stop' ? 'Stop everything' : `Hold to ${ACTION_LABELS[action].toLowerCase()}`);
+    touchDrive.bind(key, action);
     const bound = bindings[action];
     if (!bound) {
       key.classList.add('unbound');
@@ -716,7 +807,7 @@ function renderKeys() {
     legend.textContent =
       `${named('forward')}/${named('back')} drive, ${named('left')}/${named('right')} strafe, `
       + `${named('turn_left')}/${named('turn_right')} turn, ${named('stop')} disables and stops. `
-      + 'Set these in your project’s dashboard.py. Controller: left stick drive and strafe, right stick turn.';
+      + 'Hold an on-screen button to move; release to stop. Keyboard bindings come from dashboard.py. Controller: left stick drive and strafe, right stick turn.';
   }
 }
 
@@ -732,9 +823,12 @@ function applyBindings(next) {
   bindingSignature = signature;
   bindings = resolved;
   heldKeys.clear();
+  touchActions.clear();
+  touchDrive.clear();
+  if (armed) setArmed(false);
   renderKeys();
 }
-function paintKeys() { $$('[data-key]').forEach(key => key.classList.toggle('active', heldKeys.has(key.dataset.key))); }
+function paintKeys() { $$('[data-action]').forEach(key => key.classList.toggle('active', heldKeys.has(key.dataset.key) || touchActions.has(key.dataset.action))); }
 
 function markDisconnected() {
   connected = false;
@@ -891,7 +985,15 @@ async function loadControls() {
       const row=element('div','control-row'); const copy=element('div','control-copy'); copy.append(element('strong',null,control.label),element('small',null,control.detail||control.name)); row.append(copy);
       if (control.kind === 'slider') { const slider=element('input'); slider.type='range'; slider.min=control.minimum; slider.max=control.maximum; slider.step=control.step; slider.value=0; slider.addEventListener('input',()=>sendControl(control.name,slider.value)); row.append(slider); }
       else { const button=element('button','mini-button primary',control.kind==='hold'?'Hold':control.kind==='toggle'?'Toggle':'Run'); button.type='button'; let on=false;
-        if(control.kind==='hold'){button.addEventListener('pointerdown',()=>sendControl(control.name,1)); ['pointerup','pointerleave','pointercancel'].forEach(type=>button.addEventListener(type,()=>sendControl(control.name,0)));}
+        if(control.kind==='hold'){
+          button.style.touchAction='none';
+          const hold = createHoldControls({
+            enabled: () => armed && connected && mode === 'teleop',
+            change: (_, held) => sendControl(control.name, held ? 1 : 0),
+            stop: () => setArmed(false),
+          });
+          hold.bind(button, 'mechanism');
+        }
         else button.addEventListener('click',()=>{on=control.kind==='toggle'?!on:true;sendControl(control.name,on?1:0);}); row.append(button); }
       return row;
     }));
@@ -908,6 +1010,7 @@ $('#enableButton').addEventListener('click', async () => {
 });
 $('#disableButton').addEventListener('click', () => setArmed(false));
 $('#stopButton').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
+$('#mobileStop').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
 $('#speed').addEventListener('input', () => { $('#speedValue').textContent=`${$('#speed').value}%`; sendDrive(); });
 /* Match how the robot reports a key: a single character is compared without
    case, a named key such as ArrowUp is compared as-is. */

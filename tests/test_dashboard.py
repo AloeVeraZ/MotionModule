@@ -295,6 +295,7 @@ class DashboardTests(unittest.TestCase):
                 page = self.client.get(path).data.decode("utf-8")
                 self.assertIn(f'href="/static/motionmodule.css?v={version}"', page)
                 self.assertIn(f'src="/static/motionmodule.js?v={version}"', page)
+                self.assertIn(f'src="/static/hold-controls.js?v={version}"', page)
                 # A robot on its own hotspot has no internet, so no stylesheet,
                 # script, or font may come from another origin.
                 self.assertIsNone(re.search(r'<(?:link|script)[^>]+(?:href|src)="(?:https?:)?//', page))
@@ -312,6 +313,17 @@ class DashboardTests(unittest.TestCase):
                 response.close()
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(body.startswith(b"wOF2"))
+
+    def test_navigation_order_and_station_appearance_controls(self):
+        page = self.client.get("/").data.decode()
+        nav = re.search(r'<nav class="nav-links".*?</nav>', page, re.DOTALL).group()
+        self.assertLess(nav.index('href="/code"'), nav.index('href="/driver-station"'))
+        station = self.client.get("/driver-station").data.decode()
+        self.assertIn('id="appearance-boot"', station)
+        self.assertIn('class="station-tools"', station)
+        for theme in ("light", "dark", "system"):
+            self.assertIn(f'data-theme-choice="{theme}"', station)
+        self.assertIn('id="mobileStop"', station)
 
     def test_static_assets_are_cacheable_but_downloads_are_not(self):
         response = self.client.get("/static/motionmodule.js")

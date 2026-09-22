@@ -76,7 +76,7 @@ class Element {
     this.events.get(type).push(listener);
   }
   async fire(type, extra = {}) {
-    const event = {target: this, currentTarget: this, preventDefault() {}, ...extra};
+    const event = {target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...extra};
     await Promise.all((this.events.get(type) || []).map(listener => listener(event)));
   }
   focus() { this.ownerDocument.activeElement = this; }
@@ -215,7 +215,40 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'drive-test-load-error') {
+  if (scenario === 'touch-drive' || scenario === 'touch-stop') {
+    await app.releaseForward();
+    const grid = app.$(fixture.kind === 'station' ? '#keyGrid' : '#driveKeys');
+    if (fixture.kind === 'station') vm.runInContext('renderKeys()', app.context);
+    const buttons = grid.querySelectorAll('button');
+    const forward = buttons.find(button => button.dataset.action === 'forward');
+    const turn = buttons.find(button => ['turnLeft', 'turn_left'].includes(button.dataset.action));
+    const stop = buttons.find(button => button.dataset.action === 'stop');
+    const down = (button, id) => button.fire('pointerdown', {pointerId:id, pointerType:'touch', button:0});
+    await down(forward, 1); await app.settle();
+    assert.equal(app.driveRequests().at(-1).payload.forward, 1);
+    if (scenario === 'touch-drive') {
+      await down(turn, 2); await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.rotate, 1);
+      assert.equal(app.driveRequests().at(-1).payload.forward, 1);
+      await turn.fire('pointercancel', {pointerId:2}); await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.rotate, 0);
+      assert.equal(app.driveRequests().at(-1).payload.forward, 1);
+      await down(forward, 3);
+      await forward.fire('pointerup', {pointerId:1}); await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.forward, 1, 'Second finger still holds forward');
+      await forward.fire('lostpointercapture', {pointerId:3}); await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.forward, 0, 'Lost capture immediately clears movement');
+    } else {
+      await down(stop, 2); await app.settle();
+      const count = app.driveRequests().length;
+      await down(turn, 3);
+      await forward.fire('pointerup', {pointerId:1}); await app.settle();
+      assert.equal(app.driveRequests().length, count, 'No motion after Stop until rearmed');
+      await app.arm(); await app.context.dashboard.sendDrive(); await app.settle();
+      assert.equal(app.driveRequests().at(-1).payload.forward, 0, 'Rearming does not revive an old finger');
+      assert.equal(app.driveRequests().at(-1).payload.rotate, 0);
+    }
+  } else if (scenario === 'drive-test-load-error') {
     vm.runInContext("configData = {drive_test: {source: '/robots/MyRobot/test.py', error: 'test.py could not be loaded'}}; dashboard.renderDriveTest(configData.drive_test);", app.context);
     await app.settle();
     assert.match(app.$('#driveTestSource').textContent, /could not be loaded/);
