@@ -139,6 +139,18 @@ is the servo rail regulator. **Debug → Parts list** shows the whole reference
 BOM, marked required or recommended, and works inside the app with no internet
 connection.
 
+### Wiring diagram
+
+The complete reference wiring below shows the Pi, all four motor drivers,
+the PCA9685 servo board, the BNO055 IMU and the power rails. Labels use
+**physical Pi header pin numbers**. Wire colors match **Debug → Wiring →
+Follow the signal** in the dashboard, which also includes this diagram below
+**Names you can use in code**.
+
+[Open the full-size diagram](docs/images/motionmodule-complete-wiring.png)
+or use the [scalable SVG](docs/images/motionmodule-complete-wiring.svg).
+See the [pinout guide](docs/PINOUT.md) for the connection tables and power details.
+
 ![Complete MotionModule wiring diagram](docs/images/motionmodule-complete-wiring.png)
 
 ## Install on a Raspberry Pi

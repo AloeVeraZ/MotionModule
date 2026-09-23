@@ -1,0 +1,23 @@
+/* Shared by Debug's wiring guide and docs/images/draw_wiring.py.
+   Keep these as literal hex colors so PNG/SVG exports use exactly the same palette.
+   Wiring colors stay consistent in both dashboard themes. */
+:root {
+  --wire-driver-1-a: #f472b6;
+  --wire-driver-1-b: #f9a8d4;
+  --wire-driver-1-ground: #7a395b;
+  --wire-driver-2-a: #2dd4bf;
+  --wire-driver-2-b: #99f6e4;
+  --wire-driver-2-ground: #176a60;
+  --wire-driver-3-a: #fb923c;
+  --wire-driver-3-b: #fdba74;
+  --wire-driver-3-ground: #7e491e;
+  --wire-driver-4-a: #60a5fa;
+  --wire-driver-4-b: #93c5fd;
+  --wire-driver-4-ground: #30537d;
+  --wire-servo-signal: #b592f7;
+  --wire-servo-supply: #d592dc;
+  --wire-servo-ground: #5b497c;
+  --wire-imu-signal: #a3e635;
+  --wire-imu-supply: #c7d66d;
+  --wire-imu-ground: #52731b;
+}

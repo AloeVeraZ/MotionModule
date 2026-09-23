@@ -22,6 +22,7 @@
 <link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
+<link rel="stylesheet" href="/static/wiring-palette.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
 <script src="/static/hold-controls.js?v={{ asset_version }}"></script>
 <style>
@@ -366,30 +367,38 @@
 .pin-copy small { display: block; overflow: hidden; color: var(--faint); font-size: .6875rem; text-overflow: ellipsis; white-space: nowrap; }
 .pin.motor { border-color: var(--motor-line); background: var(--motor-soft); }
 .pin.motor .pin-number { background: var(--motor); color: var(--chip-ink); }
-.pin.servo { border-color: var(--servo-line); background: var(--servo-soft); }
-.pin.servo .pin-number { background: var(--servo); color: var(--chip-ink); }
+.pin.servo { --servo-pin: var(--wire-servo-signal); border-color: color-mix(in srgb, var(--servo-pin) 45%, var(--line-soft)); background: color-mix(in srgb, var(--servo-pin) 12%, var(--well)); }
+.pin.servo.module-supply { --servo-pin: var(--wire-servo-supply); }
+.pin.servo .pin-number { background: var(--servo-pin); color: #101010; }
 .pin.ground .pin-number { background: var(--ground); color: var(--chip-ink); }
 .pin.power { border-color: var(--power-line); }
 .pin.power .pin-number { background: var(--power); color: var(--chip-ink); }
 .pin.reserved .pin-number { background: var(--reserved); color: var(--chip-ink); }
 /* Driver identity is shared by the header, output cards and legend. */
-[data-driver="1"] { --driver-a: #f472b6; --driver-b: #f9a8d4; }
-[data-driver="2"] { --driver-a: #2dd4bf; --driver-b: #99f6e4; }
-[data-driver="3"] { --driver-a: #fb923c; --driver-b: #fdba74; }
-[data-driver="4"] { --driver-a: #60a5fa; --driver-b: #93c5fd; }
+[data-driver="1"] { --driver-a: var(--wire-driver-1-a); --driver-b: var(--wire-driver-1-b); --driver-ground: var(--wire-driver-1-ground); }
+[data-driver="2"] { --driver-a: var(--wire-driver-2-a); --driver-b: var(--wire-driver-2-b); --driver-ground: var(--wire-driver-2-ground); }
+[data-driver="3"] { --driver-a: var(--wire-driver-3-a); --driver-b: var(--wire-driver-3-b); --driver-ground: var(--wire-driver-3-ground); }
+[data-driver="4"] { --driver-a: var(--wire-driver-4-a); --driver-b: var(--wire-driver-4-b); --driver-ground: var(--wire-driver-4-ground); }
 .pin[data-driver] { --pin-driver: var(--driver-a); border-color: color-mix(in srgb, var(--pin-driver) 45%, var(--line-soft)); background: color-mix(in srgb, var(--pin-driver) 12%, var(--well)); }
 .pin[data-output="B"] { --pin-driver: var(--driver-b); }
+.pin[data-output="GND"] { --pin-driver: var(--driver-ground); }
 .pin[data-driver] .pin-number { background: var(--pin-driver); color: #101010; }
+.pin[data-output="GND"] .pin-number { color: #fff; }
 .pin.header-reserved { border-color: #dfbd55; }
 .pin.header-reserved .pin-number { background: #dfbd55; color: #101010; }
-.pin.header-imu { border-color: #a3e635; background: color-mix(in srgb, #a3e635 12%, var(--well)); }
-.pin.header-imu .pin-number { background: #a3e635; color: #101010; }
+.pin.header-imu { --imu-pin: var(--wire-imu-signal); border-color: var(--imu-pin); background: color-mix(in srgb, var(--imu-pin) 12%, var(--well)); }
+.pin.header-imu.module-supply { --imu-pin: var(--wire-imu-supply); }
+.pin.header-imu .pin-number { background: var(--imu-pin); color: #101010; }
+.pin.header-imu.module-ground { --imu-pin: var(--wire-imu-ground); }
+.pin.header-imu.module-ground .pin-number { color: #fff; }
+.pin.header-servo-ground { border-color: var(--wire-servo-ground); background: color-mix(in srgb, var(--wire-servo-ground) 12%, var(--well)); }
+.pin.header-servo-ground .pin-number, .legend .servo-ground-swatch { background: var(--wire-servo-ground); color: #fff; }
 .pin.header-unused { border-color: var(--line-soft); background: var(--well); }
 .pin.header-unused .pin-number { background: #080808; color: #f5f5f5; }
 .legend .driver-swatch { background: linear-gradient(90deg, var(--driver-a) 50%, var(--driver-b) 50%); }
 .driver-card .pair-a { --pair: var(--driver-a); }
 .driver-card .pair-b { --pair: var(--driver-b); }
-.driver-card .driver-ground { border-left: 3px solid var(--driver-a); padding-left: .625rem; }
+.driver-card .driver-ground { border-left: 3px solid var(--driver-ground); padding-left: .625rem; }
 
 .pin-inspector { border-color: var(--accent-line); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); }
 .pin-inspector h2 { margin: .25rem 0 .375rem; font: 700 clamp(1.375rem, 1.1rem + .8vw, 1.75rem)/1 var(--font-display); text-transform: uppercase; }
@@ -406,6 +415,7 @@
 .pair-b { --pair: var(--amber); }
 .driver-intro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.25rem 1.75rem; align-items: center; }
 .driver-figure { margin: 0; }
+.complete-wiring-image { display: block; width: 100%; height: auto; border-radius: .5rem; }
 .driver-figure svg { display: block; width: 100%; height: auto; }
 .driver-figure figcaption { margin-top: .375rem; color: var(--faint); font-size: .6875rem; text-align: center; }
 .driver-art-label { font: 700 17px/1 var(--font-display); letter-spacing: .05em; fill: var(--ink); }
@@ -1163,14 +1173,16 @@
               <span data-driver="2"><i class="driver-swatch"></i>Driver 2 · A/B</span>
               <span data-driver="3"><i class="driver-swatch"></i>Driver 3 · A/B</span>
               <span data-driver="4"><i class="driver-swatch"></i>Driver 4 · A/B</span>
-              <span><i style="background:var(--servo)"></i>Servo-board logic</span>
-              <span><i style="background:var(--ground)"></i>Servo ground</span>
+              <span><i style="background:var(--wire-servo-signal)"></i>Servo-board logic</span>
+              <span><i style="background:var(--wire-servo-supply)"></i>Servo 3.3 V</span>
+              <span><i class="servo-ground-swatch"></i>Servo ground</span>
               <span><i style="background:var(--power)"></i>Pi power</span>
               <span><i style="background:#dfbd55"></i>UART / ID EEPROM</span>
-              <span><i style="background:#a3e635"></i>Optional IMU</span>
+              <span><i style="background:var(--wire-imu-signal)"></i>Optional IMU</span>
+              <span><i style="background:var(--wire-imu-supply)"></i>IMU 3.3 V</span>
               <span><i style="background:#080808"></i>Unused</span>
             </div>
-            <p class="small muted">B uses the lighter shade; driver grounds match A.</p>
+            <p class="small muted">B uses the lighter shade. Grounds use the darkest shade of their module's color; 3.3 V uses a warmer shade.</p>
           </article>
 
           <div class="stack">
@@ -1338,6 +1350,18 @@ heading = imu.heading() if imu is not None else None
               <button class="button copy" type="button" data-copy="#namesSnippet">Copy</button>
               <pre id="namesSnippet">Loading&hellip;</pre>
             </div>
+          </div>
+        </article>
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>Complete wiring diagram</h2>
+            <a class="button" href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener">Open full-size diagram</a>
+          </div>
+          <div class="panel-body">
+            <p class="small muted">The reference build, from the Pi to the motor drivers, servo board and IMU, with the power connections included. Wire colors match Follow the signal above. Labels show physical Pi header pins.</p>
+            <a href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener" aria-label="Open complete wiring diagram at full size">
+              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and BNO055 IMU, plus battery and regulated power rails.">
+            </a>
           </div>
         </article>
       </div>
@@ -2764,14 +2788,18 @@ function inspectPin(pin) {
 
 function pinElement(pin, isEven, motors = []) {
   const item = element('button', `pin ${pin.category}${isEven ? ' even' : ''}`);
+  if (pin.function === '3.3 V') item.classList.add('module-supply');
   const motor = motors.find(output => [output.in1_physical, output.in2_physical, output.ground_physical].includes(pin.physical));
   if (motor) {
     item.dataset.driver = motor.driver;
-    item.dataset.output = pin.physical === motor.ground_physical ? 'A' : motor.output;
+    item.dataset.output = pin.physical === motor.ground_physical ? 'GND' : motor.output;
   } else if ([8, 10, 27, 28].includes(pin.physical)) {
     item.classList.add('header-reserved');
   } else if (pin.category === 'reserved' && pin.role.startsWith('Optional BNO055 IMU ')) {
     item.classList.add('header-imu');
+    if (pin.function === 'GND') item.classList.add('module-ground');
+  } else if (pin.category === 'ground' && pin.role.startsWith('Servo controller')) {
+    item.classList.add('header-servo-ground');
   } else if (!pin.configured && pin.category !== 'servo' && ![2, 4].includes(pin.physical)) {
     item.classList.add('header-unused');
   }

@@ -2,6 +2,7 @@
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import html
+import re
 
 OUT = Path(__file__).parent
 W, H = 3800, 3500
@@ -11,12 +12,14 @@ im = Image.new('RGB', (W, H), BG)
 d = ImageDraw.Draw(im)
 svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}"><rect width="100%" height="100%" fill="{BG}"/>']
 INK='#e9f0f5'; RED='#ff525b'; BLACK='#0b1015'; ORANGE='#ffac42'
-DRIVER_COLORS={
-    1:['#4b9bff','#69b8ff','#8dd5ff','#b6e8ff',BLACK],
-    2:['#b58aff','#c7a6ff','#d8c0ff','#edddff',BLACK],
-    3:['#32cd98','#59deb0','#86ebc9','#b7f6df',BLACK],
-    4:['#ffae43','#ffc36b','#ffda9a','#ffebc8',BLACK],
+palette_path = Path(__file__).resolve().parents[2] / 'core/motion_module/static/wiring-palette.css'
+PALETTE = dict(re.findall(r'--wire-([\w-]+):\s*(#[0-9a-fA-F]{6})\s*;', palette_path.read_text(encoding='utf-8')))
+DRIVER_COLORS = {
+    n: [PALETTE[f'driver-{n}-{output}'] for output in ('a', 'a', 'b', 'b', 'ground')]
+    for n in range(1, 5)
 }
+SERVO_COLORS = {1: PALETTE['servo-supply'], 3: PALETTE['servo-signal'],
+                5: PALETTE['servo-signal'], 7: PALETTE['servo-signal'], 9: PALETTE['servo-ground']}
 fontroot=Path('C:/Windows/Fonts')
 def font(size,bold=False):
     return ImageFont.truetype(str(fontroot/('arialbd.ttf' if bold else 'arial.ttf')),size)
@@ -217,7 +220,7 @@ for n,y,pins,motors in drivers:
         xx,yy=1765,y+145+i*60
         label=['IN1','IN2','IN3','IN4','GND'][i]
         text(1790,yy-12,label,23,'white',True)
-        text(1660,yy-32,f'P{p}',20,DRIVER_COLORS[n][i],True)
+        text(1660,yy-32,f'P{p}',20,INK if label == 'GND' else DRIVER_COLORS[n][i],True)
         destinations.append((p,(xx+SHIFT_X,yy),DRIVER_COLORS[n][i],n,i))
     # Heavy power returns go to battery bus, not control-header ground.
     line([(2320,y+88),(2190,y+88)],RED,9,True)
@@ -252,7 +255,7 @@ for p,target,color,n,i in destinations:
 # Servo logic originates at the five exact Pi header pins.
 for i,(p,target) in enumerate(servo_pts.items()):
     sx,sy=P[p];lane=1230+i*24
-    color=[RED,'#59b6ff','#f5d357','#c986f0',BLACK][i]
+    color=SERVO_COLORS[p]
     line([(sx,sy),(sx+18,sy+15),(lane,sy+15),(lane,target[1]),target],color,5,True)
     hole(*target);circle(*target,4,color)
 
@@ -263,7 +266,8 @@ text(650,2750,'BNO055 IMU • 0x28',33,'white',True,'ma')
 chip(407,2880,110,115)
 text(480,3060,'GY-BNO055',24,'white')
 imu_pads=['VIN','GND','SCL','SDA','AD0','BOOT','REST','INT']
-imu_wires={17:(0,RED),20:(1,BLACK),12:(2,'#f5d357'),11:(3,'#59b6ff'),6:(4,'#f28dd2')}
+imu_wires={17:(0,PALETTE['imu-supply']),20:(1,PALETTE['imu-ground']),
+           12:(2,PALETTE['imu-signal']),11:(3,PALETTE['imu-signal']),6:(4,PALETTE['imu-ground'])}
 for i,label in enumerate(imu_pads):
     yy=2820+i*51
     text(740,yy-13,label,24,'white',True)
@@ -274,13 +278,15 @@ for i,(p,(row,color)) in enumerate(imu_wires.items()):
     line([(sx,sy),(sx+18,escape),(lane,escape),(lane,ty),(912,ty)],color,5,True)
     hole(912,ty);circle(912,ty,4,color)
     label={17:'P17 · 3.3 V',20:'P20 · GND',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND'}[p]
-    text(540,ty-12,label,19,color if color != BLACK else INK,bold=True)
+    text(540,ty-12,label,19,INK if p in (6,20) else color,bold=True)
 text(1030,3090,'BOOT / REST: retain onboard pull-ups',23,color='#aabecd')
 text(1030,3130,'INT: disconnected • AD0 grounded for 0x28',23,color='#aabecd')
 
 # All forty physical header positions are visible; unused ones stay empty.
 used={p for p,*_ in destinations}|set(servo_pts)|set(imu_wires)
 pin_colors={p:color for p,_,color,_,_ in destinations}
+pin_colors.update(SERVO_COLORS)
+pin_colors.update({p:color for p,(_,color) in imu_wires.items()})
 for p,(x,y) in P.items():
     hole(x,y)
     if p in used:circle(x,y,5,pin_colors.get(p,'#eef5f0'))
@@ -292,5 +298,8 @@ line([(100,3420),(3695,3420)],'#4d6371',2)
 text(100,3450,'Physical pin numbers, not BCM GPIO. Crossings connect only at dots. Board drawings are schematic; follow terminal labels.',24)
 svg.append('</svg>')
 im.save(OUT/'motionmodule-complete-wiring.png')
+# Ship the same image with the dashboard for offline and installed use.
+(palette_path.parent/'motionmodule-complete-wiring.png').write_bytes(
+    (OUT/'motionmodule-complete-wiring.png').read_bytes())
 (OUT/'motionmodule-complete-wiring.svg').write_text('\n'.join(svg),encoding='utf-8')
 print(OUT/'motionmodule-complete-wiring.png')
