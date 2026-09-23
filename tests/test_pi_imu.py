@@ -6,9 +6,11 @@ serial link or straight to smbus2, so the same simulated chips exercise both
 transports.
 """
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fake_giga import Clock, SimBno055, SimLsm6, World
 from motion_module.imu import GigaIMU
@@ -156,16 +158,18 @@ class SixAxisOverPiI2cTests(LocalImuTestCase):
 
 
 class NoTransportTests(unittest.TestCase):
-    """Without smbus2 (this dev machine has none usable) or without a bus
-    factory, the IMU must say so plainly instead of raising."""
+    """Without smbus2, or without a bus factory, the IMU must say so plainly
+    instead of raising - on any platform, whether or not smbus2 actually
+    happens to be installed here."""
 
     def test_missing_smbus2_is_a_clear_message_not_a_crash(self):
-        imu = LocalIMU(NINE_AXIS, auto_start=False)
-        self.addCleanup(imu.close)
-        self.assertFalse(imu.poll(0.0))
-        self.assertEqual(imu.state, "waiting")
-        self.assertIn("smbus2", imu.describe())
-        self.assertIsNone(imu.heading())
+        with patch.dict(sys.modules, {"smbus2": None}):
+            imu = LocalIMU(NINE_AXIS, auto_start=False)
+            self.addCleanup(imu.close)
+            self.assertFalse(imu.poll(0.0))
+            self.assertEqual(imu.state, "waiting")
+            self.assertIn("smbus2", imu.describe())
+            self.assertIsNone(imu.heading())
 
 
 if __name__ == "__main__":
