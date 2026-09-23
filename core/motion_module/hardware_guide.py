@@ -52,9 +52,10 @@ def parts_groups() -> list[dict]:
                 _part("1 pack", "XT30 pigtails", "Male and female XT30 leads on silicone wire", "Mates the battery's XT30 and gives bare wire for the Wago joins", "selected", "https://www.amazon.com/dp/B0FY2ZCR83"),
                 _part("1", "12 V to 5 V USB-C converter", "Steps the 12 V rail down to a Pi-rated 5 V USB-C supply", "Powers the Raspberry Pi independently of motor load", "selected", "https://www.amazon.com/dp/B0FD735LFG"),
                 _part("1", "Rocker switch", "KCD1 automotive rocker switch, DC rated", "The battery module's physical on/off cutoff", "selected", "https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462"),
+                _part("1", "12 V/24 V to 5 V 5 A buck converter", "PlusRoc waterproof buck converter, fixed 5 V output, 5 A / 25 W max, open-wire leads, sold as a 2-pack", "Steps the 12 V battery rail down for the PCA9685 servo V+ terminal, which is rated 3.3-6 V", "selected", "https://www.amazon.com/dp/B0FYNCSV2Z"),
                 _part("1 set", "Power module CAD", "Enclosure and mounting for the battery, switch and converters", "Holds the power side together as one assembly", "placeholder", CAD_REPO),
             ],
-            "note": "One 12 V battery runs everything. Both batteries above ship with their own fuse, so no separate fuse or breaker is needed. The drivers take 12 V directly and the Pi gets 5 V from the USB-C converter. The servo rail is stepped down on the power module itself: the PCA9685 V+ terminal is rated 3.3-6 V, and the servos on it top out around 8.4 V, so 12 V must never reach that terminal.",
+            "note": "One 12 V battery runs everything. Both batteries above ship with their own fuse, so no separate fuse or breaker is needed. The drivers take 12 V directly and the Pi gets 5 V from the USB-C converter. The servo rail is stepped down on the power module itself, by the buck converter above: the PCA9685 V+ terminal is rated 3.3-6 V, and the servos on it top out around 8.4 V, so 12 V must never reach that terminal. 5 V/5 A is 25 W total for every servo moving at once - size your servo load against that.",
         },
         {
             "id": "actuators", "title": "Motors & servos",
@@ -79,6 +80,14 @@ def parts_groups() -> list[dict]:
                 _part("1", "STEMMA QT cable", "Adafruit 4210, 100 mm", "Chains the second IMU off the first", "selected", "https://www.adafruit.com/product/4210"),
             ],
             "note": "Recommended, not required: the robot drives without sensors. The GIGA only reads what the Pi asks it to and passes the numbers on; the Pi does the rest. Its pins take 3.3 V at most. The robot's sensors.py names what is wired to it; digital pins arrive as on or off and analog pins as 0-4095.",
+        },
+        {
+            "id": "pi-i2c-sensors", "title": "Sensors on the Pi's own I2C bus",
+            "requirement": "recommended",
+            "items": [
+                _part("1", "BNO055 9-axis IMU breakout", "Teyleten Robot BNO055 module, or any BNO055 breakout - genuine or a compatible clone", "Heading, tilt and turn rate, read directly by the Pi over I2C - no Arduino GIGA needed", "selected", "https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/"),
+            ],
+            "note": "An alternative to the GIGA-based sensors above, not an addition to them: motion_module.pi_imu.LocalIMU reads a BNO055 (or a 6-axis ISM330DHCX, LSM6DSOX, LSM6DSO or LSM6DS3TR-C) directly over I2C, with no Arduino GIGA at all - the same chip and the same heading math either way. Wire it to the Pi's own I2C-1 bus, shared with the servo board at pins 3 and 5 (I2C is a shared bus, and the two never collide on address), or, to keep it off that bus entirely, to a second, independent I2C bus bit-banged on spare GPIO17/GPIO18 (physical pins 11/12) with one line in /boot/firmware/config.txt: dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18. Either way, nothing about the servo board's own wiring changes. See docs/CODING.md for the full wiring and the code.",
         },
         {
             "id": "wiring", "title": "Wiring",
@@ -172,7 +181,6 @@ def hardware_guide(config) -> dict:
         "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. Sensors connect through an Arduino GIGA R1 WiFi on the Pi's USB.",
         "parts_groups": parts_groups(),
         "missing_specs": [
-            {"name": "Servo rail on the power module", "needed": "Set its output for the servos you fit, and size it for every servo that can move at once. PCA9685 V+ is rated 3.3-6 V, so the 12 V battery rail must never reach it."},
             {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},
         ],
         "wiring": {

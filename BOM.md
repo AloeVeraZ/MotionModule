@@ -39,12 +39,15 @@ connection.
 | 1 pack | XT30 pigtails | [XT30 male & female leads on silicone wire](https://www.amazon.com/dp/B0FY2ZCR83) | Selected |
 | 1 | 12 V → 5 V USB-C converter | [Amazon B0FD735LFG](https://www.amazon.com/dp/B0FD735LFG) | Selected |
 | 1 | Rocker switch | [DaierTek KCD1 automotive rocker switch](https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462) | Selected |
+| 1 | 12 V/24 V → 5 V 5 A buck converter | [PlusRoc waterproof buck converter, 2-pack](https://www.amazon.com/dp/B0FYNCSV2Z) | Selected |
 | 1 set | Power module CAD | [`cad/` in this repository](https://github.com/AloeVeraZ/MotionModule/tree/main/cad) | **Being drawn** |
 
 **Both batteries ship with their own fuse**, so there is no separate fuse or
-breaker to buy. The rocker switch is the physical cutoff. The servo rail is
-stepped down on the power module itself, which is why there is no separate
-regulator in this list.
+breaker to buy. The rocker switch is the physical cutoff. **The buck converter
+above steps the 12 V battery rail down to the PCA9685's servo V+ terminal**,
+which is rated 3.3–6 V; the converter's fixed 5 V output sits safely inside
+that range. It outputs 5 A (25 W) maximum — size how many servos you run at
+once against that budget.
 
 > [!WARNING]
 > **V+ feeds every servo directly.** The board will take up to 12 V there, but
@@ -106,6 +109,31 @@ its heading if one drops out. The newer BNO085 was left out: Adafruit notes
 that its I2C breaks the protocol in some circumstances, and it needs a large
 driver library.
 
+## Recommended · Sensors on the Pi's own I2C bus
+
+An alternative to the GIGA above, not an addition to it: `motion_module.pi_imu.LocalIMU`
+reads a BNO055 (or a 6-axis ISM330DHCX, LSM6DSOX, LSM6DSO or LSM6DS3TR-C)
+directly over I2C, with no Arduino GIGA at all — the same chip and the same
+heading math either way.
+
+| Qty | Part | Selection | Notes |
+| ---: | --- | --- | --- |
+| 1 | 9-axis IMU | [Teyleten Robot BNO055 breakout](https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/) | A generic BNO055 clone; any BNO055 breakout, genuine or clone, works the same way |
+
+Wire it to the Pi's own I2C-1 bus — shared with the servo board at pins 3 and
+5, since I2C is a shared bus and the two never collide on address — or, to
+keep it off that bus entirely, to a second, independent I2C bus bit-banged on
+spare GPIO17/GPIO18 (physical pins 11/12), with one line in
+`/boot/firmware/config.txt`:
+
+```
+dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
+```
+
+Either way, nothing about the servo board's own wiring changes. See
+[docs/CODING.md](docs/CODING.md#an-imu-wired-straight-to-the-pi-no-giga) for
+the full wiring and the code.
+
 ## Recommended · Wiring
 
 | Qty | Part | Requirement |
@@ -134,8 +162,6 @@ boot, a 10 kΩ pull-down from that input to signal ground holds it low.
 
 ## Still to decide
 
-1. The servo rail output on the power module, sized for every servo that can
-   move at once and set to your servos' voltage.
-2. The CAD files themselves — both `cad/` folders are still being filled in.
+1. The CAD files themselves — both `cad/` folders are still being filled in.
 
 The complete signal wiring is in [docs/PINOUT.md](docs/PINOUT.md).

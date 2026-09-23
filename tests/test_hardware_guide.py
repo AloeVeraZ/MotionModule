@@ -112,11 +112,11 @@ class HardwareGuideTests(unittest.TestCase):
         groups = hardware_guide(self.config)["parts_groups"]
         self.assertEqual(
             [group["id"] for group in groups],
-            ["controllers", "power", "actuators", "sensors", "wiring", "tools"],
+            ["controllers", "power", "actuators", "sensors", "pi-i2c-sensors", "wiring", "tools"],
         )
         self.assertEqual(
             [group["requirement"] for group in groups],
-            ["required", "required", "recommended", "recommended", "recommended", "recommended"],
+            ["required", "required", "recommended", "recommended", "recommended", "recommended", "recommended"],
         )
         by_id = {group["id"]: group for group in groups}
         self.assertIn("recommendations, not requirements", by_id["actuators"]["note"].lower())
@@ -128,6 +128,13 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertIn("6-axis IMU: Adafruit ISM330DHCX", selected)
         self.assertIn("Arduino GIGA R1 WiFi", selected)
         self.assertIn("3.3 V", sensors["note"])
+
+    def test_pi_i2c_sensor_group_names_a_bno055_and_points_at_pi_imu(self):
+        group = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "pi-i2c-sensors")
+        selected = {part["name"] for part in group["items"] if part["status"] == "selected"}
+        self.assertIn("BNO055 9-axis IMU breakout", selected)
+        self.assertIn("motion_module.pi_imu.LocalIMU", group["note"])
+        self.assertIn("i2c-gpio", group["note"])
 
     def test_the_battery_is_chosen_and_carries_its_own_fuse(self):
         power = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "power")

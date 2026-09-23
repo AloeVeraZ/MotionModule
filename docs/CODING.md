@@ -309,6 +309,61 @@ drive.drive(0, 0, max(-1, min(1, error / 30)))           # positive turns left
 The sample `autonomous.py` uses this to turn exactly 90 degrees, and falls back
 to a timed turn when no IMU is streaming.
 
+### An IMU wired straight to the Pi, no GIGA
+
+A BNO055 or 6-axis board also works wired directly to the Pi's own I2C pins
+(3 and 5) instead of through a GIGA - the same chip and heading math either
+way, just `motion_module.pi_imu.LocalIMU` in place of `giga.imu()`:
+
+```python
+from motion_module.imu import GigaIMU
+from motion_module.pi_imu import LocalIMU
+
+imu = LocalIMU(GigaIMU("bno055", "Main IMU"))
+imu.heading()   # the same methods as a GIGA IMU: heading(), zero(), describe(), ...
+```
+
+SDA and SCL are shared with the PCA9685 servo board - I2C is a shared bus, and
+they never share an address, so both work at once; nothing about the servo
+board's wiring changes. Power the breakout from the Pi's spare 3.3V (pin 17)
+and a spare ground (6, 20, or 30). A mode-select pin some breakout boards
+expose (labelled PS0/PS1, or just BOOT) needs tying to a spare ground for I2C
+mode; this driver never toggles a hardware reset or reads an interrupt line,
+so RST and INT are left unconnected. `LocalIMU` runs its own background
+thread and needs `smbus2`, already a MotionModule dependency.
+
+**A second, fully independent I2C bus on spare pins.** Rather than sharing
+pins 3 and 5 with the servo board, `dtoverlay=i2c-gpio` bit-bangs a whole
+extra I2C bus on any two ordinary GPIO pins - the reference build uses GPIO17
+(physical 11) and GPIO18 (physical 12), both already unused. Add one line to
+`/boot/firmware/config.txt` on the Pi, then reboot:
+
+```
+dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
+```
+
+Wire the IMU's SDA to physical pin 11, SCL to physical pin 12, VIN to the
+spare 3.3V (pin 17) and GND to a spare ground (6 or 20) - none of it touches
+pins 1, 3, 5, 7 or 9, so the servo board's wiring is never disturbed or
+unplugged. The kernel assigns this new bus a number that is not guaranteed to
+stay the same across reboots, so find it by name instead of hardcoding it:
+
+```python
+from motion_module.imu import GigaIMU
+from motion_module.pi_imu import LocalIMU, find_i2c_gpio_bus
+
+bus = find_i2c_gpio_bus()
+if bus is None:
+    raise RuntimeError(
+        "i2c-gpio is not set up. Add dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 "
+        "to /boot/firmware/config.txt and reboot."
+    )
+imu = LocalIMU(GigaIMU("bno055", "Main IMU"), bus=bus)
+```
+
+Verify the overlay took effect with `i2cdetect -l` on the Pi; the line naming
+`i2c-gpio` shows the bus number `find_i2c_gpio_bus()` just found for you.
+
 ## Motor API
 
 Address a motor by its name, or by its channel number from 1 to 8:
