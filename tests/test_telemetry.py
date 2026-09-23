@@ -2,6 +2,7 @@ import math
 import unittest
 
 from motion_module.telemetry import (
+    DEFAULT_GAMEPAD_BUTTONS,
     DEFAULT_GAMEPAD_STICKS,
     DEFAULT_TOUCH_STICKS,
     CameraFeed,
@@ -12,6 +13,7 @@ from motion_module.telemetry import (
     TOUCH_PANELS,
     TelemetryDashboard,
     empty_snapshot,
+    merge_cameras,
     normalize_snapshot,
 )
 
@@ -190,6 +192,44 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual((touch["forward"], touch["strafe"], touch["rotate"]), (None, None, "right_x"))
         self.assertEqual((touch["deadzone"], touch["curve"]), (0.1, 1.0))
 
+    def test_gamepad_buttons_default_to_a_dpad_stop_and_a_trigger_estop(self):
+        for payload in (normalize_snapshot(TelemetryDashboard().snapshot()), empty_snapshot(),
+                        normalize_snapshot({"cameras": []})):
+            with self.subTest(payload=payload):
+                self.assertEqual(payload["gamepad_buttons"], DEFAULT_GAMEPAD_BUTTONS)
+
+    def test_a_project_changes_only_the_buttons_it_names(self):
+        class RobotDashboard(TelemetryDashboard):
+            def gamepad_buttons(self):
+                return {"left_bumper": "Turn_Left", "right_bumper": "turn_right"}
+
+        payload = normalize_snapshot(RobotDashboard().snapshot())
+        buttons = payload["gamepad_buttons"]
+        self.assertEqual(buttons["left_bumper"], "turn_left")
+        self.assertEqual(buttons["right_bumper"], "turn_right")
+        # The defaults survive because this project never mentioned them.
+        self.assertEqual(buttons["dpad_down"], "stop")
+        self.assertEqual(buttons["right_trigger"], "estop")
+
+    def test_a_button_can_unbind_its_default(self):
+        class RobotDashboard(TelemetryDashboard):
+            def gamepad_buttons(self):
+                return {"right_trigger": None}
+
+        payload = normalize_snapshot(RobotDashboard().snapshot())
+        self.assertNotIn("right_trigger", payload["gamepad_buttons"])
+        self.assertEqual(payload["gamepad_buttons"]["dpad_down"], "stop")
+
+    def test_unknown_buttons_and_actions_are_dropped(self):
+        class RobotDashboard(TelemetryDashboard):
+            def gamepad_buttons(self):
+                return {"a": "backflip", "guide": "stop", "x": "forward"}
+
+        payload = normalize_snapshot(RobotDashboard().snapshot())
+        self.assertNotIn("a", payload["gamepad_buttons"])
+        self.assertNotIn("guide", payload["gamepad_buttons"])
+        self.assertEqual(payload["gamepad_buttons"]["x"], "forward")
+
     def test_a_touchscreen_adds_only_the_panels_it_knows(self):
         class RobotDashboard(TelemetryDashboard):
             def touch_panels(self):
@@ -200,6 +240,65 @@ class TelemetryTests(unittest.TestCase):
         self.assertEqual(normalize_snapshot({"touch_panels": "status"})["touch_panels"], ["status"])
         self.assertEqual(normalize_snapshot({"touch_panels": {"imu": True}})["touch_panels"], [])
         self.assertEqual(TOUCH_PANELS, ("status", "mechanisms", "imu", "pi_inputs", "usb_controllers"))
+
+
+class MergeCamerasTests(unittest.TestCase):
+    def test_no_configured_cameras_uses_the_auto_feeds_as_is(self):
+        auto = [{"id": "camera-usb-1", "name": "USB camera", "url": "", "connected": False, "detail": "None found"}]
+        self.assertEqual(merge_cameras([], auto), auto)
+
+    def test_a_named_slot_with_no_url_takes_the_matching_auto_stream(self):
+        configured = [{"id": "camera-1", "name": "Front", "url": "", "connected": False, "detail": ""}]
+        auto = [{"id": "camera-usb-1", "name": "USB camera", "url": "/api/camera/usb-1.mjpg",
+                 "connected": True, "detail": "Streaming automatically."}]
+        merged = merge_cameras(configured, auto)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["name"], "Front", "The project's own name wins")
+        self.assertEqual(merged[0]["url"], "/api/camera/usb-1.mjpg")
+        self.assertTrue(merged[0]["connected"])
+
+    def test_a_slot_with_its_own_url_is_left_alone(self):
+        configured = [{"id": "camera-1", "name": "Front", "url": "http://example.local/stream",
+                       "connected": True, "detail": ""}]
+        auto = [{"id": "camera-usb-1", "name": "USB camera", "url": "/api/camera/usb-1.mjpg",
+                 "connected": True, "detail": "Streaming automatically."}]
+        self.assertEqual(merge_cameras(configured, auto), configured)
+
+    def test_no_matching_auto_feed_keeps_the_offline_placeholder(self):
+        configured = [{"id": "camera-1", "name": "Front", "url": "", "connected": False, "detail": ""}]
+        auto = [{"id": "camera-usb-1", "name": "USB camera", "url": "", "connected": False, "detail": "None found"}]
+        self.assertEqual(merge_cameras(configured, auto), configured)
+
+    def test_an_extra_connected_camera_appends_but_a_disconnected_one_does_not(self):
+        configured = [{"id": "camera-1", "name": "Front", "url": "", "connected": False, "detail": ""}]
+        connected_extra = [
+            {"id": "camera-usb-1", "name": "USB camera", "url": "", "connected": False, "detail": "None found"},
+            {"id": "camera-usb-2", "name": "USB camera 2", "url": "/api/camera/usb-2.mjpg",
+             "connected": True, "detail": "Streaming automatically."},
+        ]
+        merged = merge_cameras(configured, connected_extra)
+        self.assertEqual([camera["name"] for camera in merged], ["Front", "USB camera 2"])
+
+        disconnected_extra = [
+            {"id": "camera-usb-1", "name": "USB camera", "url": "", "connected": False, "detail": "None found"},
+        ]
+        self.assertEqual(merge_cameras(configured, disconnected_extra), configured,
+                          "A phantom second placeholder must never appear")
+
+    def test_result_never_exceeds_max_cameras(self):
+        configured = [
+            {"id": "camera-1", "name": "Front", "url": "", "connected": False, "detail": ""},
+            {"id": "camera-2", "name": "Rear", "url": "", "connected": False, "detail": ""},
+        ]
+        auto = [
+            {"id": "camera-usb-1", "name": "USB camera", "url": "/api/camera/usb-1.mjpg",
+             "connected": True, "detail": ""},
+            {"id": "camera-usb-2", "name": "USB camera 2", "url": "/api/camera/usb-2.mjpg",
+             "connected": True, "detail": ""},
+        ]
+        merged = merge_cameras(configured, auto)
+        self.assertEqual(len(merged), MAX_CAMERAS)
+        self.assertEqual([camera["name"] for camera in merged], ["Front", "Rear"])
 
 
 if __name__ == "__main__":

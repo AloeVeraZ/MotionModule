@@ -332,6 +332,36 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   text-transform: uppercase;
 }
 .camera-meta span { color: var(--faint); }
+.camera-rotate {
+  position: absolute; left: .625rem; right: .625rem; top: .625rem; z-index: 2;
+  display: flex; align-items: center; gap: .5rem;
+  padding: .3125rem .5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: rgba(8, 8, 8, .84);
+}
+.camera-rotate-button {
+  display: grid; place-items: center;
+  width: 1.625rem; height: 1.625rem; flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+}
+.camera-rotate-button svg { width: .9rem; height: .9rem; }
+.camera-rotate-button:hover, .camera-rotate-button:focus-visible { color: var(--ink); border-color: var(--accent-line); }
+.camera-rotate-slider { flex: 1 1 auto; min-width: 0; accent-color: var(--accent-fill); }
+.camera-rotate-value {
+  width: 3.25rem; flex: 0 0 auto;
+  padding: .1875rem .25rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--well);
+  color: var(--ink);
+  font: 700 .75rem/1 var(--font-mono);
+  text-align: center;
+}
 
 /* ------------------------------------------------------ mechanism controls */
 
@@ -757,6 +787,17 @@ const touchDrive = createHoldControls({
    positive. */
 const DEFAULT_TOUCH_STICKS = {forward: 'left_y', strafe: 'left_x', rotate: 'right_x', deadzone: .1, curve: 1};
 const DEFAULT_GAMEPAD_STICKS = {forward: 'left_y', strafe: 'left_x', rotate: 'right_x', deadzone: .12, curve: 1};
+/* Which game-controller buttons trigger an action, from dashboard.py's
+   gamepad_buttons(). Indices follow the W3C "standard" gamepad mapping that
+   an Xbox-style controller reports over either USB or Bluetooth. */
+const DEFAULT_GAMEPAD_BUTTONS = {dpad_down: 'stop', right_trigger: 'estop'};
+const GAMEPAD_BUTTON_INDEX = {
+  a: 0, b: 1, x: 2, y: 3,
+  left_bumper: 4, right_bumper: 5, left_trigger: 6, right_trigger: 7,
+  dpad_up: 12, dpad_down: 13, dpad_left: 14, dpad_right: 15,
+};
+let gamepadButtons = {...DEFAULT_GAMEPAD_BUTTONS};
+let padButtonsHeld = new Set();
 // Up or right drives forward, strafes right or turns right. drive() counts
 // rotate up turning left, so a turn is sent the other way round.
 const MOTIONS = {
@@ -797,6 +838,18 @@ $$('[data-turn]').forEach(button => turnButtons.bind(button, button.dataset.turn
 let padIndex = null;
 let cameraMode = 'both';
 let cameraSignature = '';
+/* Holding Shift while dragging a camera's rotation slider snaps it to 90°
+   steps instead of moving freely. A range input's own "input" event carries
+   no modifier keys, so Shift is tracked here instead. */
+let shiftHeld = false;
+addEventListener('keydown', event => { if (event.key === 'Shift') shiftHeld = true; });
+addEventListener('keyup', event => { if (event.key === 'Shift') shiftHeld = false; });
+addEventListener('blur', () => { shiftHeld = false; });
+let cameraRotation = {};
+try { cameraRotation = JSON.parse(localStorage.getItem('motionmodule-camera-rotation') || '{}') || {}; } catch (_) { cameraRotation = {}; }
+function saveCameraRotation() {
+  try { localStorage.setItem('motionmodule-camera-rotation', JSON.stringify(cameraRotation)); } catch (_) {}
+}
 /* The competition console's key layout belongs to the robot project: it comes
    from dashboard.py's driver_bindings(). This is deliberately unrelated to the
    fixed bindings in Debug's Drive Test. */
@@ -977,17 +1030,60 @@ function renderInputSummary(pad = activePad()) {
     : pad ? (pad.mapping === 'standard' ? 'Standard gamepad' : 'Raw gamepad') : 'Keyboard';
 }
 
+/* A pressed gamepad button, by the name dashboard.py's gamepad_buttons()
+   uses for it. Most browsers report each as a GamepadButton object; a few
+   report a trigger as a plain 0..1 number instead, so both are read. */
+function padPressedButtons(pad) {
+  const pressed = new Set();
+  const buttons = pad.buttons || [];
+  for (const [name, index] of Object.entries(GAMEPAD_BUTTON_INDEX)) {
+    const button = buttons[index];
+    const isPressed = button && typeof button === 'object' ? Boolean(button.pressed) : Number(button) > 0.5;
+    if (isPressed) pressed.add(name);
+  }
+  return pressed;
+}
+
+/* A configured button held down moves like a held key: -1, 0 or 1, and wins
+   over that motion's stick reading, so a bumper bound to a turn always turns
+   at full speed regardless of where the stick sits. */
+function padButtonAxis(pressed, positive, negative) {
+  const bound = action => Object.entries(gamepadButtons).some(([button, mapped]) => mapped === action && pressed.has(button));
+  return (bound(positive) ? 1 : 0) - (bound(negative) ? 1 : 0);
+}
+
+/* stop and estop fire the instant their button goes down - not once per
+   poll while it stays held - the same way the STOP key and button work. */
+function handlePadKillButtons(pressed) {
+  for (const [button, action] of Object.entries(gamepadButtons)) {
+    if ((action === 'stop' || action === 'estop') && pressed.has(button) && !padButtonsHeld.has(button)) {
+      $('#armConfirm').checked = false;
+      setArmed(false);
+    }
+  }
+  padButtonsHeld = pressed;
+}
+
 function readPad() {
   const pad = activePad();
   renderInputSummary(pad);
   if (!pad) {
     replaceWith($('#axisList'), []);
+    padButtonsHeld = new Set();
     return null;
   }
   // Browsers count a stick's Y axis up as negative.
   const axes = pad.axes || [];
   const reading = {left_x: axes[0], left_y: -axes[1], right_x: axes[2], right_y: -axes[3]};
   const command = stickCommand(gamepadSticks, axis => Number(reading[axis]) || 0);
+  const pressed = padPressedButtons(pad);
+  const buttonForward = padButtonAxis(pressed, 'forward', 'back');
+  if (buttonForward) command.forward = buttonForward;
+  const buttonStrafe = padButtonAxis(pressed, 'right', 'left');
+  if (buttonStrafe) command.strafe = buttonStrafe;
+  const buttonRotate = padButtonAxis(pressed, 'turn_left', 'turn_right');
+  if (buttonRotate) command.rotate = buttonRotate;
+  handlePadKillButtons(pressed);
   replaceWith($('#axisList'), [axisBar('Forward', command.forward), axisBar('Strafe', command.strafe), axisBar('Turn', command.rotate)]);
   return moving(command) ? command : null;
 }
@@ -1133,12 +1229,14 @@ function applyStickLayout(data) {
   };
   const touch = layout(data.touch_sticks, DEFAULT_TOUCH_STICKS);
   const pad = layout(data.gamepad_sticks, DEFAULT_GAMEPAD_STICKS);
+  const buttons = data.gamepad_buttons && typeof data.gamepad_buttons === 'object' ? data.gamepad_buttons : DEFAULT_GAMEPAD_BUTTONS;
   const panels = Array.isArray(data.touch_panels) ? data.touch_panels.map(String) : [];
-  const signature = JSON.stringify([touch, pad, panels]);
+  const signature = JSON.stringify([touch, pad, buttons, panels]);
   if (signature === stickSignature) return;
   stickSignature = signature;
   touchSticks = touch;
   gamepadSticks = pad;
+  gamepadButtons = buttons;
   touchPanels = panels;
   turnActions.clear();
   turnButtons.clear();
@@ -1232,6 +1330,52 @@ function cameraPlaceholder(title, detail) {
   return empty;
 }
 
+/* A viewing preference only: it turns the image in the browser, it does not
+   move the camera. The slider drags freely; holding Shift while dragging it
+   snaps to 90° steps, and typing a number in the box beside it (say, 91 or
+   92) always sets that exact angle. The round button beside both just adds
+   90° each press. */
+function cameraRotateControl(camera, frame) {
+  const wrap = element('div', 'camera-rotate');
+  const stored = Number(cameraRotation[camera.id]);
+  const initial = Number.isFinite(stored) ? ((Math.round(stored) % 360) + 360) % 360 : 0;
+
+  const button = element('button', 'camera-rotate-button');
+  button.type = 'button';
+  button.setAttribute('aria-label', `Rotate ${camera.name} 90 degrees`);
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>';
+
+  const slider = element('input', 'camera-rotate-slider');
+  slider.type = 'range'; slider.min = '0'; slider.max = '359'; slider.step = '1';
+  slider.setAttribute('aria-label', `${camera.name} rotation`);
+
+  const number = element('input');
+  number.type = 'number'; number.min = '0'; number.max = '359'; number.step = '1';
+  number.className = 'camera-rotate-value';
+  number.setAttribute('aria-label', `${camera.name} rotation in degrees`);
+
+  const apply = degrees => {
+    const wrapped = ((Math.round(degrees) % 360) + 360) % 360;
+    cameraRotation[camera.id] = wrapped;
+    slider.value = String(wrapped);
+    number.value = String(wrapped);
+    const image = frame.querySelector('img');
+    if (image) image.style.transform = wrapped ? `rotate(${wrapped}deg)` : '';
+    saveCameraRotation();
+  };
+
+  slider.addEventListener('input', () => {
+    const raw = Number(slider.value);
+    apply(shiftHeld ? Math.round(raw / 90) * 90 : raw);
+  });
+  number.addEventListener('change', () => apply(Number(number.value) || 0));
+  button.addEventListener('click', () => apply((Number(slider.value) || 0) + 90));
+
+  wrap.append(button, slider, number);
+  apply(initial);
+  return wrap;
+}
+
 function applyCameraMode() {
   const stage = $('#cameraStage');
   const frames = [...stage.querySelectorAll('[data-camera-id]')];
@@ -1260,6 +1404,7 @@ function renderCameras(data) {
       image.addEventListener('load', () => { empty.hidden = true; }); frame.append(image);
     }
     frame.append(empty);
+    frame.append(cameraRotateControl(camera, frame));
     const meta = element('div', 'camera-meta'); meta.append(element('strong', null, camera.name), element('span', null, camera.connected && camera.url ? 'LIVE' : 'OFFLINE')); frame.append(meta);
     return frame;
   }));

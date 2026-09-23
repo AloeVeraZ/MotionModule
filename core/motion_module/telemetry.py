@@ -32,6 +32,20 @@ DEFAULT_DRIVER_BINDINGS = {
     "stop": " ",
 }
 
+# The Driver Station's game-controller buttons. Each names one of the same
+# six drive() directions as driver_bindings, or "stop"/"estop" to disable the
+# robot immediately. A project names only the buttons it wants to change.
+GAMEPAD_BUTTONS = (
+    "a", "b", "x", "y",
+    "left_bumper", "right_bumper", "left_trigger", "right_trigger",
+    "dpad_up", "dpad_down", "dpad_left", "dpad_right",
+)
+BUTTON_ACTIONS = {"forward", "back", "left", "right", "turn_left", "turn_right", "stop", "estop"}
+DEFAULT_GAMEPAD_BUTTONS = {
+    "dpad_down": "stop",
+    "right_trigger": "estop",
+}
+
 # The Driver Station's sticks: a game controller's, and the on-screen pair a
 # phone or tablet drives with. Both use these four axis names, and each of
 # drive()'s three motions takes one of them. Pushing a stick up or right
@@ -166,6 +180,21 @@ class TelemetryDashboard:
 
         return {}
 
+    def gamepad_buttons(self):
+        """Which game-controller buttons trigger an action, as {button: action}.
+
+        Buttons: "a", "b", "x", "y", "left_bumper", "right_bumper",
+        "left_trigger", "right_trigger", "dpad_up", "dpad_down", "dpad_left"
+        and "dpad_right". Actions: the same six drive() directions as
+        driver_bindings ("forward", "back", "left", "right", "turn_left",
+        "turn_right"), plus "stop" and "estop", either of which disables the
+        robot the instant the button is pressed. Return only what you want to
+        change; by default the D-pad's down button is "stop" and the right
+        trigger is "estop". None unbinds a button that took a default.
+        """
+
+        return {}
+
     def touch_sticks(self):
         """The on-screen sticks a phone or tablet drives with.
 
@@ -196,6 +225,7 @@ class TelemetryDashboard:
             "usb_controllers": self.usb_controllers(),
             "driver_bindings": self.driver_bindings(),
             "gamepad_sticks": self.gamepad_sticks(),
+            "gamepad_buttons": self.gamepad_buttons(),
             "touch_sticks": self.touch_sticks(),
             "touch_panels": self.touch_panels(),
             # Kept for projects and clients written for MotionModule 0.10.
@@ -211,6 +241,7 @@ def empty_snapshot() -> dict[str, Any]:
         "usb_controllers": [],
         "driver_bindings": dict(DEFAULT_DRIVER_BINDINGS),
         "gamepad_sticks": dict(DEFAULT_GAMEPAD_STICKS),
+        "gamepad_buttons": dict(DEFAULT_GAMEPAD_BUTTONS),
         "touch_sticks": dict(DEFAULT_TOUCH_STICKS),
         "touch_panels": [],
         "sensors": [],
@@ -423,6 +454,31 @@ def _driver_bindings(value: Any) -> dict[str, str]:
     return bindings
 
 
+def _gamepad_buttons(value: Any) -> dict[str, str]:
+    """Fill in the default kill buttons around whatever a project chose.
+
+    A button the project names is taken exactly as given, even to unbind a
+    default with None. Anything left unmentioned keeps its default, so a
+    project that never overrides gamepad_buttons() still gets a working
+    D-pad stop and trigger e-stop.
+    """
+
+    chosen = _mapping(value) or {}
+    buttons: dict[str, str] = {}
+    for button in GAMEPAD_BUTTONS:
+        if button not in chosen:
+            continue
+        raw = chosen.get(button)
+        action = "" if raw is None or raw is False else _text(raw, 16).casefold().replace(" ", "_")
+        if action in {"", "none", "off"} or action not in BUTTON_ACTIONS:
+            continue
+        buttons[button] = action
+    for button, action in DEFAULT_GAMEPAD_BUTTONS.items():
+        if button not in chosen:
+            buttons[button] = action
+    return buttons
+
+
 def _sticks(value: Any, defaults: Mapping[str, Any], *, turn_buttons: bool = False) -> dict[str, Any]:
     """Fill in the defaults around the stick axes a project chose.
 
@@ -516,10 +572,38 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
         "usb_controllers": controllers,
         "driver_bindings": _driver_bindings(item.get("driver_bindings")),
         "gamepad_sticks": _sticks(item.get("gamepad_sticks"), DEFAULT_GAMEPAD_STICKS),
+        "gamepad_buttons": _gamepad_buttons(item.get("gamepad_buttons")),
         "touch_sticks": _sticks(item.get("touch_sticks"), DEFAULT_TOUCH_STICKS, turn_buttons=True),
         "touch_panels": _touch_panels(item.get("touch_panels")),
         "sensors": sensors,
     }
+
+
+def merge_cameras(configured: list[dict], auto: list[dict]) -> list[dict]:
+    """Fill in a live USB stream for any camera slot a project only named.
+
+    A project can declare a camera by name alone, with no URL - the Mecanum
+    sample's single "Front" entry does exactly this - and let MotionModule's
+    own USB camera detection supply the live feed instead: position in
+    cameras() picks which auto-detected device a slot gets. A slot that
+    already has its own URL, from an external streamer, is left exactly as
+    given. A physical camera beyond what the project named still appears, so
+    plugging a second one in brings up the multi-camera toggle even though
+    only one was named in code - but only once it is actually detected, not
+    as a second, permanently-offline placeholder.
+    """
+
+    if not configured:
+        return auto[:MAX_CAMERAS]
+    merged = []
+    for index, camera in enumerate(configured):
+        auto_feed = auto[index] if index < len(auto) else None
+        if camera.get("url") or auto_feed is None or not auto_feed.get("connected"):
+            merged.append(camera)
+            continue
+        merged.append({**auto_feed, "name": camera.get("name") or auto_feed["name"]})
+    merged.extend(feed for feed in auto[len(configured):] if feed.get("connected"))
+    return merged[:MAX_CAMERAS]
 
 
 def merge_usb_controllers(configured: list[dict], discovered: list[dict]) -> list[dict]:

@@ -19,10 +19,11 @@ import time
 import zipfile
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from werkzeug.serving import make_server
 
 from . import __version__
+from .camera import USBCameraManager
 from .config import (
     DEFAULT_HARDWARE_PATH,
     PROJECT_CONFIG_NAME,
@@ -49,7 +50,7 @@ from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .runner import load_project
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
-from .telemetry import empty_snapshot, merge_usb_controllers, normalize_snapshot
+from .telemetry import empty_snapshot, merge_cameras, merge_usb_controllers, normalize_snapshot
 from .updates import PasswordRequired, TooManyPasswordAttempts, UpdateChecker, installed_release
 from .usb import sensor_controllers, usb_devices
 
@@ -343,6 +344,8 @@ def create_app(
     firmware_lock = threading.Lock()
     updates = update_checker if update_checker is not None else UpdateChecker()
     app.config["UPDATE_CHECKER"] = updates
+    camera_manager = USBCameraManager()
+    app.config["CAMERA_MANAGER"] = camera_manager
 
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
@@ -870,6 +873,13 @@ def create_app(
     def drive_control_list():
         return jsonify({"ok": True, "controls": drive_controls(), "project": project_name})
 
+    @app.get("/api/camera/usb-<int:slot>.mjpg")
+    def usb_camera_stream(slot: int):
+        return Response(
+            camera_manager.mjpeg(slot),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+
     @app.get("/api/drive/telemetry")
     def drive_telemetry():
         payload = empty_snapshot()
@@ -888,6 +898,12 @@ def create_app(
                     "error": f"dashboard.py could not read telemetry: {error}",
                     **payload,
                 }), 503
+        # dashboard.py may not declare cameras at all, or may only name one
+        # without a URL. Either way, the Driver Station still gets a live
+        # camera tile: MotionModule streams a USB camera automatically,
+        # matching a project's named slots in order, and stays a labelled
+        # placeholder when there is none plugged in.
+        payload["cameras"] = merge_cameras(payload["cameras"], camera_manager.feeds())
         payload["usb_controllers"] = merge_usb_controllers(
             payload["usb_controllers"], discovered_sensor_controllers()
         )
@@ -1359,6 +1375,9 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         checker = app.config.get("UPDATE_CHECKER")
         if checker is not None:
             checker.close()
+        camera_manager = app.config.get("CAMERA_MANAGER")
+        if camera_manager is not None:
+            camera_manager.close()
         server.server_close()
 
 

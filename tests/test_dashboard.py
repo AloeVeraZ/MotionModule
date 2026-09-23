@@ -635,6 +635,31 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(data["pi_inputs"], data["sensors"])
         self.assertTrue(data["pi_gpio"]["digital_only"])
 
+    def test_no_project_cameras_still_gets_a_default_camera_tile(self):
+        # A project with no dashboard.py, and one whose cameras() returns
+        # nothing, both leave payload["cameras"] empty; either way the
+        # Driver Station gets a camera tile instead of "No camera configured".
+        for telemetry in (None, TelemetryDashboard()):
+            with self.subTest(telemetry=telemetry):
+                app = create_app(self.module, dashboard_telemetry=telemetry)
+                data = app.test_client().get("/api/drive/telemetry").get_json()
+                self.assertEqual(len(data["cameras"]), 1)
+                camera = data["cameras"][0]
+                self.assertEqual(camera["name"], "USB camera")
+                self.assertIsInstance(camera["connected"], bool)
+                self.assertTrue(camera["detail"])
+                app.config["CAMERA_MANAGER"].close()
+
+    def test_project_cameras_are_never_replaced_by_the_default_tile(self):
+        class Dashboard(TelemetryDashboard):
+            def cameras(self):
+                return [{"name": "Front", "url": "", "connected": False}]
+
+        app = create_app(self.module, dashboard_telemetry=Dashboard())
+        data = app.test_client().get("/api/drive/telemetry").get_json()
+        self.assertEqual([camera["name"] for camera in data["cameras"]], ["Front"])
+        app.config["CAMERA_MANAGER"].close()
+
     def test_telemetry_carries_the_project_s_sticks_and_touchscreen_panels(self):
         class Dashboard(TelemetryDashboard):
             def touch_sticks(self):
@@ -671,7 +696,7 @@ class DashboardTests(unittest.TestCase):
                 response = app.test_client().get("/api/drive/telemetry")
                 data = response.get_json()
                 self.assertEqual(response.status_code, 200, data.get("error"))
-                self.assertEqual([camera["name"] for camera in data["cameras"]], ["Front camera", "Rear camera"])
+                self.assertEqual([camera["name"] for camera in data["cameras"]], ["Front camera"])
                 self.assertEqual(data["driver_bindings"], DEFAULT_DRIVER_BINDINGS)
                 self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
                 self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)

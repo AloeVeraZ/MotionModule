@@ -145,7 +145,6 @@ from motion_module.telemetry import CameraFeed, TelemetryDashboard
 
 
 FRONT_STREAM = ""  # e.g. http://motionmodule.local:1181/?action=stream
-REAR_STREAM = ""   # e.g. http://motionmodule.local:1182/?action=stream
 
 
 class MyDashboard(TelemetryDashboard):
@@ -153,10 +152,15 @@ class MyDashboard(TelemetryDashboard):
         self.sensors = drive.sensors
 
     def cameras(self):
-        return [
-            CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM)),
-            CameraFeed("Rear", REAR_STREAM, connected=bool(REAR_STREAM)),
-        ]
+        # Naming one camera, with no URL, is enough - see below. A second
+        # one is only ever added the same way, one more CameraFeed:
+        #
+        #     REAR_STREAM = ""
+        #     return [
+        #         CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM)),
+        #         CameraFeed("Rear", REAR_STREAM, connected=bool(REAR_STREAM)),
+        #     ]
+        return [CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM))]
 
     def imu(self):
         return self.sensors.imus[0].reading()
@@ -174,6 +178,24 @@ Station preserves square viewports and lets the operator show either feed or
 both. Return live readings quickly from `snapshot()`/the group methods; the
 page polls them at 4 Hz. Mark missing hardware `connected=False` so it is shown
 as offline rather than as a valid zero.
+
+By default only one camera is coded, and that is deliberate: `cameras()`
+naming a camera with no URL, as above, does not leave it a permanent offline
+placeholder. MotionModule looks for a USB-connected camera itself and streams
+it, JPEG-encoded, matching it to that named slot - "Front" here - with no
+external streamer and no more code. A second physical camera, beyond what you
+named, still shows up on its own and brings up the Front/Both/Rear toggle,
+generically named until you give it a `CameraFeed` of its own the same way;
+plugging one in - or back in after it was unplugged - is picked up within a
+few seconds either way. A slot that already has its own URL (an external
+streamer's) is left exactly as given, and leaving `dashboard.py` out
+entirely, or `cameras()` empty, still puts one camera tile up. Streaming a
+USB camera this way needs `opencv-python-headless` installed on the Pi;
+without it, or without a camera plugged in, the tile stays a clearly labelled
+offline placeholder instead of an error. The operator can also rotate any
+camera's view from the Driver Station itself, in the browser, with a slider,
+a quick-rotate button, or by typing an exact angle - that is a per-viewer
+display preference, not something `dashboard.py` configures.
 
 A sensor on a spare Raspberry Pi pin also works: `module.digital_input()`
 accepts only BCM GPIO that remains unused after the active motor map and
@@ -483,6 +505,27 @@ the robot; dragging does, and lifting the thumb stops it at once. A thumb that
 was on a stick when the robot was disabled does nothing until it lifts and
 touches again. A held key wins over the sticks, and the sticks over a game
 controller.
+
+### Game controller buttons
+
+`gamepad_buttons()` says which buttons trigger an action, as `{button:
+action}`:
+
+```python
+def gamepad_buttons(self):
+    return {"left_bumper": "turn_left", "right_bumper": "turn_right"}
+```
+
+The buttons are `a`, `b`, `x`, `y`, `left_bumper`, `right_bumper`,
+`left_trigger`, `right_trigger`, `dpad_up`, `dpad_down`, `dpad_left` and
+`dpad_right`. The actions are the same six `drive()` directions as
+`driver_bindings` (`forward`, `back`, `left`, `right`, `turn_left`,
+`turn_right`), plus `stop` and `estop`, either of which disables the robot
+the instant the button goes down — the controller's own STOP button. A
+button held down drives like a held key, at full speed, and wins over that
+motion's stick reading. Return only what you want to change: by default the
+D-pad's down button is `stop` and the right trigger is `estop`; give a
+button `None` to unbind a default without replacing it.
 
 ### Touchscreen panels
 

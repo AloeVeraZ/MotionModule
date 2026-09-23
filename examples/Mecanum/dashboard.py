@@ -9,11 +9,11 @@ what the robot code reads.
 from motion_module.telemetry import CameraFeed, IMUReading, TelemetryDashboard
 
 
-# Browser-readable MJPEG URLs from the robot or camera server. Empty URLs keep
-# the two sample viewports visible as clearly labelled offline placeholders.
-# Common examples look like "http://motionmodule.local:1181/?action=stream".
+# An external streamer's browser-readable MJPEG URL, e.g.
+# "http://motionmodule.local:1181/?action=stream". Leave this blank - it's
+# blank by default - and MotionModule streams a USB camera plugged into the
+# Pi for "Front" itself, with no server of your own to run.
 FRONT_CAMERA_URL = ""
-REAR_CAMERA_URL = ""
 
 
 class MecanumDashboard(TelemetryDashboard):
@@ -64,6 +64,22 @@ class MecanumDashboard(TelemetryDashboard):
             "curve": 1.0,
         }
 
+    def gamepad_buttons(self):
+        """Which game-controller buttons trigger an action on this robot.
+
+        Written the same way as driver_bindings: return only what you want to
+        change; a face button ("a", "b", "x", "y"), a bumper, a trigger or a
+        D-pad direction can take any of driver_bindings' six actions, or
+        "stop"/"estop" to disable the robot instantly. This sample keeps the
+        defaults explicit: the D-pad's down button stops the robot and the
+        right trigger is the emergency stop.
+        """
+
+        return {
+            "dpad_down": "stop",
+            "right_trigger": "estop",
+        }
+
     def touch_sticks(self):
         """The two on-screen sticks a phone or tablet drives with.
 
@@ -92,20 +108,25 @@ class MecanumDashboard(TelemetryDashboard):
         return []
 
     def cameras(self):
-        # The Driver Station lets the operator show either camera or both.
-        # Each viewport remains square; at most two feeds are accepted.
+        # Only one camera is wired up by default. A second USB camera on the
+        # Pi still shows up on its own, bringing up the Driver Station's
+        # Front/Both/Rear toggle without any code here - but naming it
+        # "Rear", or giving it its own external streamer's URL, takes a
+        # second CameraFeed the same way this one is written:
+        #
+        #     REAR_CAMERA_URL = ""
+        #     return [
+        #         CameraFeed("Front camera", FRONT_CAMERA_URL,
+        #                    connected=bool(FRONT_CAMERA_URL), detail="Forward C920 / C270 view"),
+        #         CameraFeed("Rear camera", REAR_CAMERA_URL,
+        #                    connected=bool(REAR_CAMERA_URL), detail="Rear C920 / C270 view"),
+        #     ]
         return [
             CameraFeed(
                 "Front camera",
                 FRONT_CAMERA_URL,
                 connected=bool(FRONT_CAMERA_URL),
                 detail="Forward C920 / C270 view",
-            ),
-            CameraFeed(
-                "Rear camera",
-                REAR_CAMERA_URL,
-                connected=bool(REAR_CAMERA_URL),
-                detail="Rear C920 / C270 view",
             ),
         ]
 

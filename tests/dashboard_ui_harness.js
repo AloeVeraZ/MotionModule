@@ -183,7 +183,7 @@ function browser(now = 1700000000000) {
     },
   });
   const exports = fixture.kind === 'station'
-    ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll};'
+    ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll, readPad};'
     : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate, renderDriveTest};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
@@ -601,6 +601,88 @@ async function run(scenario) {
     await app.$('#updatePasswordCancel').fire('click');
     assert.equal(dialog.open, false, 'Cancel closes the popup');
     assert.equal(posts().length, sent, 'Cancelling sends nothing');
+  } else if (scenario === 'station-gamepad-buttons') {
+    await app.releaseForward();
+    await app.arm();
+    const gamepadWithButtons = pressedIndexes => ({
+      index: 0, id: 'Test pad (STANDARD GAMEPAD)', mapping: 'standard', axes: [0, 0, 0, 0],
+      buttons: Array.from({length: 16}, (_, index) => ({pressed: pressedIndexes.includes(index)})),
+    });
+
+    // Button 13 is the D-pad's down button, "stop" by default with no dashboard.py.
+    // readPad() polls on its own interval, independent of sendDrive() and of
+    // whether the robot is armed, exactly as the real page's setInterval does.
+    app.context.navigator.getGamepads = () => [gamepadWithButtons([13])];
+    let stops = app.requests.filter(item => item.url === '/api/stop').length;
+    await app.context.dashboard.readPad();
+    await app.settle();
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED',
+      "The D-pad's default stop button disables the robot");
+    assert(app.requests.filter(item => item.url === '/api/stop').length > stops);
+
+    // Holding it down must not resend the stop on every poll.
+    stops = app.requests.filter(item => item.url === '/api/stop').length;
+    await app.context.dashboard.readPad();
+    await app.settle();
+    assert.equal(app.requests.filter(item => item.url === '/api/stop').length, stops,
+      'A held stop button only fires once, on the initial press');
+
+    // Releasing it, then pressing it again, fires the stop again.
+    app.context.navigator.getGamepads = () => [gamepadWithButtons([])];
+    await app.context.dashboard.readPad();
+    await app.settle();
+    await app.arm();
+    app.context.navigator.getGamepads = () => [gamepadWithButtons([13])];
+    stops = app.requests.filter(item => item.url === '/api/stop').length;
+    await app.context.dashboard.readPad();
+    await app.settle();
+    assert(app.requests.filter(item => item.url === '/api/stop').length > stops,
+      'Pressing the button again after releasing it fires the stop again');
+
+    // A project can rebind any button with gamepad_buttons(); this one drives.
+    await app.arm();
+    app.setTelemetry({gamepad_buttons: {b: 'forward'}});
+    await app.context.dashboard.refreshTelemetry();
+    await app.settle();
+    await app.arm();
+    app.context.navigator.getGamepads = () => [gamepadWithButtons([1])];
+    await app.context.dashboard.sendDrive();
+    await app.settle();
+    assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 1, strafe: 0, rotate: 0},
+      'A button mapped to forward drives forward at full speed');
+  } else if (scenario === 'station-camera-rotation') {
+    await app.context.dashboard.refreshTelemetry();
+    await app.settle();
+    const frame = app.$('[data-camera-id="camera-1"]');
+    const slider = frame.querySelector('.camera-rotate-slider');
+    const number = frame.querySelector('.camera-rotate-value');
+    const button = frame.querySelector('.camera-rotate-button');
+    const image = frame.querySelector('img');
+    assert.equal(image.style.transform, '', 'No rotation applied yet');
+
+    slider.value = '45';
+    await slider.fire('input');
+    assert.equal(image.style.transform, 'rotate(45deg)');
+    assert.equal(number.value, '45', 'The number box tracks the slider');
+
+    // Holding Shift while dragging the slider snaps it to 90 degree steps.
+    await app.window.fire('keydown', {key: 'Shift'});
+    slider.value = '100';
+    await slider.fire('input');
+    assert.equal(image.style.transform, 'rotate(90deg)', 'Shift snaps the drag to the nearest 90 degrees');
+    await app.window.fire('keyup', {key: 'Shift'});
+
+    // Typing an exact angle is always free precision, Shift or not.
+    number.value = '91';
+    await number.fire('change');
+    assert.equal(image.style.transform, 'rotate(91deg)');
+    assert.equal(slider.value, '91', 'The slider tracks a typed value');
+
+    // The round button adds 90 degrees each press, wrapping past 360.
+    number.value = '300';
+    await number.fire('change');
+    await button.fire('click');
+    assert.equal(image.style.transform, 'rotate(30deg)', 'Rotation wraps around at 360');
   } else {
     throw new Error(`Unknown scenario: ${scenario}`);
   }
