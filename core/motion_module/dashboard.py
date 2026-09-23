@@ -17,6 +17,7 @@ import subprocess
 import threading
 import time
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
@@ -353,6 +354,14 @@ def create_app(
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
         return bool(provided) and secrets.compare_digest(provided, dashboard_token)
+
+    @app.before_request
+    def validate_json_body():
+        # All JSON command endpoints accept objects. Reject other shapes
+        # before a handler can treat an array, scalar or null as a command.
+        if request.path.startswith("/api/") and request.method == "POST" and request.is_json:
+            if not isinstance(request.get_json(silent=True), dict):
+                return jsonify({"ok": False, "error": "Request body must be a JSON object"}), 400
 
     # The routine's own thread must be able to stop the robot without waiting
     # for a request, so it gets the same stop path the STOP button uses.
@@ -1363,26 +1372,21 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         project_path=project_path,
         camera_auto_install=True,
     )
-    # Nginx is the only network-facing listener. Keeping Flask on loopback
-    # prevents bypassing the stable port-80 front door and proxy policy.
-    server = make_server("127.0.0.1", 8080, app, threaded=True)
-    server.timeout = 0.25
-    print("MotionModule dashboard: http://motionmodule.local")
-    try:
+    with ExitStack() as cleanup:
+        # Register cleanup before binding the server. A bind failure or a
+        # broken project close hook must not leak background workers.
+        for resource in (app.config.get("CAMERA_MANAGER"), app.config.get("UPDATE_CHECKER"), dashboard_telemetry):
+            close = getattr(resource, "close", None)
+            if callable(close):
+                cleanup.callback(close)
+        cleanup.callback(app.config["STOP_OUTPUTS"])
+        # Nginx is the only network-facing listener.
+        server = make_server("127.0.0.1", 8080, app, threaded=True)
+        cleanup.callback(server.server_close)
+        server.timeout = 0.25
+        print("MotionModule dashboard: http://motionmodule.local")
         while not stop_event.is_set():
             server.handle_request()
-    finally:
-        app.config["STOP_OUTPUTS"]()
-        close_telemetry = getattr(dashboard_telemetry, "close", None)
-        if callable(close_telemetry):
-            close_telemetry()
-        checker = app.config.get("UPDATE_CHECKER")
-        if checker is not None:
-            checker.close()
-        camera_manager = app.config.get("CAMERA_MANAGER")
-        if camera_manager is not None:
-            camera_manager.close()
-        server.server_close()
 
 
 def main(argv: list[str] | None = None) -> int:

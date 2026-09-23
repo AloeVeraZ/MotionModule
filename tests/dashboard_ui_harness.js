@@ -184,7 +184,7 @@ function browser(now = 1700000000000) {
   });
   const exports = fixture.kind === 'station'
     ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll, readPad};'
-    : '\nglobalThis.dashboard = {selectTab, refreshStatus, refreshTelemetry, sendDrive, stopAll, installUpdate, renderDriveTest};';
+    : '\nglobalThis.dashboard = {selectTab, refreshStatus, sendDrive, stopAll, installUpdate, renderDriveTest};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
   const driveEndpoint = fixture.kind === 'station' ? '/api/drive' : '/api/drive/test';

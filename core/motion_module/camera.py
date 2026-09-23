@@ -12,8 +12,8 @@ Opening a camera needs OpenCV (``opencv-python-headless``), which is an
 optional install, not a hard dependency of MotionModule - it is heavy, and a
 release with a broken install must never be able to brick a robot. Rather
 than leaving the operator to SSH in and install it by hand, a first run
-without it installs it quietly in the background the moment a dashboard
-starts, and the camera tile explains that it is doing so. Without any camera
+without it installs it quietly in the background when a camera is detected,
+and the camera tile explains that it is doing so. Without any camera
 plugged in, or if that install fails (no network, most likely), the tile
 stays a clearly labelled offline placeholder instead of an error.
 """
@@ -115,19 +115,23 @@ class _DeviceStream:
         import cv2
 
         while not self._stop.is_set():
-            capture = cv2.VideoCapture(self.device)
-            if not capture.isOpened():
-                capture.release()
+            capture = None
+            try:
+                capture = cv2.VideoCapture(self.device)
+                if capture.isOpened():
+                    self._stream(cv2, capture)
+                else:
+                    with self._lock:
+                        self._detail = "This camera would not open."
+            except Exception as error:
                 with self._lock:
+                    self._detail = f"Camera capture failed: {error}"
+            finally:
+                if capture is not None:
+                    capture.release()
+                with self._lock:
+                    self._frame = None
                     self._connected = False
-                    self._detail = "This camera would not open."
-                if self._stop.wait(_RETRY_SECONDS):
-                    return
-                continue
-            self._stream(cv2, capture)
-            capture.release()
-            with self._lock:
-                self._connected = False
             if self._stop.wait(_RETRY_SECONDS):
                 return
 
@@ -147,7 +151,7 @@ class _DeviceStream:
                     self._frame = buffer.tobytes()
                     self._connected = True
                     self._detail = ""
-            time.sleep(max(0.0, interval - (time.monotonic() - started)))
+            self._stop.wait(max(0.0, interval - (time.monotonic() - started)))
 
     @property
     def connected(self) -> bool:
@@ -165,10 +169,10 @@ class _DeviceStream:
         boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
         while not self._stop.is_set():
             with self._lock:
-                frame = self._frame
+                frame = self._frame if self._connected else None
             if frame is not None:
                 yield boundary + frame + b"\r\n"
-            time.sleep(1.0 / _CAPTURE_FPS)
+            self._stop.wait(1.0 / _CAPTURE_FPS)
 
     def close(self) -> None:
         self._stop.set()
@@ -199,21 +203,30 @@ class USBCameraManager:
             self.start()
 
     def start(self) -> None:
-        if self._thread is not None:
-            return
-        try:
-            import cv2  # noqa: F401  # Only a USB camera needs this.
-        except ImportError:
-            if self._auto_install:
-                threading.Thread(target=self._install_then_run, daemon=True).start()
-            else:
-                with self._lock:
+        with self._lock:
+            if self._thread is not None or self._stop.is_set():
+                return
+            target = self._run
+            try:
+                import cv2  # noqa: F401  # Only a USB camera needs this.
+            except ImportError:
+                if not self._auto_install:
                     self._status = _NO_OPENCV
-            return
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+                    return
+                target = self._install_then_run
+            self._thread = threading.Thread(target=target, daemon=True)
+            self._thread.start()
 
     def _install_then_run(self) -> None:
+        # Installing OpenCV is expensive. Wait for a real capture node;
+        # repeated start() calls share this same worker while it waits.
+        while not self._stop.is_set():
+            if any(_is_capture_device(device) for device in list_video_devices(self._dev_root)):
+                break
+            if self._stop.wait(_RETRY_SECONDS):
+                return
+        if self._stop.is_set():
+            return
         with self._lock:
             self._status = _INSTALLING
         try:
@@ -233,33 +246,44 @@ class USBCameraManager:
             self._status = ""
         if self._stop.is_set():
             return
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
+        self._run()
 
     def _run(self) -> None:
-        while not self._stop.is_set():
-            candidates = list_video_devices(self._dev_root)
-            wanted = [device for device in candidates if _is_capture_device(device)][:MAX_CAMERAS]
-            with self._lock:
-                for device in [item for item in self._streams if item not in wanted]:
-                    self._streams.pop(device).close()
-                for device in wanted:
-                    if device not in self._streams:
-                        stream = _DeviceStream(device)
-                        stream.start()
-                        self._streams[device] = stream
-            if self._stop.wait(_RETRY_SECONDS):
-                break
+        try:
+            while not self._stop.is_set():
+                candidates = list_video_devices(self._dev_root)
+                wanted = [device for device in candidates if _is_capture_device(device)][:MAX_CAMERAS]
+                with self._lock:
+                    removed = [self._streams.pop(device) for device in list(self._streams) if device not in wanted]
+                # Joining a camera thread can take seconds. Telemetry must
+                # remain readable while a disconnected device shuts down.
+                for stream in removed:
+                    stream.close()
+                with self._lock:
+                    if self._stop.is_set():
+                        break
+                    for device in wanted:
+                        if device not in self._streams:
+                            stream = _DeviceStream(device)
+                            stream.start()
+                            self._streams[device] = stream
+                if self._stop.wait(_RETRY_SECONDS):
+                    break
+        finally:
+            self._close_streams()
+
+    def _close_streams(self) -> None:
         with self._lock:
-            for stream in self._streams.values():
-                stream.close()
+            streams = list(self._streams.values())
+            self._streams.clear()
+        for stream in streams:
+            stream.close()
 
     def feeds(self) -> list[dict]:
         """Every auto-detected camera as normalized Driver Station entries.
 
         Named generically, in device order. dashboard.py's merge_cameras()
-        renames each one to match a project's own cameras() where the two
-        line up, and drops the rest when a project never asked for them.
+        renames matching slots and includes additional detected cameras.
         """
 
         with self._lock:
@@ -296,6 +320,4 @@ class USBCameraManager:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
-        with self._lock:
-            for stream in self._streams.values():
-                stream.close()
+        self._close_streams()

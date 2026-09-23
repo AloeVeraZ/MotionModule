@@ -48,7 +48,7 @@ class DemoTests(unittest.TestCase):
         self.assertTrue(controls)
         self.assertTrue(self.client.get("/api/autonomous").get_json()["configured"])
 
-    def test_driver_station_gets_simulated_cameras_imu_and_sensors(self):
+    def test_driver_station_simulates_pi_imu_without_extra_sensors(self):
         data = self.client.get("/api/drive/telemetry").get_json()
         self.assertEqual(
             [camera["url"] for camera in data["cameras"]],
@@ -56,8 +56,8 @@ class DemoTests(unittest.TestCase):
         )
         self.assertTrue(all(camera["connected"] for camera in data["cameras"]))
         self.assertTrue(data["imu"]["connected"])
-        self.assertTrue(data["pi_inputs"])
-        self.assertEqual(data["usb_controllers"][0]["bridge"], "streaming")
+        self.assertEqual(data["pi_inputs"], [])
+        self.assertEqual(data["usb_controllers"], [])
         camera = self.client.get("/demo/camera/front.svg")
         self.assertEqual(camera.mimetype, "image/svg+xml")
         self.assertIn(b"FRONT CAMERA", camera.data)

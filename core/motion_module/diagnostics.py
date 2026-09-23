@@ -200,9 +200,9 @@ def dashboard_checks(module) -> list[dict]:
             "level": "warn" if spi_active else "pass",
             "title": "SPI pin conflict",
             "detail": (
-                "SPI is active and conflicts with Driver 3/4 GPIO7, GPIO8, GPIO9, and GPIO11. Disable SPI before motor power."
+                "SPI is active and conflicts with Driver 3 GPIO7, GPIO8, GPIO9, and GPIO11. Disable SPI before motor power."
                 if spi_active
-                else "No active SPI device conflicts with Drivers 3 and 4."
+                else "No active SPI device conflicts with Driver 3."
             ),
         }
     )

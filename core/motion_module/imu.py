@@ -1,10 +1,8 @@
 """IMU drivers that run on the Raspberry Pi.
 
-The Arduino GIGA only moves bytes: the Pi tells it which I2C registers to read
-and how often, and these classes decide what to write during start-up, what
-the raw registers mean, and what the robot's heading is. Everything about a
-particular sensor lives here, so the GIGA's firmware never changes when the
-robot's sensors do.
+These transport-independent drivers initialize the chip and interpret its
+registers. The reference robot uses LocalIMU to access the BNO055 directly
+from the Pi. The USB bridge also retains compatibility with these drivers.
 
 Angles are degrees. Yaw counts up as the robot turns counter-clockwise seen
 from above, pitch as its front rises, and roll as its right side dips, so a
@@ -33,7 +31,7 @@ RETRY_SECONDS = 2.0
 
 @dataclass(frozen=True, slots=True)
 class GigaIMU:
-    """One IMU on the GIGA's I2C pins: SDA 20, SCL 21, 3.3V, and GND.
+    """A transport-independent IMU chip declaration (the name is historical).
 
     ``chip`` is ``"bno055"`` for the 9-axis BNO055, or ``"ism330dhcx"``,
     ``"lsm6dsox"``, ``"lsm6dso"``, or ``"lsm6ds3trc"`` for a 6-axis IMU.

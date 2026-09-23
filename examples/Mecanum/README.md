@@ -7,7 +7,7 @@ Six small Python files make the complete sample. Only one is required.
 | `robot.py` | Turns drive commands into wheel power | Yes |
 | `test.py` | Debug Drive Test motor/servo mapping | No — without it, the same built-in Mecanum test runs |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
-| `sensors.py` | Every sensor, read by the Arduino GIGA, by name | No — without a GIGA, remove its import from `robot.py` |
+| `sensors.py` | BNO055 read directly by the Pi | Included; missing hardware is shown offline |
 | `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
 | `dashboard.py` | Driver Station cameras, sensors, keys, and sticks | No — delete it without affecting driving |
 
@@ -115,34 +115,31 @@ the outputs immediately either way. `duration_seconds` cuts off a routine that
 never returns. While it runs, manual driving is refused, so the driver and the
 routine cannot fight over the motors.
 
-## Sensors: the Arduino GIGA
+## Sensors: the Pi-connected BNO055
 
-`sensors.py` lists everything wired to the Arduino GIGA R1 WiFi: a BNO055
-9-axis IMU, an ISM330DHCX 6-axis IMU, an arm potentiometer on A0, and an intake
-beam break on D22. The GIGA reads them and passes the numbers to the Pi, which
-does the rest. `robot.py` imports this file, and the drive object carries it as
-`drive.sensors`, which `autonomous.py` and `dashboard.py` both use.
+`sensors.py` reads one BNO055 directly from the Pi, shared by `robot.py`,
+`autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-gy-bno055-nine-axis-imu):
+VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12 and AD0 to 6.
+Enable the documented `i2c-gpio` overlay and reboot. The module discovers the
+bus and closes its reader on shutdown. Motors and servos keep their Pi wiring.
 
-1. Plug the GIGA into a Pi USB port and install its firmware from **Debug →
-   Checks & logs → Install firmware**, or run `motionmodule giga flash`. No
-   Arduino IDE is needed, and this is done once.
-2. Wire the IMUs to 3.3V, GND, SDA 20 and SCL 21, as `sensors.py` describes.
-3. Delete any IMU or pin in `sensors.py` that this robot does not have.
+**Zero heading** sets the current direction to zero. Heading increases turning
+left, like `rotate`. Autonomous uses measured turns when the IMU is ready,
+and timed turns otherwise. Missing hardware is shown as offline.
 
-With an IMU streaming, **Zero heading** and **Calibrate gyro** appear among the
-full Driver Station's controls, and autonomous turns a measured quarter turn
-instead of turning for a fixed time. Headings count up turning left, like
-`rotate`.
+No extra sensors are declared. An Arduino **GIGA R1 WiFi** can provide optional
+USB GPIO inputs for future additions using the existing auto-detection and
+bridge API. This experimental feature may need troubleshooting; it is not
+required for the Mecanum robot. See [the opt-in API](../../docs/CODING.md#optional-usb-gpio-expansion).
 
 ## Full Driver Station: cameras, IMU, and sensors
 
 `dashboard.py` is discovered automatically when it is beside `robot.py`.
 **Debug → Drive Test** uses `test.py`, not this telemetry hook or `robot.py`.
 Press **Open Driver Station** for the independent operator
-console, which does. The sample shows two
-offline camera placeholders, the first IMU in `sensors.py` on the heading dial,
-and every GIGA pin and IMU in the USB controller card. Add browser-readable
-stream URLs for a C920 or C270.
+console, which does. The sample declares a front camera and shows the Pi
+BNO055 on the heading dial. Its additional USB sensor list is empty.
+USB cameras are discovered automatically; an external stream URL is optional.
 
 `driver_bindings()` in the same file decides which keys the Driver Station
 listens for. The sample keeps the usual W/S, A/D, Q/E and space; return only

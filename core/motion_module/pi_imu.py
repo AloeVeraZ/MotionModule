@@ -1,20 +1,12 @@
-"""Read an I2C IMU wired directly to the Raspberry Pi's own I2C bus.
+"""Read the robot's BNO055 directly on the Pi's independent I2C bus.
 
-Every IMU chip's start-up sequence and heading math already lives in imu.py,
-written as a generator of Read/Write/Wait steps so it does not care whether
-those travel to an Arduino GIGA over serial or go straight to a bus the Pi
-opens itself. This module supplies that second, local path - for a BNO055 or
-6-axis IMU wired directly to the Pi rather than through a GIGA sensor board.
+The reference wiring is VIN to physical pin 17, GND to 20, SDA to 11,
+SCL to 12 and AD0 to 6. Enable the i2c-gpio overlay on GPIO17/18;
+see docs/PINOUT.md and Debug > Wiring for the complete board guide.
+BOOT and REST retain their pull-ups; INT is left disconnected.
 
-Wire it like any other I2C peripheral sharing the Pi's I2C-1 bus: 3.3V (the
-spare pin 17) and a spare ground (6, 20, or 30), then SDA (pin 3) and SCL
-(pin 5) - the same two pins the PCA9685 servo board already uses. I2C is a
-shared bus, and the servo board and an IMU never share an address, so both
-work at once; nothing about the servo board's wiring changes. Alternatively,
-use i2c-gpio on GPIO17/18 (physical 11/12). PS0/PS1 must be low for I2C mode;
-BOOT is a different, active-low bootloader input and must remain high for
-normal operation. This driver never toggles a hardware
-reset or reads an interrupt line, so RST and INT can be left unconnected.
+The chip drivers in imu.py are transport-independent. LocalIMU executes
+those register operations on the Pi; the Mecanum sample uses this path.
 """
 
 from __future__ import annotations
@@ -29,6 +21,7 @@ from .telemetry import IMUReading
 
 POLL_SECONDS = 0.02   # ~50 Hz, the same cadence the GIGA bridge reads at
 STALE_AFTER = 1.0     # seconds; an older reading is treated as disconnected
+RETRY_SECONDS = 2.0
 _NO_SMBUS2 = "Install smbus2 to read an IMU wired directly to the Pi."
 
 
@@ -39,13 +32,10 @@ def _wrap180(degrees: float) -> float:
 def find_i2c_gpio_bus(sysfs_root: str | Path = "/sys/class/i2c-dev") -> int | None:
     """The bus number of the Pi's bit-banged i2c-gpio adapter, if one is set up.
 
-    ``dtoverlay=i2c-gpio,i2c_gpio_sda=<pin>,i2c_gpio_scl=<pin>`` in
-    /boot/firmware/config.txt turns any two GPIO pins into a whole extra I2C
-    bus, entirely independent of the Pi's hardware I2C-1 bus the PCA9685
-    servo board already uses - handy for a sensor when the header has no room
-    left near pins 3 and 5, or when keeping it off the servo board's bus
-    entirely is simpler. The kernel assigns this bus a number that can shift
-    between boots, so this finds it by name instead of assuming a fixed one.
+    ``dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18`` in
+    /boot/firmware/config.txt enables the reference IMU bus on physical
+    pins 11 and 12, independently of the PCA9685 bus. The kernel assigns a
+    number that can shift between boots, so discovery uses the adapter name.
     Returns None if no such adapter exists yet - the overlay line above needs
     adding, then a reboot.
     """
@@ -78,10 +68,9 @@ def find_i2c_gpio_bus(sysfs_root: str | Path = "/sys/class/i2c-dev") -> int | No
 class LocalIMU:
     """One IMU read directly over the Pi's own I2C bus, on its own thread.
 
-    ``declaration`` is a GigaIMU - the same declaration a GIGA sensor board
-    would take, since the chip and its I2C address mean the same thing
-    however the bytes travel. ``bus`` is the Pi's I2C bus number (1 on every
-    Pi with a 40-pin header, and the PCA9685 servo board's default).
+    ``declaration`` is the shared GigaIMU chip declaration. Pass the bus
+    returned by find_i2c_gpio_bus() for the reference wiring, or use
+    module.local_imu() to manage discovery and shutdown.
     """
 
     def __init__(
@@ -161,6 +150,7 @@ class LocalIMU:
             if self._bus is None:
                 return False
             with self._lock:
+                self._error = ""
                 self._driver.begin(now)
             return True
         with self._lock:
@@ -173,9 +163,8 @@ class LocalIMU:
     def _run(self) -> None:
         try:
             while not self._stop.is_set():
-                if not self.poll():
-                    return
-                time.sleep(POLL_SECONDS)
+                delay = POLL_SECONDS if self.poll() else RETRY_SECONDS
+                self._stop.wait(delay)
         finally:
             close = getattr(self._bus, "close", None)
             if callable(close):
@@ -301,8 +290,8 @@ class LocalIMU:
         if state == "missing":
             return (
                 f"Nothing answers at 0x{self.declaration.address:02X} on I2C bus {self._bus_number}. "
-                "Check 3.3V, GND and the SDA/SCL wires for this bus "
-                "(GPIO17/18 bus: physical pins 11/12; I2C-1: pins 3/5)."
+                "Check the reference Pi wiring: VIN pin 17, GND pin 20, "
+                "SDA pin 11, SCL pin 12 and AD0 pin 6."
             )
         if state == "wrong-chip":
             return f"0x{self.declaration.address:02X} answered, but {driver.message}."

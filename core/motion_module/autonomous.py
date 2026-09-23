@@ -21,6 +21,7 @@ by ``duration_seconds`` so a routine that never returns still ends.
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from pathlib import Path
@@ -119,6 +120,8 @@ class AutonomousRunner:
             limit = float(limit)
         except (TypeError, ValueError):
             return DEFAULT_DURATION_SECONDS
+        if not math.isfinite(limit):
+            return DEFAULT_DURATION_SECONDS
         return limit if limit > 0 else None
 
     def status(self) -> dict:
@@ -145,8 +148,8 @@ class AutonomousRunner:
                     self._load_error
                     or "This robot project has no autonomous.py, so it has no autonomous routine"
                 )
-            if self._state == "running":
-                raise RuntimeError("The autonomous routine is already running")
+            if self._state == "running" or (self._thread is not None and self._thread.is_alive()):
+                raise RuntimeError("The autonomous routine is already running or still stopping")
             self._stop_event = threading.Event()
             self._state = "running"
             self._error = ""

@@ -8,9 +8,9 @@ browser → nginx :80 → versioned dashboard :8080
                            ├── browser project deployment
 active robot folder ───────┤
                            ├── GPIO PWM → four dual H-bridges → eight motors
-                           ├── unused Pi GPIO → digital sensor inputs
+                           ├── independent Pi I2C → BNO055 IMU
                            ├── I2C → PCA9685 board(s) → servos
-                           ├── USB serial → Arduino GIGA → IMUs and sensor pins
+                           ├── USB serial → optional GIGA GPIO inputs (experimental)
                            ├── dfu-util → GIGA bootloader (firmware installs)
                            └── time-limited PTY Bash terminal
 ```
@@ -110,7 +110,16 @@ node, and permission status. The Arduino GIGA R1 WiFi is matched by its
 official USB VID/PID: 2341:0266 running a sketch, 2341:0366 in its bootloader.
 USB discovery alone cannot identify which physical sensor is wired to a pin.
 
-## Arduino GIGA sensor bridge
+## Reference Pi IMU
+
+The Mecanum sample declares one BNO055 at 0x28. `module.local_imu()` finds
+the independent `i2c-gpio` adapter, creates a `LocalIMU` and closes it on
+module shutdown. Simulation and a missing overlay return no reader; the
+sample reports heading unavailable. The wiring is the single plan in
+Debug → Wiring and PINOUT.md. Motors and the PCA9685 also connect to the Pi.
+No additional sensors are declared by the sample.
+
+## Optional Arduino GIGA USB GPIO expansion
 
 ```text
 firmware/giga_sensor_bridge/giga_sensor_bridge.ino   the firmware, generic
@@ -122,8 +131,8 @@ core/motion_module/imu.py                            the sensor drivers, on the 
 
 The firmware only moves bytes: it reads the pins and I2C registers it is told
 to, at the interval it is told, and answers one-off reads, writes and bus
-scans. The project's `sensors.py` declares pins and IMUs; `module.giga()`
-creates one `GigaR1Bridge` for the process (never opened in simulation), and
+scans. An opt-in project extension declares additional GPIO inputs;
+`module.giga()` creates one `GigaR1Bridge` for the process (never opened in simulation), and
 its reader thread sends `MM3 CONFIG <id> <ms> <pins> <streams>` after every
 connection. The GIGA answers with one JSON line of readings per interval,
 tagged with that id, so readings meant for another configuration are never
@@ -132,6 +141,9 @@ directions, so older MotionModule software and the original sketch keep
 working; firmware whose protocol this version cannot use is reported as
 needing a flash rather than guessed at.
 
+This experimental extension targets GIGA R1 WiFi, not Uno or Mega. Hardware
+operation needs verification; it is not required by the reference robot.
+The transport also retains its existing IMU protocol for compatibility.
 Nothing about a particular sensor lives on the GIGA. `motion_module.imu`
 holds the drivers: each writes its chip's set-up registers through one-off
 `MM3 I2C` commands (written as a generator of reads, writes and waits, so the

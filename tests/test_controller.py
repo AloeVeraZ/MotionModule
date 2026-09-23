@@ -1,7 +1,7 @@
 import time
 import unittest
 from dataclasses import replace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from motion_module.config import default_config
 from motion_module.controller import MotionModule
@@ -171,6 +171,66 @@ class ControllerTests(unittest.TestCase):
         self.module.close()
         self.module.stop_all()
         self.assertTrue(self.gpio.closed)
+
+    def test_one_broken_motor_does_not_prevent_stopping_the_rest(self):
+        self.module.set_motors({1: 0.4, 2: 0.4})
+        with patch.object(self.module._motors[1], "set", side_effect=OSError("GPIO unavailable")):
+            with self.assertRaises(ExceptionGroup):
+                self.module.stop_all()
+        self.assertEqual(self.module.motor_values[2], 0)
+        self.assertEqual(self.module.motor_values[1], 0.4)
+        self.assertTrue(self.module._watchdog_armed)
+        self.module.stop_all()
+        self.assertEqual(self.module.motor_values[1], 0)
+
+    def test_watchdog_survives_a_transient_gpio_failure_and_retries(self):
+        # Drive the loop synchronously after stopping its real worker.
+        self.module._stop_event.set()
+        self.module._watchdog_thread.join(timeout=1)
+        self.module.set_motors({1: 0.4})
+        self.module._last_feed = time.monotonic() - 10
+        stop = self.module._stop_event = Mock()
+        stop.wait.side_effect = [False, False, True]
+        motor = self.module._motors[1]
+        real_set = motor.set
+        attempts = []
+
+        def set_power(value):
+            attempts.append(value)
+            if len(attempts) == 1:
+                raise OSError("temporary GPIO failure")
+            real_set(value)
+
+        with patch.object(motor, "set", side_effect=set_power), \
+                self.assertLogs("motion_module.controller", level="ERROR"):
+            self.module._watchdog_loop()
+        self.assertEqual(attempts, [0, 0])
+        self.assertEqual(self.module.motor_values[1], 0)
+        self.assertFalse(self.module._watchdog_armed)
+        self.assertTrue(self.module._watchdog_tripped)
+
+    def test_shutdown_attempts_all_resources_even_after_hardware_errors(self):
+        first = next(iter(self.module._motors.values()))
+        giga = self.module._giga = Mock()
+        imu = self.module._local_imu = Mock()
+        giga.close.side_effect = OSError("USB disconnected")
+        with patch.object(first, "set", side_effect=OSError("motor GPIO failed")), \
+                patch.object(self.servos, "close", side_effect=OSError("I2C failed")):
+            with self.assertRaises(ExceptionGroup) as raised:
+                self.module.close()
+        self.assertEqual(len(raised.exception.exceptions), 3)
+        self.assertTrue(self.gpio.closed)
+        self.assertFalse(self.module._watchdog_thread.is_alive())
+        giga.close.assert_called_once_with()
+        imu.close.assert_called_once_with()
+        self.module.close()  # Idempotent even after a failed hardware close.
+
+    def test_closed_module_cannot_start_a_usb_reader(self):
+        self.module.close()
+        with patch("motion_module.sensor_bridge.GigaR1Bridge") as bridge:
+            with self.assertRaisesRegex(RuntimeError, "closed"):
+                self.module.giga()
+            bridge.assert_not_called()
 
 
 if __name__ == "__main__":

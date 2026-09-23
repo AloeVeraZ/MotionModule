@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from fake_giga import Clock, SimBno055, SimLsm6, World
 from motion_module.imu import GigaIMU
@@ -179,6 +179,36 @@ class NoTransportTests(unittest.TestCase):
             self.assertEqual(imu.state, "waiting")
             self.assertIn("smbus2", imu.describe())
             self.assertIsNone(imu.heading())
+
+
+class LocalIMURecoveryTests(unittest.TestCase):
+    def test_background_reader_retries_an_initial_bus_failure(self):
+        imu = LocalIMU(NINE_AXIS, auto_start=False)
+        attempts = []
+
+        def poll():
+            attempts.append(True)
+            if len(attempts) == 2:
+                imu._stop.set()
+                return True
+            return False
+
+        with patch.object(imu, "poll", side_effect=poll), \
+                patch("motion_module.pi_imu.RETRY_SECONDS", 0.001):
+            imu.start()
+            imu._thread.join(timeout=1)
+            imu.close()
+        self.assertEqual(len(attempts), 2)
+
+    def test_recovered_bus_clears_the_previous_open_error(self):
+        bus = Mock()
+        smbus = Mock(SMBus=Mock(side_effect=[OSError("temporarily unavailable"), bus]))
+        with patch.dict(sys.modules, {"smbus2": smbus}):
+            imu = LocalIMU(NINE_AXIS, auto_start=False)
+            self.assertFalse(imu.poll(0))
+            self.assertIn("temporarily unavailable", imu.describe())
+            self.assertTrue(imu.poll(1))
+            self.assertNotIn("temporarily unavailable", imu.describe())
 
 
 if __name__ == "__main__":

@@ -1,28 +1,22 @@
 import struct
+import threading
 import sys
 import tempfile
 import time
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from motion_module.camera import (
     USBCameraManager,
+    _DeviceStream,
     _is_capture_device,
     _V4L2_CAP_DEVICE_CAPS,
     _V4L2_CAP_VIDEO_CAPTURE,
     _V4L2_CAPABILITY_FORMAT,
     list_video_devices,
 )
-
-
-def _skip_if_opencv_installed(test):
-    try:
-        import cv2  # noqa: F401
-    except ImportError:
-        return
-    test.skipTest("This environment has opencv installed")
 
 
 class ListVideoDevicesTests(unittest.TestCase):
@@ -100,17 +94,19 @@ class USBCameraManagerTests(unittest.TestCase):
         manager.close()
 
     def test_missing_opencv_without_auto_install_says_so_immediately(self):
-        _skip_if_opencv_installed(self)
         manager = USBCameraManager(auto_start=False, auto_install=False)
-        manager.start()
+        with patch.dict(sys.modules, {"cv2": None}):
+            manager.start()
         feed = manager.feeds()[0]
         self.assertFalse(feed["connected"])
         self.assertIn("pip install opencv-python-headless", feed["detail"])
         manager.close()
 
     def test_missing_opencv_tries_to_install_it_automatically(self):
-        _skip_if_opencv_installed(self)
-        with patch("motion_module.camera.subprocess.run") as run:
+        with patch.dict(sys.modules, {"cv2": None}), \
+                patch("motion_module.camera.list_video_devices", return_value=["/dev/video0"]), \
+                patch("motion_module.camera._is_capture_device", return_value=True), \
+                patch("motion_module.camera.subprocess.run") as run:
             run.side_effect = TimeoutError("no network in this test")
             manager = USBCameraManager(auto_start=False)
             manager.start()
@@ -133,3 +129,63 @@ class USBCameraManagerTests(unittest.TestCase):
 
     def test_close_before_start_does_not_raise(self):
         USBCameraManager(auto_start=False).close()
+
+
+class CameraLifecycleTests(unittest.TestCase):
+    def test_no_install_until_a_camera_exists_and_start_is_idempotent(self):
+        scanned = threading.Event()
+
+        def devices(_root):
+            scanned.set()
+            return []
+
+        with patch.dict(sys.modules, {"cv2": None}), \
+                patch("motion_module.camera.list_video_devices", side_effect=devices), \
+                patch("motion_module.camera.subprocess.run") as install:
+            manager = USBCameraManager(auto_start=False)
+            try:
+                manager.start()
+                self.assertTrue(scanned.wait(1))
+                worker = manager._thread
+                manager.start()
+                self.assertIs(manager._thread, worker)
+                install.assert_not_called()
+            finally:
+                manager.close()
+            self.assertFalse(worker.is_alive())
+            manager.start()
+            self.assertIs(manager._thread, worker)
+            install.assert_not_called()
+
+    def test_disconnected_camera_closes_without_holding_telemetry_lock(self):
+        manager = USBCameraManager(auto_start=False)
+
+        def close():
+            self.assertTrue(manager._lock.acquire(blocking=False))
+            manager._lock.release()
+
+        stream = Mock(close=Mock(side_effect=close))
+        manager._streams["/dev/video0"] = stream
+        manager.close()
+        manager.close()
+        stream.close.assert_called_once_with()
+        self.assertEqual(manager._streams, {})
+
+    def test_capture_error_releases_device_and_discards_stale_frame(self):
+        stream = _DeviceStream("/dev/video0")
+        stream._frame = b"old frame"
+        stream._connected = True
+        capture = Mock()
+        capture.isOpened.return_value = True
+
+        def fail():
+            stream._stop.set()
+            raise RuntimeError("device disconnected")
+
+        capture.read.side_effect = fail
+        with patch.dict(sys.modules, {"cv2": Mock(VideoCapture=Mock(return_value=capture))}):
+            stream._run()
+        capture.release.assert_called_once_with()
+        self.assertFalse(stream.connected)
+        self.assertIsNone(stream._frame)
+        self.assertIn("device disconnected", stream.detail)

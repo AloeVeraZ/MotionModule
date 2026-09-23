@@ -107,7 +107,7 @@ class DemoTerminal:
 
 
 class DemoTelemetry:
-    """Camera, IMU, and sensor readings that move, for the Driver Station."""
+    """Simulated cameras and the reference Pi BNO055 for the Driver Station."""
 
     def __init__(self) -> None:
         self.started = time.monotonic()
@@ -129,41 +129,10 @@ class DemoTelemetry:
                 "pitch": 1.6 * math.sin(t / 3.1),
                 "roll": -2.2 * math.cos(t / 4.3),
                 "rate": 9.0,
-                "detail": "Simulated BNO055 at 0x28: the demo robot turns slowly left.",
+                "detail": "Simulated Pi BNO055 at 0x28: the demo robot turns slowly left.",
             },
-            "pi_inputs": [
-                {"name": "Forward limit", "value": math.sin(t / 2.5) > 0.6, "kind": "digital",
-                 "channel": "GPIO17", "status": "ok"},
-                {"name": "Arm home switch", "value": True, "kind": "digital", "channel": "GPIO5",
-                 "status": "ok"},
-            ],
-            "usb_controllers": [{
-                "id": "giga:demo",
-                "name": "Arduino GIGA R1 WiFi",
-                "board_id": "arduino_giga_r1_wifi",
-                "connected": True,
-                "serial": "DEMO",
-                "port": "simulated",
-                "bridge": "streaming",
-                "digital_pins": ["D0", "D75"],
-                "analog_pins": ["A0", "A7"],
-                "adc_bits": 12,
-                "detail": "Simulated MotionModule sensor firmware 3.0.0",
-                "pins": [
-                    {"name": "Arm potentiometer", "value": round(2048 + 1700 * math.sin(t / 2)),
-                     "kind": "analog", "unit": "raw", "channel": "A0", "minimum": 0, "maximum": 4095,
-                     "status": "ok"},
-                    {"name": "Battery", "value": round(12.4 - 0.25 * math.sin(t / 9), 2),
-                     "kind": "analog", "unit": "V", "channel": "A1", "minimum": 10.5, "maximum": 13,
-                     "status": "ok"},
-                    {"name": "Intake beam", "value": int(t / 3) % 2 == 0, "kind": "digital",
-                     "channel": "D22", "status": "ok"},
-                    {"name": "Main IMU heading", "value": round(heading, 1), "kind": "analog",
-                     "unit": "°", "channel": "I2C 0x28", "minimum": -180, "maximum": 180, "status": "ok"},
-                    {"name": "Backup IMU heading", "value": round(heading - 0.4, 1), "kind": "analog",
-                     "unit": "°", "channel": "I2C 0x6A", "minimum": -180, "maximum": 180, "status": "ok"},
-                ],
-            }],
+            "pi_inputs": [],
+            "usb_controllers": [],
         }
 
 

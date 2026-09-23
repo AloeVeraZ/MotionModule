@@ -67,7 +67,7 @@ Two releases can remain after an install:
 `main`'s, so each branch installs with its own scripts even after they
 change.
 
-For the Arduino GIGA sensor controller, the installer also installs
+For optional Arduino GIGA R1 WiFi USB GPIO expansion, the installer also installs
 `dfu-util`, adds the user to the `dialout` group (its USB serial port) and the
 `plugdev` group, and writes `/etc/udev/rules.d/motionmodule-giga.rules`, which
 lets that user flash the GIGA's firmware with `motionmodule giga flash`

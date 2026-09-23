@@ -366,7 +366,7 @@ class SensorProblemTests(BridgeTestCase):
         imu = bridge.imu()
         self.assertEqual(imu.state, "missing")
         self.assertIsNone(imu.heading())
-        self.assertIn("SDA 20", imu.describe())
+        self.assertIn("configured sensor connection and address", imu.describe())
         bridge.scan()
         self.run_for(0.1)
         self.assertIn("0x6A", imu.describe())

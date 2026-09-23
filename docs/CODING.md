@@ -23,7 +23,7 @@ MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── test.py        # optional: Debug Drive Test motor/servo mapping (Mecanum by default)
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
-├── sensors.py     # optional: what is wired to the Arduino GIGA, by name
+├── sensors.py     # BNO055 wired directly to the Pi
 ├── autonomous.py  # optional: the routine the robot runs by itself
 ├── dashboard.py   # optional: Driver Station cameras, sensors, keys, sticks
 └── helpers.py     # optional: any other Python files you want
@@ -163,10 +163,10 @@ class MyDashboard(TelemetryDashboard):
         return [CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM))]
 
     def imu(self):
-        return self.sensors.imus[0].reading()
+        return self.sensors.reading()
 
     def usb_controllers(self):
-        return [self.sensors.giga.snapshot()]
+        return []  # No additional USB sensors declared
 
 
 def create_dashboard(module, drive):
@@ -203,173 +203,82 @@ the browser, with a slider, a quick-rotate button, or by typing an exact angle
 - that is a per-viewer display preference, not something `dashboard.py`
 configures.
 
-A sensor on a spare Raspberry Pi pin also works: `module.digital_input()`
-accepts only BCM GPIO that remains unused after the active motor map and
-MotionModule's I2C, ID, and UART reservations, and `pi_inputs()` returns its
-readings. Pi header GPIO is digital-only, which is one reason sensors normally
-go on the GIGA.
+## Pi-connected BNO055 IMU
 
-## Sensors on the Arduino GIGA
+The Mecanum setup uses one BNO055 wired directly to the Pi. Follow the
+[complete wiring plan](PINOUT.md#optional-gy-bno055-nine-axis-imu): VIN to
+physical pin 17, GND to 20, SDA to 11 (GPIO17), SCL to 12 (GPIO18), and AD0
+to ground pin 6 for address 0x28. BOOT and REST retain their pull-ups; INT is
+left disconnected. The motor and PCA9685 wiring stays as shipped.
 
-An Arduino GIGA R1 WiFi on one of the Pi's USB ports works as the robot's
-sensor board. It reads each digital pin as on or off, each analog pin as a
-number, and whichever I2C registers the Pi asks for, then passes the numbers
-up the cable; the Pi sets the sensors up and does every calculation. Its
-firmware installs from the Pi with no Arduino IDE (`motionmodule giga flash`,
-or **Debug → Checks & logs → Install firmware**); setup and wiring are in
-[SETUP.md](SETUP.md#5-add-sensors-with-the-arduino-giga-optional).
+Add this under `[all]` in `/boot/firmware/config.txt`, then reboot:
 
-The firmware is the same for every robot, and never changes when the sensors
-do. `sensors.py` says what is wired to the board, and MotionModule sends that
-list every time it connects:
-
-```python
-from motion_module.sensor_bridge import GigaIMU, GigaPin
-
-IMUS = [
-    GigaIMU("bno055", "Main IMU"),        # 9-axis, address 0x28
-    GigaIMU("ism330dhcx", "Backup IMU"),  # 6-axis, address 0x6A
-]
-
-PINS = [
-    GigaPin("A0", "Arm potentiometer", kind="analog", minimum=0, maximum=4095),
-    GigaPin("D22", "Intake beam", kind="digital", pull="up"),
-]
-
-
-class RobotSensors:
-    def __init__(self, module):
-        self.giga = module.giga(pins=PINS, imus=IMUS)
-        self.imu = self.giga.imu("Main IMU")
-
-    def heading(self):
-        return self.imu.heading()
-
-
-def create_sensors(module):
-    return RobotSensors(module)
-```
-
-and `robot.py` imports it:
-
-```python
-from sensors import create_sensors
-
-
-def create_drive(module):
-    return MecanumDrive(module, sensors=create_sensors(module))
-```
-
-`module.giga()` is called once per robot: calling it again with different
-declarations raises, because two readers would split the board's stream. In
-the laptop demo and in tests the robot is simulated, the board is never
-opened, and every reading is `None`.
-
-**Pins.** `GigaPin(pin, name, kind="digital"` or `"analog"`, `pull="none"`,
-`"up"`, or `"down"`, `unit, minimum, maximum, scale, offset)`. Digital pins
-D0-D75 read `True` or `False`. Analog pins A0-A7 read 0 (0 V) to 4095 (3.3 V),
-then `value * scale + offset`. Read one with `giga.value("Intake beam")` (or by
-its pin, `giga.value("D22")`); `None` means there is no fresh reading. The
-GIGA's pins take 3.3 V at most.
-
-**IMUs.** `GigaIMU(chip, name, address=None, compass=False)`, up to two, on
-SDA 20 and SCL 21:
-
-| `chip` | Board | Address | Notes |
-| --- | --- | --- | --- |
-| `"bno055"` | Adafruit BNO055, 9-axis | 0x28 (0x29) | Fuses its own readings. `compass=True` adds the magnetometer for a north heading, which motors disturb |
-| `"ism330dhcx"` | Adafruit ISM330DHCX, 6-axis | 0x6A (0x6B) | Fused on the GIGA. Keep the robot still for a second while it calibrates |
-| `"lsm6dsox"`, `"lsm6dso"`, `"lsm6ds3trc"` | Other ST 6-axis boards | 0x6A (0x6B) | The same driver as the ISM330DHCX |
-
-`giga.imu(name)` returns the live IMU:
-
-```python
-imu.heading()         # -180 to 180 degrees; None while it is not streaming
-imu.total_rotation()  # degrees since zero, counting whole turns
-imu.rate()            # degrees per second
-imu.pitch()           # degrees, front up is positive
-imu.roll()            # degrees, right side down is positive
-imu.zero()            # the way the robot faces now reads 0 (or zero(90) for 90)
-imu.connected         # True while it streams usable angles
-imu.calibrated
-imu.state             # ok, starting, calibrating, missing, wrong-chip, failed, ...
-imu.describe()        # one sentence for people: what it is doing, or what to check
-giga.calibrate()      # measure the 6-axis gyro again; keep the robot still
-```
-
-**Heading counts up turning left** (counter-clockwise seen from above), the
-same direction a positive `rotate` turns the robot, so steering toward a
-heading is just the remaining angle:
-
-```python
-error = (target - sensors.heading() + 180) % 360 - 180   # the short way round
-drive.drive(0, 0, max(-1, min(1, error / 30)))           # positive turns left
-```
-
-The sample `autonomous.py` uses this to turn exactly 90 degrees, and falls back
-to a timed turn when no IMU is streaming.
-
-### An IMU wired straight to the Pi, no GIGA
-
-A BNO055 or 6-axis board also works wired directly to the Pi's own I2C pins
-(3 and 5) instead of through a GIGA - the same chip and heading math either
-way, just `motion_module.pi_imu.LocalIMU` in place of `giga.imu()`:
-
-```python
-from motion_module.imu import GigaIMU
-from motion_module.pi_imu import LocalIMU
-
-imu = LocalIMU(GigaIMU("bno055", "Main IMU"))
-imu.heading()   # the same methods as a GIGA IMU: heading(), zero(), describe(), ...
-```
-
-SDA and SCL are shared with the PCA9685 servo board - I2C is a shared bus, and
-they never share an address, so both work at once; nothing about the servo
-board's wiring changes. Power the breakout from the Pi's spare 3.3V (pin 17)
-and a spare ground (6, 20, or 30). A mode-select pin some breakout boards
-expose (PS0/PS1) must be low for I2C mode. BOOT is a separate active-low
-bootloader input: keep it high for normal operation, never ground it for I2C.
-This driver never toggles a hardware reset or reads an interrupt line,
-so RST and INT are left unconnected. `LocalIMU` runs its own background
-thread and needs `smbus2`, already a MotionModule dependency.
-
-**A second, fully independent I2C bus on spare pins.** Rather than sharing
-pins 3 and 5 with the servo board, `dtoverlay=i2c-gpio` bit-bangs a whole
-extra I2C bus on any two ordinary GPIO pins - the reference build uses GPIO17
-(physical 11) and GPIO18 (physical 12), both already unused. Add one line to
-`/boot/firmware/config.txt` on the Pi, then reboot:
-
-```
+```ini
 dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
-Wire the IMU's SDA to physical pin 11, SCL to physical pin 12, VIN to the
-spare 3.3V (pin 17) and GND to a spare ground (6 or 20) - none of it touches
-pins 1, 3, 5, 7 or 9, so the servo board's wiring is never disturbed or
-unplugged. The kernel assigns this new bus a number that is not guaranteed to
-stay the same across reboots, so find it by name instead of hardcoding it:
+The sample's `sensors.py` already opens the IMU through MotionModule:
 
 ```python
 from motion_module.imu import GigaIMU
-from motion_module.pi_imu import LocalIMU, find_i2c_gpio_bus
 
-bus = find_i2c_gpio_bus()
-if bus is None:
-    raise RuntimeError(
-        "i2c-gpio is not set up. Add dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 "
-        "to /boot/firmware/config.txt and reboot."
-    )
-imu = LocalIMU(GigaIMU("bno055", "Main IMU"), bus=bus)
+# GigaIMU is the shared chip declaration; it does not select an Arduino.
+imu = module.local_imu(GigaIMU("bno055", "Main IMU", address=0x28))
+heading = imu.heading() if imu is not None else None
 ```
 
-Verify the overlay took effect with `i2cdetect -l` on the Pi; the line naming
-`i2c-gpio` shows the bus number `find_i2c_gpio_bus()` just found for you.
-Some kernels name it `i2c@0`; discovery also checks its device-tree compatible
-property. Debug → Wiring has the complete eight-pin GY-BNO055 guide, and
-Checks & logs reads the chip ID at both 0x28 and 0x29 without resetting it.
-For the selected Teyleten board, connect AD0 to spare ground pin 6 for 0x28.
-BOOT and REST retain their pull-ups and INT is left disconnected. If using
-address 0x29 instead, pass `address=0x29` to `GigaIMU`.
+`module.local_imu()` discovers the independent `i2c-gpio` adapter by name,
+creates one `motion_module.pi_imu.LocalIMU` reader, and closes it when the
+module shuts down. It returns `None` in simulation or without the overlay;
+it never falls back to the servo bus. Enable the overlay and restart after
+rebooting. With the bus present but the sensor missing, the reader reports
+it offline and retries. `smbus2` is included as a runtime dependency.
+
+`imu.heading()` returns degrees from -180 to 180, increasing as the robot
+turns left, or `None` until usable readings arrive. `imu.zero()` sets the
+current heading to zero. `imu.reading()` supplies the Driver Station;
+`connected`, `calibrated`, `pitch()`, `roll()`, `rate()` and `describe()`
+provide status and other readings. The BNO055 handles its own fusion; the
+sample does not include the old six-axis gyro calibration control.
+
+The sample shares this single reader between robot.py, autonomous.py and
+dashboard.py. Autonomous uses measured turns when heading is available,
+and timed turns otherwise. No other sensor is predeclared.
+
+## Optional USB GPIO expansion
+
+Additional sensors beyond the reference robot go through USB, directly or
+through an **Arduino GIGA R1 WiFi** used for extra GPIO inputs. This is an
+experimental extension, not a requirement for Mecanum; verify it with your
+own hardware. The bundled firmware targets GIGA R1 WiFi, not Uno or Mega.
+
+The existing bridge code discovers the GIGA by USB identity, opens its serial
+port, sends your pin declarations on connection, and reconnects if unplugged.
+It does not discover what is wired to the GPIO pins. Install its firmware
+with `motionmodule giga flash`; see [setup](SETUP.md#optional-usb-gpio-expansion).
+
+An opt-in extension can start empty:
+
+```python
+from motion_module.sensor_bridge import GigaPin
+
+USB_PINS = []  # Add declarations only for additional inputs you actually wire.
+expansion = module.giga(pins=USB_PINS)
+# Once you add a declaration, read it by name with expansion.value(name).
+# Expose expansion.snapshot() from dashboard.py's usb_controllers() method.
+```
+
+A declaration uses `GigaPin(pin, name, kind="digital", pull="none")`.
+Digital pins D0-D75 read `True` or `False`; `pull` can be `"none"`, `"up"`
+or `"down"`. Analog A0-A7 use `kind="analog"` and read 0-4095; optional
+`scale`, `offset`, `unit`, `minimum` and `maximum` describe the reading.
+Pins accept at most 3.3 V. `expansion.value(name)` returns `None` when no
+fresh reading is available. This API reads inputs; it does not add motor
+or servo outputs. Declare all inputs once and share the returned bridge.
+MotionModule closes it at shutdown and never opens a physical board in simulation.
+
+Leave the sample's USB controller list empty until you add an extension.
+The IMU stays on the Pi; no Arduino IMU wiring is part of the reference setup.
 
 ## Motor API
 

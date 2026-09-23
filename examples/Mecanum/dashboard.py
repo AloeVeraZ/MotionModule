@@ -17,7 +17,7 @@ FRONT_CAMERA_URL = ""
 
 
 class MecanumDashboard(TelemetryDashboard):
-    """The Driver Station's controls, cameras, IMU and GIGA readings."""
+    """The Driver Station's controls, cameras and Pi IMU."""
 
     def __init__(self, module, drive):
         self.module = module
@@ -131,16 +131,14 @@ class MecanumDashboard(TelemetryDashboard):
         ]
 
     def imu(self):
-        # The heading dial shows the first IMU in sensors.py; the GIGA card
-        # below it lists every IMU and pin.
-        if self.sensors is None or not self.sensors.imus:
+        if self.sensors is None:
             return IMUReading(name="Robot IMU", connected=False, calibrated=False,
-                              detail="Declare an IMU in sensors.py.")
-        return self.sensors.imus[0].reading()
+                              detail="Pi BNO055 is not configured in sensors.py.")
+        return self.sensors.reading()
 
     def usb_controllers(self):
-        # Every pin and IMU on the GIGA, as the robot code sees them.
-        return [self.sensors.giga.snapshot()] if self.sensors is not None else []
+        # No additional USB sensors are declared by this robot.
+        return []
 
 
 def create_dashboard(module, drive):

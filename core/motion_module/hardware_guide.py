@@ -69,25 +69,20 @@ def parts_groups() -> list[dict]:
             "note": "Recommendations, not requirements. The controller runs without any of this; these are the parts known to work well on it.",
         },
         {
-            "id": "sensors", "title": "Sensors on the Arduino GIGA",
+            "id": "pi-i2c-sensors", "title": "Pi-connected BNO055 IMU",
             "requirement": "recommended",
             "items": [
-                _part("1", "Arduino GIGA R1 WiFi", "ABX00063, on a USB-C data cable to any Pi USB port", "Reads every sensor and streams the values to the Pi. Its firmware installs from the Pi, with no Arduino IDE", "selected", "https://store-usa.arduino.cc/products/giga-r1-wifi"),
-                _part("1", "9-axis IMU: Adafruit BNO055", "STEMMA QT version, product 4646, I2C address 0x28", "Heading, tilt and turn rate. It fuses its own readings and is ready about a second after power-on", "selected", "https://www.adafruit.com/product/4646"),
-                _part("1", "6-axis IMU: Adafruit ISM330DHCX", "STEMMA QT version, product 4502, I2C address 0x6A", "A second heading source from an industrial-grade gyro; the Pi turns its readings into a heading", "selected", "https://www.adafruit.com/product/4502"),
-                _part("Alternative", "6-axis IMU: Adafruit LSM6DSOX", "STEMMA QT version, product 4438; same wiring and code as the ISM330DHCX", "Lower-cost 6-axis choice", "optional", "https://www.adafruit.com/product/4438"),
-                _part("1", "STEMMA QT to male header cable", "Adafruit 4209, 150 mm", "First IMU to the GIGA: red 3.3V, black GND, blue SDA 20, yellow SCL 21", "selected", "https://www.adafruit.com/product/4209"),
-                _part("1", "STEMMA QT cable", "Adafruit 4210, 100 mm", "Chains the second IMU off the first", "selected", "https://www.adafruit.com/product/4210"),
+                _part("1", "BNO055 9-axis IMU breakout", "Teyleten Robot BNO055 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/"),
             ],
-            "note": "Recommended, not required: the robot drives without sensors. The GIGA only reads what the Pi asks it to and passes the numbers on; the Pi does the rest. Its pins take 3.3 V at most. The robot's sensors.py names what is wired to it; digital pins arrive as on or off and analog pins as 0-4095.",
+            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12 and AD0 to 6. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
         },
         {
-            "id": "pi-i2c-sensors", "title": "Sensors on the Pi's own I2C bus",
-            "requirement": "recommended",
+            "id": "sensors", "title": "Optional USB GPIO expansion",
+            "requirement": "optional",
             "items": [
-                _part("1", "BNO055 9-axis IMU breakout", "Teyleten Robot BNO055 module, or any BNO055 breakout - genuine or a compatible clone", "Heading, tilt and turn rate, read directly by the Pi over I2C - no Arduino GIGA needed", "selected", "https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/"),
+                _part("Optional", "Arduino GIGA R1 WiFi", "ABX00063, USB-C data cable to the Pi", "Extra GPIO inputs for future sensors; firmware and USB auto-detection are included", "optional", "https://store-usa.arduino.cc/products/giga-r1-wifi"),
             ],
-            "note": "An alternative to the GIGA-based sensors above, not an addition to them: motion_module.pi_imu.LocalIMU reads a BNO055 (or a 6-axis ISM330DHCX, LSM6DSOX, LSM6DSO or LSM6DS3TR-C) directly over I2C, with no Arduino GIGA at all - the same chip and the same heading math either way. Wire it to the Pi's own I2C-1 bus, shared with the servo board at pins 3 and 5 (I2C is a shared bus, and the two never collide on address), or, to keep it off that bus entirely, to a second, independent I2C bus bit-banged on spare GPIO17/GPIO18 (physical pins 11/12) with one line in /boot/firmware/config.txt: dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18. Either way, nothing about the servo board's own wiring changes. See docs/CODING.md for the full wiring and the code.",
+            "note": "Experimental extra, not part of the Mecanum setup; verify it with your own hardware. No additional sensors are declared. The Python GigaPin API reads digital and analog inputs; GPIO takes 3.3 V maximum. Firmware targets GIGA R1 WiFi, not Uno or Mega. The reference BNO055 stays on the Pi.",
         },
         {
             "id": "wiring", "title": "Wiring",
@@ -178,7 +173,7 @@ def hardware_guide(config) -> dict:
         "reference": "MotionModule reference build · BOM.md + docs/PINOUT.md",
         "summary": "Eight motor channels and sixteen servo outputs in the reference build. The Pi header map shows controller connections; the servo output headers are on the PCA9685 board.",
         "capacity": {"motors": 8, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
-        "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. Sensors connect through an Arduino GIGA R1 WiFi on the Pi's USB.",
+        "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. The reference BNO055 connects directly to the Pi; Arduino GIGA R1 WiFi USB GPIO expansion is an experimental extra.",
         "parts_groups": parts_groups(),
         "missing_specs": [
             {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},

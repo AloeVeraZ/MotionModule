@@ -7,7 +7,7 @@
 >
 > Every new change lands here first, before it is merged into `main`. Right
 > now that is the redesigned dashboard and Driver Station, and Arduino GIGA
-> sensors with firmware installed from the Pi. Code on this branch
+> USB GPIO expansion with firmware installed from the Pi. Code on this branch
 > can be unfinished or broken at any time. **If something stops working after
 > you install from `testing`, assume it is because you are on the testing
 > branch**, and go back to `main` before reporting a bug.
@@ -125,8 +125,8 @@ See the root-level **[bill of materials](BOM.md)** for the reference parts:
   and to a separate regulated rail for the servos;
 - Wago 221 lever connectors for the 12 V joins and ordinary jumper wires for
   the Pi's control signals; and
-- optionally, an Arduino GIGA R1 WiFi on the Pi's USB as the sensor board,
-  with a 9-axis BNO055 and a 6-axis ISM330DHCX IMU on its I2C pins.
+- a BNO055 IMU on the Pi's independent I2C bus for heading; the robot can
+  also drive without it. Optional USB GPIO expansion is separate from this setup.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
 wiring. Never connect motor battery positive or the PCA9685 servo V+ rail to a
@@ -289,7 +289,7 @@ Every project is self-contained, and only the first file is required:
 MyRobot/
 ├── robot.py          # required browser-control entry point
 ├── hardware.py       # optional: your own names, pins, and inversions
-├── sensors.py        # optional: what is wired to the Arduino GIGA, by name
+├── sensors.py        # the BNO055 wired directly to the Pi
 ├── autonomous.py     # optional: the routine the robot runs by itself
 ├── dashboard.py      # optional: Driver Station cameras, sensors, keys, sticks
 ├── drivetrain.py     # optional Python modules
@@ -364,34 +364,22 @@ automatically and is not required for drivetrain debugging or robot control.
 The complete contract and copyable example are in
 [docs/CODING.md](docs/CODING.md#optional-full-driver-station-telemetry).
 
-### Sensors: `sensors.py` and the Arduino GIGA
+### Sensors: the Pi-connected BNO055
 
-An Arduino GIGA R1 WiFi plugged into the Pi's USB works as the robot's sensor
-board. It reads the pins and sensors the Pi asks for and passes the numbers
-on: digital pins arrive as on or off, analog pins as 0-4095, and the Pi turns
-an IMU's registers into a heading. Its firmware installs from the Pi with
-`motionmodule giga flash` or **Debug → Checks & logs → Install firmware**, with
-no Arduino IDE, and the same firmware serves every robot, whatever is wired to
-it. The sample's `sensors.py` names what is connected and `robot.py` imports it:
+The Mecanum robot's motors, PCA9685 servo controller and BNO055 IMU connect
+directly to the Raspberry Pi. `sensors.py` reads one BNO055 on the independent
+`i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VIN on 17, GND on 20 and
+AD0 on 6. Use the single [IMU wiring plan](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu)
+and enable its overlay before starting the robot. No extra sensors are declared.
+The robot can still drive without an IMU; heading stays unavailable and the
+sample autonomous routine uses timed turns.
 
-```python
-from motion_module.sensor_bridge import GigaIMU, GigaPin
-
-IMUS = [GigaIMU("bno055", "Main IMU"), GigaIMU("ism330dhcx", "Backup IMU")]
-PINS = [GigaPin("D22", "Intake beam", pull="up")]
-
-
-class RobotSensors:
-    def __init__(self, module):
-        self.giga = module.giga(pins=PINS, imus=IMUS)
-        self.imu = self.giga.imu("Main IMU")
-```
-
-`self.imu.heading()` is degrees from -180 to 180, counting up as the robot
-turns left, the same way a positive `rotate` turns it. Wiring, parts, and the
-full API are in [docs/SETUP.md](docs/SETUP.md#5-add-sensors-with-the-arduino-giga-optional),
-[BOM.md](BOM.md#recommended--sensors-on-the-arduino-giga), and
-[docs/CODING.md](docs/CODING.md#sensors-on-the-arduino-giga).
+An **Arduino GIGA R1 WiFi** can optionally connect by USB for additional GPIO
+inputs. The repository includes USB auto-detection, bridge firmware and a Python
+pin API. This is an experimental extra, not part of the Mecanum setup; operation
+on your board and sensors needs verification. Uno and Mega boards are not
+supported by the bundled GIGA firmware. See [USB GPIO expansion](docs/CODING.md#optional-usb-gpio-expansion)
+for the opt-in code and [setup](docs/SETUP.md#optional-usb-gpio-expansion) for flashing.
 
 This is a complete two-sided drive example:
 

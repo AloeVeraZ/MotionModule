@@ -149,8 +149,8 @@ def sensor_controllers(inventory: dict | None = None) -> list[dict]:
         else:
             bridge = "detected" if port else "serial-port-missing"
             detail = (
-                "Board detected. Readings appear once the MotionModule firmware is installed "
-                "(motionmodule giga flash) and the robot's sensors.py declares what is wired to it."
+                "Optional USB GPIO board detected. This experimental extension needs MotionModule firmware "
+                "(motionmodule giga flash) and explicit declarations for your extra inputs. The Mecanum IMU stays on the Pi."
             )
         controllers.append({
             **profile,

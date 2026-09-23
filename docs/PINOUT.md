@@ -111,7 +111,7 @@ board and a new software backend instead of casually taking the ID or UART pins.
 
 GPIO7/8/9/11 normally have alternate SPI functions. The reference Raspberry Pi
 OS image has SPI disabled. `motionmodule doctor` warns if a `/dev/spidev*`
-device is active; disable SPI before using Drivers 3 and 4.
+device is active; disable SPI before using Driver 3.
 
 Raspberry Pi GPIOs are inputs during early boot, so they cannot be relied on to
 hold a driver input low until Linux and the MotionModule service have started.

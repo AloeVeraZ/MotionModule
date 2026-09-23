@@ -1,17 +1,17 @@
-"""The Arduino GIGA R1 WiFi as the robot's sensor board.
+"""Experimental Arduino GIGA R1 WiFi USB GPIO expansion.
 
 The GIGA only moves bytes. It reads the pins and I2C registers this side asks
 for and sends the numbers up its USB cable; the Pi decides what is wired
 where, sets the sensors up, and works out what the readings mean. A robot says
 what is connected, normally in ``sensors.py``::
 
-    giga = module.giga(
-        pins=[GigaPin("A0", "Arm potentiometer", kind="analog"),
-              GigaPin("D22", "Intake beam", pull="up")],
-        imus=[GigaIMU("bno055", "Main IMU")],
-    )
-    giga.value("Intake beam")        # True, False, or None when not streaming
-    giga.imu("Main IMU").heading()   # degrees, counter-clockwise positive
+    pins = []  # Declare only additional inputs actually wired to the board.
+    giga = module.giga(pins=pins)
+    # giga.value(name) reads a declared input, or None when not streaming.
+
+The reference Mecanum robot uses a Pi-connected BNO055 and does not start
+this extension. The bridge discovers a supported board, not its attached
+sensors. Its bundled firmware targets GIGA R1 WiFi, not Uno or Mega.
 
 MotionModule finds the board by its USB ID, sends those declarations after
 every connection, and keeps the newest readings from a background thread, so
@@ -298,7 +298,7 @@ class LiveIMU:
             )
         state = driver.state
         if state == "missing":
-            text = f"Nothing answers at 0x{self.declaration.address:02X}. Check 3.3V, GND, SDA 20 and SCL 21."
+            text = f"Nothing answers at 0x{self.declaration.address:02X}. Check the configured sensor connection and address."
             if driver.seen:
                 text += " Answering instead: " + ", ".join(f"0x{address:02X}" for address in driver.seen) + "."
             return text

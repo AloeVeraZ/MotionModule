@@ -3,6 +3,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from motion_module.config import load_project_config
 from motion_module.controller import MotionModule
@@ -149,23 +150,56 @@ class MecanumSensorTests(unittest.TestCase):
         config = load_project_config(PROJECT_DIR)
         with MotionModule(config, gpio=MockGPIO()) as module:
             drive = create_drive(module)
-            # One GIGA for the whole robot: sensors.py's declarations, simulated here.
-            self.assertIs(drive.sensors.giga, module.giga(pins=sensors.PINS, imus=sensors.IMUS))
-            self.assertTrue(drive.sensors.giga.simulated)
+            self.assertIsNone(drive.sensors.imu)
+            self.assertIsNone(module._giga)
             self.assertIsNone(drive.sensors.heading())
-            self.assertIsNone(drive.sensors.arm_position())
-            self.assertIsNone(drive.sensors.intake_blocked())
+            self.assertFalse(drive.sensors.reading().connected)
             names = [control["name"] for control in drive.controls()]
             self.assertIn("zero_heading", names)
-            self.assertIn("calibrate_gyro", names)
+            self.assertNotIn("calibrate_gyro", names)
             self.assertEqual(drive.control("zero_heading", 1), {"heading": None})
 
-    def test_sensors_file_declares_both_recommended_imus(self):
+    def test_sensors_file_declares_only_the_reference_bno055(self):
         import sensors
 
-        self.assertEqual([imu.chip for imu in sensors.IMUS], ["bno055", "ism330dhcx"])
-        self.assertEqual([imu.address for imu in sensors.IMUS], [0x28, 0x6A])
-        self.assertEqual([imu.driver for imu in sensors.IMUS], ["BNO055", "LSM6"])
+        self.assertEqual(sensors.IMU.chip, "bno055")
+        self.assertEqual(sensors.IMU.address, 0x28)
+        self.assertFalse(hasattr(sensors, "PINS"))
+        self.assertFalse(hasattr(sensors, "IMUS"))
+
+    def test_pi_imu_uses_discovered_bus_shares_reader_and_closes_on_shutdown(self):
+        import sensors
+
+        config = load_project_config(PROJECT_DIR)
+        with MotionModule(config, gpio=MockGPIO()) as module:
+            module.gpio.is_hardware = True
+            with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=11), \
+                    patch("motion_module.pi_imu.LocalIMU") as reader:
+                reader.return_value.declaration = sensors.IMU
+                reader.return_value.heading.return_value = 42.0
+                drive = create_drive(module)
+                reader.assert_called_once_with(sensors.IMU, bus=11)
+                self.assertEqual(drive.sensors.heading(), 42.0)
+                self.assertIs(module.local_imu(sensors.IMU), drive.sensors.imu)
+                drive.sensors.zero_heading()
+                reader.return_value.zero.assert_called_once_with()
+                self.assertIs(drive.sensors.reading(), reader.return_value.reading.return_value)
+                module.close()
+                reader.return_value.close.assert_called_once_with()
+                with self.assertRaises(RuntimeError):
+                    module.local_imu(sensors.IMU)
+
+    def test_missing_overlay_never_falls_back_to_servo_bus(self):
+        config = load_project_config(PROJECT_DIR)
+        with MotionModule(config, gpio=MockGPIO()) as module:
+            module.gpio.is_hardware = True
+            with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=None), \
+                    patch("motion_module.pi_imu.LocalIMU") as reader:
+                drive = create_drive(module)
+                self.assertIsNone(drive.sensors.heading())
+                self.assertFalse(drive.sensors.reading().connected)
+                reader.assert_not_called()
+                self.assertIsNone(module._giga)
 
     def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
         sensors = FakeHeadingSensors()

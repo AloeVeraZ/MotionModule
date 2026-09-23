@@ -85,54 +85,31 @@ and is not used in this build. Swapping which bullet lands on which terminal
 reverses that motor, but set direction with `inverted` in `hardware.py` rather
 than in the wiring.
 
-## Recommended · Sensors on the Arduino GIGA
+## Recommended · Pi-connected BNO055
 
-The robot drives without sensors. When it has them, an Arduino GIGA R1 WiFi
-reads every one and passes the numbers to the Pi over USB, which does the
-thinking. Its firmware installs from the Pi (`motionmodule giga flash`, or
-**Debug → Install firmware**), so no Arduino IDE is needed. The robot's
-`sensors.py` names what is wired to it.
+The Mecanum robot's IMU connects directly to the Pi on the independent
+`i2c-gpio` bus. No Arduino is needed for the reference robot.
 
 | Qty | Part | Selection | Notes |
 | ---: | --- | --- | --- |
-| 1 | Sensor controller | [Arduino GIGA R1 WiFi, ABX00063](https://store-usa.arduino.cc/products/giga-r1-wifi) | USB-C data cable to any Pi USB port. Its pins take 3.3 V at most |
-| 1 | 9-axis IMU | [Adafruit BNO055, STEMMA QT, 4646](https://www.adafruit.com/product/4646) | Fuses its own readings; ready about a second after power-on. Address 0x28 |
-| 1 | 6-axis IMU | [Adafruit ISM330DHCX, STEMMA QT, 4502](https://www.adafruit.com/product/4502) | Industrial-grade gyro; the Pi turns it into a heading. Address 0x6A |
-| Alternative | 6-axis IMU | [Adafruit LSM6DSOX, STEMMA QT, 4438](https://www.adafruit.com/product/4438) | Lower cost; same wiring and code as the ISM330DHCX |
-| 1 | IMU to GIGA cable | [STEMMA QT to male headers, 150 mm, 4209](https://www.adafruit.com/product/4209) | Red 3.3V, black GND, blue SDA 20, yellow SCL 21 |
-| 1 | IMU to IMU cable | [STEMMA QT, 100 mm, 4210](https://www.adafruit.com/product/4210) | Chains the second IMU off the first |
+| 1 | 9-axis IMU | [Teyleten Robot BNO055 breakout](https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/) | Read by the Pi; address 0x28 |
 
-Both IMUs share the GIGA's I2C pins at different addresses. The Pi sets them
-up and reads them through the GIGA, so no Arduino library is involved at all.
-Mount them flat, parts side up. One IMU is enough; with both, the robot keeps
-its heading if one drops out. The newer BNO085 was left out: Adafruit notes
-that its I2C breaks the protocol in some circumstances, and it needs a large
-driver library.
+VIN goes to physical pin 17, GND to 20, SDA to 11, SCL to 12, and AD0 to 6.
+Use the [complete wiring guide](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu)
+and [Pi IMU setup](docs/CODING.md#pi-connected-bno055-imu). The robot can drive
+without the IMU, but heading will be unavailable.
 
-## Recommended · Sensors on the Pi's own I2C bus
-
-An alternative to the GIGA above, not an addition to it: `motion_module.pi_imu.LocalIMU`
-reads a BNO055 (or a 6-axis ISM330DHCX, LSM6DSOX, LSM6DSO or LSM6DS3TR-C)
-directly over I2C, with no Arduino GIGA at all — the same chip and the same
-heading math either way.
+## Optional · USB GPIO expansion
 
 | Qty | Part | Selection | Notes |
 | ---: | --- | --- | --- |
-| 1 | 9-axis IMU | [Teyleten Robot BNO055 breakout](https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/) | A generic BNO055 clone; any BNO055 breakout, genuine or clone, works the same way |
+| Optional | USB GPIO board | [Arduino GIGA R1 WiFi, ABX00063](https://store-usa.arduino.cc/products/giga-r1-wifi) | USB-C data cable to the Pi; GPIO inputs take 3.3 V maximum |
 
-Wire it to the Pi's own I2C-1 bus — shared with the servo board at pins 3 and
-5, since I2C is a shared bus and the two never collide on address — or, to
-keep it off that bus entirely, to a second, independent I2C bus bit-banged on
-spare GPIO17/GPIO18 (physical pins 11/12), with one line in
-`/boot/firmware/config.txt`:
-
-```
-dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
-```
-
-Either way, nothing about the servo board's own wiring changes. See
-[docs/CODING.md](docs/CODING.md#an-imu-wired-straight-to-the-pi-no-giga) for
-the full wiring and the code.
+This is an experimental extension for future sensors, not part of the
+Mecanum wiring. USB auto-detection, bridge firmware and a Python pin API are
+included; operation with your hardware needs verification. No extra sensors
+are selected or declared. The firmware targets GIGA, not Uno or Mega.
+See [USB expansion setup](docs/SETUP.md#optional-usb-gpio-expansion).
 
 ## Recommended · Wiring
 

@@ -9,7 +9,7 @@ import zipfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from motion_module.config import hardware_source, load_hardware_file, load_project_config
 from motion_module.controller import MotionModule
@@ -20,6 +20,7 @@ from motion_module.dashboard import (
     load_dashboard_telemetry,
     load_drive,
     static_asset_version,
+    serve,
 )
 from motion_module.gpio import MockGPIO
 from motion_module.servo import MockServoController, Servo
@@ -694,11 +695,25 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
         self.assertEqual(data["touch_panels"], [])
 
+    def test_json_commands_reject_arrays_scalars_null_and_malformed_json(self):
+        routes = ["/api/drive", "/api/drive/control", "/api/test/motor",
+                  "/api/servo", "/api/network/connect", "/api/terminal/start"]
+        app = create_app(self.module)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        for route in routes:
+            for body in ('[]', '[1]', '"text"', '42', 'true', 'null', '{bad'):
+                with self.subTest(route=route, body=body):
+                    response = client.post(route, data=body, content_type="application/json", headers=headers)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("JSON object", response.get_json()["error"])
+        self.assertFalse(any(self.module.outputs.values()))
+
     def test_the_mecanum_sample_dashboard_loads_and_spells_out_the_default_controls(self):
         # The sample keeps drive.sensors as self.sensors. That once made every
         # snapshot fail, so the console never saw its cameras, IMU or keys.
-        giga = SimpleNamespace(snapshot=lambda: {"name": "Arduino GIGA R1 WiFi", "board_id": "arduino_giga_r1_wifi"})
-        for sensors in (None, SimpleNamespace(imus=[], giga=giga)):
+        pi_sensors = SimpleNamespace(reading=lambda: {"name": "Main IMU", "connected": False})
+        for sensors in (None, pi_sensors):
             with self.subTest(sensors=sensors):
                 drive = MecanumDrive(self.module, sensors=sensors)
                 telemetry = load_dashboard_telemetry(self.module, drive, EXAMPLE_DIR / "robot.py")
@@ -1343,6 +1358,26 @@ class DashboardAssetHelperTests(unittest.TestCase):
             self.assertEqual(install_ref(root), "testing")
             (root / "INSTALL_REF").write_text("<script>alert(1)</script>\n", encoding="utf-8")
             self.assertEqual(install_ref(root), "")
+
+
+class DashboardShutdownTests(unittest.TestCase):
+    def test_bind_failure_still_closes_all_workers_when_project_cleanup_fails(self):
+        camera, updates, telemetry, stop = Mock(), Mock(), Mock(), Mock()
+        telemetry.close.side_effect = RuntimeError("project close failed")
+        app = SimpleNamespace(config={
+            "CAMERA_MANAGER": camera, "UPDATE_CHECKER": updates, "STOP_OUTPUTS": stop,
+        })
+        with patch("motion_module.dashboard.load_drive"), \
+                patch("motion_module.dashboard.load_dashboard_telemetry", return_value=telemetry), \
+                patch("motion_module.dashboard.load_autonomous_routine", return_value=None), \
+                patch("motion_module.dashboard.create_app", return_value=app), \
+                patch("motion_module.dashboard.make_server", side_effect=OSError("port busy")):
+            with self.assertRaisesRegex(RuntimeError, "project close failed"):
+                serve(Mock(), threading.Event())
+        stop.assert_called_once_with()
+        telemetry.close.assert_called_once_with()
+        updates.close.assert_called_once_with()
+        camera.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

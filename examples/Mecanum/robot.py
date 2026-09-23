@@ -2,7 +2,7 @@
 
 `hardware.py` next to this file names the four wheels. This file turns the
 Driver Station's forward / strafe / rotate commands into wheel power, and
-`sensors.py` gives it the robot's sensors, all read by the Arduino GIGA.
+`sensors.py` reads the robot's BNO055 directly from the Raspberry Pi.
 
 The same three numbers arrive whether someone is using the keyboard or a game
 controller, the way an FTC opmode reads one gamepad's sticks:
@@ -80,8 +80,6 @@ class MecanumDrive:
             controls += [
                 {"name": "zero_heading", "label": "Zero heading", "kind": "button",
                  "detail": "The way the robot faces now becomes 0°"},
-                {"name": "calibrate_gyro", "label": "Calibrate gyro", "kind": "button",
-                 "detail": "Measures the 6-axis gyro again; keep the robot still"},
             ]
         return controls
 
@@ -95,9 +93,6 @@ class MecanumDrive:
         if name == "zero_heading" and self.sensors is not None:
             self.sensors.zero_heading()
             return {"heading": self.sensors.heading()}
-        if name == "calibrate_gyro" and self.sensors is not None:
-            self.sensors.calibrate_gyro()
-            return {"calibrating": True}
         raise ValueError(f"Unknown control: {name}")
 
 

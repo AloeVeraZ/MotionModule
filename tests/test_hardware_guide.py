@@ -112,22 +112,22 @@ class HardwareGuideTests(unittest.TestCase):
         groups = hardware_guide(self.config)["parts_groups"]
         self.assertEqual(
             [group["id"] for group in groups],
-            ["controllers", "power", "actuators", "sensors", "pi-i2c-sensors", "wiring", "tools"],
+            ["controllers", "power", "actuators", "pi-i2c-sensors", "sensors", "wiring", "tools"],
         )
         self.assertEqual(
             [group["requirement"] for group in groups],
-            ["required", "required", "recommended", "recommended", "recommended", "recommended", "recommended"],
+            ["required", "required", "recommended", "recommended", "optional", "recommended", "recommended"],
         )
         by_id = {group["id"]: group for group in groups}
         self.assertIn("recommendations, not requirements", by_id["actuators"]["note"].lower())
 
-    def test_sensor_group_names_one_nine_axis_and_one_six_axis_imu(self):
-        sensors = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "sensors")
-        selected = {part["name"] for part in sensors["items"] if part["status"] == "selected"}
-        self.assertIn("9-axis IMU: Adafruit BNO055", selected)
-        self.assertIn("6-axis IMU: Adafruit ISM330DHCX", selected)
-        self.assertIn("Arduino GIGA R1 WiFi", selected)
-        self.assertIn("3.3 V", sensors["note"])
+    def test_usb_expansion_is_optional_with_no_preselected_sensors(self):
+        group = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "sensors")
+        self.assertEqual(group["requirement"], "optional")
+        self.assertEqual([part["name"] for part in group["items"]], ["Arduino GIGA R1 WiFi"])
+        self.assertTrue(all(part["status"] == "optional" for part in group["items"]))
+        self.assertIn("Experimental", group["note"])
+        self.assertIn("3.3 V", group["note"])
 
     def test_pi_i2c_sensor_group_names_a_bno055_and_points_at_pi_imu(self):
         group = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "pi-i2c-sensors")

@@ -176,6 +176,36 @@ class RunnerTests(unittest.TestCase):
         self.assertTrue(wait_until(lambda: runner.status()["state"] == "finished"))
         self.assertEqual(calls, [1])
 
+    def test_stopped_but_unfinished_routine_cannot_overlap_a_new_run(self):
+        entered, finish = threading.Event(), threading.Event()
+
+        class Routine:
+            duration_seconds = None
+
+            def run(self, stop):
+                entered.set()
+                finish.wait(2)
+
+        runner, _ = self.runner(Routine())
+        try:
+            runner.start()
+            self.assertTrue(entered.wait(1))
+            runner.stop(timeout=0)
+            with self.assertRaisesRegex(RuntimeError, "still stopping"):
+                runner.start()
+        finally:
+            finish.set()
+            runner.stop()
+
+    def test_nonfinite_duration_uses_the_default_instead_of_breaking_the_timer(self):
+        from motion_module.autonomous import DEFAULT_DURATION_SECONDS
+        from types import SimpleNamespace
+
+        for duration in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(duration=duration):
+                runner, _ = self.runner(SimpleNamespace(duration_seconds=duration))
+                self.assertEqual(runner.status()["duration_seconds"], DEFAULT_DURATION_SECONDS)
+
 
 if __name__ == "__main__":
     unittest.main()

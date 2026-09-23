@@ -91,7 +91,7 @@ def doctor(as_json: bool = False) -> int:
             {
                 "name": "spi-pins",
                 "status": "warn" if spi_active else "pass",
-                "detail": "SPI is active and conflicts with Drivers 3/4" if spi_active else "SPI device is not active",
+                "detail": "SPI is active and conflicts with Driver 3" if spi_active else "SPI device is not active",
             }
         )
 

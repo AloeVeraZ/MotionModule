@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import threading
 import time
@@ -37,6 +38,7 @@ class MotionModule:
         self._last_servo_probe = time.monotonic()
         self._stop_event = threading.Event()
         self._giga = None
+        self._local_imu = None
         self._motors = {
             item.channel: HBridgeMotor(self.gpio, item, self.config.pwm_hz)
             for item in self.config.motors
@@ -104,8 +106,31 @@ class MotionModule:
 
         return bool(getattr(self.gpio, "is_hardware", False))
 
+    def local_imu(self, declaration):
+        """Read the reference Pi IMU on the independent i2c-gpio bus.
+
+        Returns None in simulation or if the bus overlay is missing. The
+        module owns the reader and closes it during shutdown.
+        """
+        from .pi_imu import LocalIMU, find_i2c_gpio_bus
+
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("MotionModule is closed")
+            if self._local_imu is not None:
+                if self._local_imu.declaration != declaration:
+                    raise ValueError("The Pi IMU is already configured differently")
+                return self._local_imu
+            if not self.hardware:
+                return None
+            bus = find_i2c_gpio_bus()
+            if bus is None:
+                return None
+            self._local_imu = LocalIMU(declaration, bus=bus)
+            return self._local_imu
+
     def giga(self, pins=(), imus=(), *, serial: str = ""):
-        """The Arduino GIGA R1 WiFi reading this robot's sensors.
+        """Optional USB GPIO expansion through an Arduino GIGA R1 WiFi.
 
         Declare every pin and IMU wired to the GIGA in one call, normally in
         sensors.py; calling again with the same declarations returns the same
@@ -116,14 +141,14 @@ class MotionModule:
         from .sensor_bridge import GigaR1Bridge
 
         with self._lock:
+            if self._closed:
+                raise RuntimeError("MotionModule is closed")
             bridge = self._giga
-            created = bridge is None
-            if created:
+            if bridge is None:
                 bridge = self._giga = GigaR1Bridge(pins, imus=imus, serial=serial, simulated=not self.hardware)
-        if created:
-            return bridge.start()
-        if bridge.matches(pins, imus, serial):
-            return bridge
+                return bridge.start()
+            if bridge.matches(pins, imus, serial):
+                return bridge
         raise ValueError(
             "The GIGA is already set up with other sensors. Declare all of its pins and IMUs "
             "once, in sensors.py, and share that object."
@@ -262,9 +287,16 @@ class MotionModule:
                     continue
 
     def _apply_all_zero(self) -> None:
+        failures = []
         for channel, motor in self._motors.items():
-            motor.set(0)
-            self.motor_values[channel] = 0.0
+            try:
+                motor.set(0)
+            except Exception as error:
+                failures.append(error)
+            else:
+                self.motor_values[channel] = 0.0
+        if failures:
+            raise ExceptionGroup("Could not stop every motor", failures)
 
     def _watchdog_loop(self) -> None:
         interval = max(0.01, self.config.watchdog_ms / 4000.0)
@@ -272,9 +304,15 @@ class MotionModule:
         while not self._stop_event.wait(interval):
             with self._lock:
                 if self._watchdog_armed and time.monotonic() - self._last_feed > timeout:
-                    self._apply_all_zero()
-                    self._watchdog_armed = False
-                    self._watchdog_tripped = True
+                    try:
+                        self._apply_all_zero()
+                    except Exception:
+                        if not self._watchdog_tripped:
+                            logging.getLogger(__name__).exception("Motor stop failed; watchdog will retry")
+                    else:
+                        self._watchdog_armed = False
+                    finally:
+                        self._watchdog_tripped = True
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -317,24 +355,36 @@ class MotionModule:
             }
 
     def close(self) -> None:
+        failures = []
+
+        def attempt(action, *args):
+            try:
+                action(*args)
+            except Exception as error:
+                failures.append(error)
+
         with self._lock:
             if self._closed:
                 return
             self._closed = True
             self._watchdog_armed = False
-            self._apply_all_zero()
+            self._stop_event.set()
+            # A failed output must not prevent stopping the remaining ones
+            # or closing the bus, GPIO handle and sensor threads.
+            attempt(self._apply_all_zero)
             if self._oe_gpio is not None:
-                try:
-                    self._write_output_enable(False)
-                except MotionModuleError:
-                    pass
-            self._servos.close()
-            self.gpio.close()
+                attempt(self._write_output_enable, False)
+            attempt(self._servos.close)
+            attempt(self.gpio.close)
             giga, self._giga = self._giga, None
-        self._stop_event.set()
+            local_imu, self._local_imu = self._local_imu, None
         self._watchdog_thread.join(timeout=1)
         if giga is not None:
-            giga.close()
+            attempt(giga.close)
+        if local_imu is not None:
+            attempt(local_imu.close)
+        if failures:
+            raise ExceptionGroup("Errors while shutting down MotionModule", failures)
 
     def __enter__(self):
         return self

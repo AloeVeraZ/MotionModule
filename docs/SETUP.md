@@ -69,60 +69,47 @@ Basic H-bridge and servo outputs cannot identify attached hardware.
 With all wheels raised, use the guarded Motor Bench Test at half power. Test
 servos one channel at a time after selecting the correct voltage and behavior.
 
-## 5. Add sensors with the Arduino GIGA (optional)
+## 5. Connect the Pi IMU
 
-An Arduino GIGA R1 WiFi reads every sensor on the robot: IMUs, switches,
-beam breaks, potentiometers. It passes the numbers to the Pi over its USB
-cable and the Pi does the rest, so the Pi's own header stays free for motors
-and servos. The parts, with links, are in
-[the bill of materials](../BOM.md#recommended--sensors-on-the-arduino-giga).
+The reference Mecanum setup keeps its motors, servo controller and BNO055
+on the Pi. The IMU uses the independent bus shown in **Debug → Wiring**:
+VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12, and AD0 to 6.
+Follow the [complete BNO055 guide](PINOUT.md#optional-gy-bno055-nine-axis-imu),
+including the board's BOOT, REST and mode-selection notes.
 
-**Install its firmware from the Pi. No Arduino IDE is needed.**
+Add under `[all]` in `/boot/firmware/config.txt`, then reboot:
 
-1. Plug the GIGA's USB-C port into one of the Pi's USB ports with a data cable.
-   It is powered from that cable.
-2. Open **Debug → Checks & logs**. Under *Connected USB devices* the GIGA card
-   has an **Install firmware** button. Press it and wait about 30 seconds.
-   Over SSH or the web terminal, this does the same thing:
+```ini
+dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
+```
 
-   ```bash
-   motionmodule giga flash
-   ```
+Use `i2cdetect -l` to confirm the independent adapter exists, then run
+**Debug → Checks & logs**. The sample's `sensors.py` reads the BNO055 on that
+bus automatically. It does not use the servo bus or an Arduino for heading.
+Without the IMU the robot still drives, with heading unavailable.
 
-   The Pi restarts the GIGA into its bootloader, writes the bundled firmware
-   with `dfu-util`, and checks the version it comes back with. Motors stop
-   while it runs. `motionmodule giga status` shows what is plugged in.
-3. The GIGA's light shows what it is doing: a short **blue** blink every two
-   seconds while it waits for the Pi, a short **green** blip while it streams,
-   **cyan** while an IMU starts or calibrates, and a **magenta** double blink
-   when an IMU it was told about does not answer.
+### Optional USB GPIO expansion
 
-The firmware knows nothing about any particular sensor, so this is done once.
-What to read comes from the robot project's `sensors.py`, sent every time
-MotionModule connects, so changing sensors never means reflashing.
+For additional sensors, an Arduino **GIGA R1 WiFi** may be connected to the
+Pi by a USB-C data cable as extra GPIO inputs. This is an experimental extra
+and may need troubleshooting on your hardware. The reference sample declares
+no additional sensors. Uno and Mega boards cannot use the bundled GIGA firmware.
 
-**Wire the IMUs.** Both recommended boards have STEMMA QT / Qwiic sockets.
-A STEMMA QT to male-header cable connects the first one to the GIGA, and a
-plain STEMMA QT cable chains the second one off the first:
+The existing USB discovery code recognizes the GIGA. Install its bridge
+firmware from **Debug → Checks & logs → Install firmware**, or run:
 
-| Wire | GIGA pin |
-| --- | --- |
-| Red | 3.3V |
-| Black | GND |
-| Blue | SDA 20 |
-| Yellow | SCL 21 |
+```bash
+motionmodule giga flash
+motionmodule giga status
+```
 
-Mount each IMU flat, parts side up, on the robot's frame. The BNO055 answers at
-0x28 and the ISM330DHCX or LSM6DSOX at 0x6A, so they share the bus. Keep the
-robot still for a second after power-on while the 6-axis gyro calibrates.
-
-**Wire other sensors to any GIGA pin**: digital pins D0-D75 read on or off,
-analog pins A0-A7 read 0 to 4095. **The GIGA's pins take 3.3 V at most.** A 5 V
-sensor output needs a level shifter or a resistor divider first.
-
-Then list what you wired in `sensors.py` (next section, and
-[CODING.md](CODING.md#sensors-on-the-arduino-giga)). Readings appear on the
-Driver Station's gyro panel and USB controller card.
+Flashing replaces the board's sketch, stops motors and restarts the GIGA.
+The Pi uses the bundled firmware and `dfu-util`; no Arduino IDE is needed.
+After flashing, declare only the extra inputs you actually wire, using
+[the Python GPIO API](CODING.md#optional-usb-gpio-expansion). Board detection
+does not identify attached sensors. The Pi sends your declarations on each
+connection; a pin-list change does not require reflashing. GIGA GPIO takes
+3.3 V maximum. The robot's BNO055 stays connected directly to the Pi.
 
 ## 6. Create and deploy robot code
 
@@ -141,8 +128,8 @@ MyRobot/
 
 Edit the local folder in any editor. `hardware.py` owns this robot's pins,
 inversion, PWM, watchdog, and servo board list. `robot.py` defines
-`create_drive(module)` and imports `sensors.py`, which lists what is wired to
-the GIGA. See [CODING.md](CODING.md) for the APIs and examples.
+`create_drive(module)` and imports `sensors.py`, which reads the Pi-connected
+BNO055. See [CODING.md](CODING.md) for the APIs and examples.
 
 Return to Code, choose the whole folder, review its files, accept the output
 stop/restart confirmation, and press **Deploy and run**. The Pi validates it,
@@ -317,7 +304,7 @@ fallback. Inspect `motionmodule-network.service` if necessary.
 Reboot after installation. Confirm the user belongs to `gpio` and `i2c` and
 that `/dev/gpiochip0` and `/dev/i2c-1` exist.
 
-### The GIGA is not found, or its readings stay empty
+### Optional GIGA expansion is not found, or readings stay empty
 
 - `motionmodule giga status` should list it. If not, try another cable: many
   USB-C cables only carry power.
@@ -325,8 +312,6 @@ that `/dev/gpiochip0` and `/dev/i2c-1` exist.
   `dialout` and `plugdev`. Reboot once after installing.
 - The Driver Station says it runs the original bridge sketch, or a different
   firmware version: install the firmware again from Debug.
-- *Nothing answers at 0x28* (or 0x6A): check the four IMU wires, and that the
-  board's address jumper is untouched. The message lists what did answer.
 - A flash that says the GIGA did not enter its bootloader: press the GIGA's
   RESET button twice quickly, so its green light pulses, and install again.
 
