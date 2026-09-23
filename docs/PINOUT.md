@@ -354,3 +354,7 @@ says what moved. The new file brings the shipped `inverted` values, so repeat
 the first electrical test above and fix `inverted` on any wheel that turns the
 wrong way before driving. A `hardware.py` with any other pins is the robot's own and is
 never changed.
+
+## Complete wiring diagram
+
+![Complete MotionModule wiring diagram](images/motionmodule-complete-wiring.png)

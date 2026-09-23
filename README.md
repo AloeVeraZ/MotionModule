@@ -139,6 +139,8 @@ is the servo rail regulator. **Debug → Parts list** shows the whole reference
 BOM, marked required or recommended, and works inside the app with no internet
 connection.
 
+![Complete MotionModule wiring diagram](docs/images/motionmodule-complete-wiring.png)
+
 ## Install on a Raspberry Pi
 
 In Raspberry Pi Imager, install current Raspberry Pi OS, create a normal

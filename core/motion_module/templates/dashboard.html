@@ -18,7 +18,7 @@
 })();
 </script>
 <title>MotionModule</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.svg?v={{ asset_version }}" type="image/svg+xml">
 <link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
@@ -71,12 +71,10 @@
 .brand:hover, .brand:focus-visible { color: var(--accent); }
 .brand-mark {
   display: grid; place-items: center;
-  width: 2rem; height: 2rem; flex: none;
-  border-radius: .5625rem;
-  background: var(--accent-fill);
-  color: var(--accent-ink);
+  width: 2.25rem; height: 2.25rem; flex: none;
 }
-.brand-mark svg { width: 1.0625rem; height: 1.0625rem; }
+.brand-mark img { display: block; width: 100%; height: 100%; }
+.hero .eyebrow .overview-mark { width: 1.75rem; height: 1.75rem; flex: none; }
 .build-pill {
   padding: .1875rem .4375rem;
   border: 1px solid var(--amber-line);
@@ -374,6 +372,22 @@
 .pin.power { border-color: var(--power-line); }
 .pin.power .pin-number { background: var(--power); color: var(--chip-ink); }
 .pin.reserved .pin-number { background: var(--reserved); color: var(--chip-ink); }
+/* Driver identity is shared by the header, output cards and legend. */
+[data-driver="1"] { --driver-a: #f472b6; --driver-b: #f9a8d4; }
+[data-driver="2"] { --driver-a: #2dd4bf; --driver-b: #99f6e4; }
+[data-driver="3"] { --driver-a: #fb923c; --driver-b: #fdba74; }
+[data-driver="4"] { --driver-a: #60a5fa; --driver-b: #93c5fd; }
+.pin[data-driver] { --pin-driver: var(--driver-a); border-color: color-mix(in srgb, var(--pin-driver) 45%, var(--line-soft)); background: color-mix(in srgb, var(--pin-driver) 12%, var(--well)); }
+.pin[data-output="B"] { --pin-driver: var(--driver-b); }
+.pin[data-driver] .pin-number { background: var(--pin-driver); color: #101010; }
+.pin.header-reserved { border-color: #dfbd55; }
+.pin.header-reserved .pin-number { background: #dfbd55; color: #101010; }
+.pin.header-unused { border-color: var(--line-soft); background: var(--well); }
+.pin.header-unused .pin-number { background: #080808; color: #f5f5f5; }
+.legend .driver-swatch { background: linear-gradient(90deg, var(--driver-a) 50%, var(--driver-b) 50%); }
+.driver-card .pair-a { --pair: var(--driver-a); }
+.driver-card .pair-b { --pair: var(--driver-b); }
+.driver-card .driver-ground { border-left: 3px solid var(--driver-a); padding-left: .625rem; }
 
 .pin-inspector { border-color: var(--accent-line); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--surface); }
 .pin-inspector h2 { margin: .25rem 0 .375rem; font: 700 clamp(1.375rem, 1.1rem + .8vw, 1.75rem)/1 var(--font-display); text-transform: uppercase; }
@@ -921,7 +935,7 @@
 <header class="topbar" data-bar>
   <div class="topbar-inner">
     <a class="brand" href="/">
-      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7l6 10 6-10v10M21 7v10"/></svg></span>
+      <span class="brand-mark" aria-hidden="true"><img src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt=""></span>
       <span class="brand-name">MotionModule</span>
       {% if install_ref and install_ref != 'main' %}<span class="build-pill" title="Installed from the {{ install_ref }} branch. Expect unfinished work.">{{ install_ref }}</span>{% endif %}
     </a>
@@ -971,7 +985,7 @@
     <section class="view" data-view="overview">
       <div class="hero">
         <div>
-          <p class="eyebrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 16a8 8 0 1 1 16 0"/><path d="M12 16l4-5"/></svg>Control center <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
+          <p class="eyebrow"><img class="overview-mark" src="/static/favicon.svg?v={{ asset_version }}" width="28" height="28" alt="" aria-hidden="true">Control center <span class="eyebrow-divider" aria-hidden="true">/</span> <span id="robotName">MotionModule</span></p>
           <h1>System overview</h1>
           <p>Live outputs, connections, and controller health without the noise.</p>
         </div>
@@ -1143,12 +1157,17 @@
               <div class="header-grid" id="headerGrid"></div>
             </div>
             <div class="legend">
-              <span><i style="background:var(--motor)"></i>Motor signal</span>
+              <span data-driver="1"><i class="driver-swatch"></i>Driver 1 · A/B</span>
+              <span data-driver="2"><i class="driver-swatch"></i>Driver 2 · A/B</span>
+              <span data-driver="3"><i class="driver-swatch"></i>Driver 3 · A/B</span>
+              <span data-driver="4"><i class="driver-swatch"></i>Driver 4 · A/B</span>
               <span><i style="background:var(--servo)"></i>Servo-board logic</span>
-              <span><i style="background:var(--ground)"></i>Ground</span>
+              <span><i style="background:var(--ground)"></i>Servo ground</span>
               <span><i style="background:var(--power)"></i>Pi power</span>
-              <span><i style="background:var(--reserved)"></i>Optional IMU / reserved · inspect why</span>
+              <span><i style="background:#dfbd55"></i>UART / ID EEPROM</span>
+              <span><i style="background:#080808"></i>Unused</span>
             </div>
+            <p class="small muted">B uses the lighter shade; driver grounds match A.</p>
           </article>
 
           <div class="stack">
@@ -2921,8 +2940,17 @@ function inspectPin(pin) {
   });
 }
 
-function pinElement(pin, isEven) {
+function pinElement(pin, isEven, motors = []) {
   const item = element('button', `pin ${pin.category}${isEven ? ' even' : ''}`);
+  const motor = motors.find(output => [output.in1_physical, output.in2_physical, output.ground_physical].includes(pin.physical));
+  if (motor) {
+    item.dataset.driver = motor.driver;
+    item.dataset.output = pin.physical === motor.ground_physical ? 'A' : motor.output;
+  } else if ([8, 10, 27, 28].includes(pin.physical)) {
+    item.classList.add('header-reserved');
+  } else if (!pin.configured && pin.category !== 'servo' && ![2, 4].includes(pin.physical)) {
+    item.classList.add('header-unused');
+  }
   item.type = 'button';
   item.dataset.pin = pin.physical;
   item.title = `Physical ${pin.physical} · ${pin.function} · ${pin.role}`;
@@ -2934,11 +2962,11 @@ function pinElement(pin, isEven) {
   return item;
 }
 
-function renderPinMap(header) {
+function renderPinMap(header, motors = []) {
   const rows = [];
   for (let index = 0; index < 40; index += 2) {
     const row = element('div', 'pin-row');
-    row.append(pinElement(header[index], false), pinElement(header[index + 1], true));
+    row.append(pinElement(header[index], false, motors), pinElement(header[index + 1], true, motors));
     rows.push(row);
   }
   replaceWith($('#headerGrid'), rows);
@@ -3298,7 +3326,7 @@ function renderHardware(data) {
   $('#driveWatchdog').textContent = `${data.module.watchdog_ms} MS WATCHDOG`;
   renderHardwareGuide(data.hardware_guide);
   renderStarterSnippet(data);
-  renderPinMap(data.header);
+  renderPinMap(data.header, data.motors);
   renderDrivers(data.motors);
   renderNameTables(data);
   renderServoPicker(data);

@@ -15,7 +15,7 @@
 })();
 </script>
 <title>MotionModule Driver Station</title>
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.svg?v={{ asset_version }}" type="image/svg+xml">
 <link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
@@ -54,12 +54,9 @@
 .station-brand { display: flex; align-items: center; gap: .625rem; min-width: 0; }
 .station-mark {
   display: grid; place-items: center;
-  width: 2rem; height: 2rem; flex: none;
-  border-radius: .5625rem;
-  background: var(--accent-fill);
-  color: var(--accent-ink);
+  width: 2.25rem; height: 2.25rem; flex: none;
 }
-.station-mark svg { width: 1.0625rem; height: 1.0625rem; }
+.station-mark img { display: block; width: 100%; height: 100%; }
 .station-brand strong { display: block; overflow: hidden; font: 700 1.125rem/1 var(--font-display); letter-spacing: .06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .station-brand small { display: block; margin-top: .1875rem; color: var(--accent-text); font: 700 .75rem/1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .header-center { display: flex; align-items: center; gap: .5rem; min-width: 0; }
@@ -621,7 +618,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 <body>
 <header class="station-header">
   <div class="station-brand">
-    <span class="station-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17V7l6 10 6-10v10M21 7v10"/></svg></span>
+    <span class="station-mark" aria-hidden="true"><img src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt=""></span>
     <div><strong>MotionModule Driver Station</strong><small>Competition console</small></div>
   </div>
   <div class="header-center">
