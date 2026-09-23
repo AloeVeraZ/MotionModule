@@ -9,6 +9,49 @@ import subprocess
 from .config import load_config
 from .errors import MotionModuleError
 from .pinout import motor_rows
+from .pi_imu import find_i2c_gpio_bus
+
+
+def local_imu_check(hardware: bool) -> dict:
+    """Identify the optional BNO055 without resetting or configuring the chip."""
+    check = {"id": "local-imu", "title": "BNO055 IMU · independent I2C bus", "level": "info"}
+    if not hardware:
+        return {**check, "detail": "Simulation: physical IMU detection is unavailable."}
+    bus_number = find_i2c_gpio_bus()
+    if bus_number is None:
+        return {**check, "detail": (
+            "IMU bus not enabled. Add dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 "
+            "to /boot/firmware/config.txt and reboot. See Wiring for pins 11/12, 17 and 20."
+        )}
+    try:
+        import smbus2
+    except ImportError:
+        return {**check, "level": "warn", "detail": "Install smbus2 in the MotionModule environment to check the IMU."}
+    try:
+        with smbus2.SMBus(bus_number) as bus:
+            answers = []
+            for address in (0x28, 0x29):
+                try:
+                    chip_id = bus.read_byte_data(address, 0x00)
+                except OSError:
+                    continue
+                if chip_id == 0xA0:
+                    return {**check, "level": "pass", "detail": (
+                        f"BNO055 detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0xA0). "
+                        "The chip responds; this does not verify calibration or live heading. "
+                        "LocalIMU in robot code initializes and reads the sensor."
+                    )}
+                answers.append(f"0x{address:02X} returned chip ID 0x{chip_id:02X}")
+    except OSError as error:
+        return {**check, "level": "warn", "detail": (
+            f"Cannot access IMU I2C bus {bus_number}: {error}. Check /dev/i2c-{bus_number}, "
+            "the i2c-dev module and the service user's i2c group permissions."
+        )}
+    return {**check, "level": "warn", "detail": (
+        f"No BNO055 identified on I2C bus {bus_number}. "
+        + ("; ".join(answers) + ". " if answers else "No response at 0x28 or 0x29. ")
+        + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 20 and the board's I2C mode."
+    )}
 
 
 def pi_power_check(hardware: bool) -> dict:
@@ -195,4 +238,5 @@ def dashboard_checks(module) -> list[dict]:
                     "detail": detail,
                 }
             )
+    checks.append(local_imu_check(bool(snapshot.get("hardware"))))
     return checks

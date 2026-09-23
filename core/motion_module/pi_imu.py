@@ -10,9 +10,10 @@ Wire it like any other I2C peripheral sharing the Pi's I2C-1 bus: 3.3V (the
 spare pin 17) and a spare ground (6, 20, or 30), then SDA (pin 3) and SCL
 (pin 5) - the same two pins the PCA9685 servo board already uses. I2C is a
 shared bus, and the servo board and an IMU never share an address, so both
-work at once; nothing about the servo board's wiring changes. A mode-select
-pin some breakout boards expose (often labelled PS0/PS1, or just BOOT) needs
-tying to a spare ground for I2C mode; this driver never toggles a hardware
+work at once; nothing about the servo board's wiring changes. Alternatively,
+use i2c-gpio on GPIO17/18 (physical 11/12). PS0/PS1 must be low for I2C mode;
+BOOT is a different, active-low bootloader input and must remain high for
+normal operation. This driver never toggles a hardware
 reset or reads an interrupt line, so RST and INT can be left unconnected.
 """
 
@@ -60,7 +61,16 @@ def find_i2c_gpio_bus(sysfs_root: str | Path = "/sys/class/i2c-dev") -> int | No
             name = (entry / "name").read_text(encoding="utf-8", errors="replace").strip()
         except OSError:
             continue
-        if name == "i2c-gpio":
+        # Device-tree adapters may be named i2c@0, not "i2c-gpio".
+        # Read the compatible property rather than guessing from that name.
+        compatible = b""
+        for node in (entry / "device/of_node/compatible", entry / "of_node/compatible"):
+            try:
+                compatible = node.read_bytes()
+                break
+            except OSError:
+                pass
+        if b"i2c-gpio" in compatible.split(b"\0") or re.fullmatch(r"i2c-gpio(?:\d+|[.@-][\w.-]+)?", name):
             return int(match.group(1))
     return None
 
@@ -291,7 +301,8 @@ class LocalIMU:
         if state == "missing":
             return (
                 f"Nothing answers at 0x{self.declaration.address:02X} on I2C bus {self._bus_number}. "
-                "Check 3.3V, GND, SDA (pin 3) and SCL (pin 5)."
+                "Check 3.3V, GND and the SDA/SCL wires for this bus "
+                "(GPIO17/18 bus: physical pins 11/12; I2C-1: pins 3/5)."
             )
         if state == "wrong-chip":
             return f"0x{self.declaration.address:02X} answered, but {driver.message}."

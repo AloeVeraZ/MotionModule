@@ -327,8 +327,9 @@ SDA and SCL are shared with the PCA9685 servo board - I2C is a shared bus, and
 they never share an address, so both work at once; nothing about the servo
 board's wiring changes. Power the breakout from the Pi's spare 3.3V (pin 17)
 and a spare ground (6, 20, or 30). A mode-select pin some breakout boards
-expose (labelled PS0/PS1, or just BOOT) needs tying to a spare ground for I2C
-mode; this driver never toggles a hardware reset or reads an interrupt line,
+expose (PS0/PS1) must be low for I2C mode. BOOT is a separate active-low
+bootloader input: keep it high for normal operation, never ground it for I2C.
+This driver never toggles a hardware reset or reads an interrupt line,
 so RST and INT are left unconnected. `LocalIMU` runs its own background
 thread and needs `smbus2`, already a MotionModule dependency.
 
@@ -363,6 +364,12 @@ imu = LocalIMU(GigaIMU("bno055", "Main IMU"), bus=bus)
 
 Verify the overlay took effect with `i2cdetect -l` on the Pi; the line naming
 `i2c-gpio` shows the bus number `find_i2c_gpio_bus()` just found for you.
+Some kernels name it `i2c@0`; discovery also checks its device-tree compatible
+property. Debug → Wiring has the complete eight-pin GY-BNO055 guide, and
+Checks & logs reads the chip ID at both 0x28 and 0x29 without resetting it.
+For the selected Teyleten board, connect AD0 to spare ground pin 6 for 0x28.
+BOOT and REST retain their pull-ups and INT is left disconnected. If using
+address 0x29 instead, pass `address=0x29` to `GigaIMU`.
 
 ## Motor API
 

@@ -21,6 +21,15 @@ SIX_AXIS = GigaIMU("ism330dhcx", "Backup IMU")
 
 
 class FindI2cGpioBusTests(unittest.TestCase):
+    def test_device_tree_adapter_name_is_not_the_driver_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._adapter(root, "i2c-11", "i2c@0")
+            node = root / "i2c-11/device/of_node"
+            node.mkdir(parents=True)
+            (node / "compatible").write_bytes(b"i2c-gpio\0")
+            self.assertEqual(find_i2c_gpio_bus(root), 11)
+
     def _adapter(self, root: Path, entry: str, name: str) -> None:
         directory = root / entry
         directory.mkdir()

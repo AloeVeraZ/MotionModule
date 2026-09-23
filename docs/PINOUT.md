@@ -248,7 +248,8 @@ when only some have explicit names.
 ## Reserved and unused Pi header pins
 
 "Reserved" means kept for a specific electrical interface. It does not mean
-that a sensor is connected or supported; no sensors are implemented yet.
+that a sensor is connected. The base harness leaves the following spare pins
+available; the optional IMU extension below uses pins 6, 11, 12, 17 and 20.
 
 | Physical pin(s) | Reference purpose | What to do |
 | --- | --- | --- |
@@ -264,6 +265,41 @@ If you customize motor pins, Debug shows the **active assignment** in place of
 the reference label. For example, using a UART GPIO for a motor requires
 disabling its serial-console/UART use first. Do not treat an unused label as a
 guarantee that another Pi service is not using that pin.
+
+## Optional GY-BNO055 nine-axis IMU
+
+The [selected Teyleten Robot board](https://www.amazon.com/dp/B0D47G672B)
+has eight header pins. Match the labels shown on its underside; numbering
+below follows VIN through REST and is not Pi header numbering.
+This extension leaves every motor and PCA9685 wire in place.
+
+| Board header | Connection / purpose |
+| --- | --- |
+| 1 · VIN | Pi pin 17, 3.3 V |
+| 2 · GND | Pi pin 20, ground |
+| 3 · SCL–Rx | Pi pin 12, GPIO18, software I2C clock |
+| 4 · SDA–Tx | Pi pin 11, GPIO17, software I2C data |
+| 5 · AD0 | Pi pin 6, ground, selects address 0x28 |
+| 6 · INT | Leave disconnected; the driver polls the sensor |
+| 7 · BOOT | No Pi GPIO; retain pull-up for normal boot, never ground for I2C |
+| 8 · REST | No Pi GPIO; active-low reset, retain pull-up; driver uses software reset |
+
+Use a 10 kΩ pull-up to 3.3 V if BOOT or REST lacks one on the board.
+SDA/SCL also require pull-ups to 3.3 V. Standard I2C requires PS0 and PS1 low;
+verify the board's mode-selection pads before soldering. BOOT is not PS0/PS1.
+See the [Bosch datasheet](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bno055-ds000.pdf).
+
+With power off, wire the board, then add under `[all]` in
+`/boot/firmware/config.txt` (older Pi OS: `/boot/config.txt`) and reboot:
+
+```ini
+dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
+```
+
+Debug → Wiring shows the optional connections even before hardware is present.
+Checks & logs verifies the BNO055 chip ID on the independent bus, below the
+PCA9685 checks. Detection is not proof of calibration or usable heading.
+[LocalIMU setup](CODING.md) explains how robot code initializes and reads it.
 
 ## Power boundaries
 

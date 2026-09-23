@@ -104,7 +104,7 @@ def motor_rows(config) -> list[dict]:
     return rows
 
 
-def header_rows(config) -> list[dict]:
+def header_rows(config, *, imu_guide: bool = False) -> list[dict]:
     """Return every Pi header pin with its configured MotionModule role."""
 
     enabled = config.servos.enabled
@@ -176,6 +176,18 @@ def header_rows(config) -> list[dict]:
             if row[f"{signal}_bcm"] in {14, 15}:
                 details[physical] += " Disable the serial console and any UART use of this pin first."
             configured_pins.add(physical)
+
+    if imu_guide:
+        for physical, label in ((6, "AD0 address-select ground (0x28)"), (11, "SDA / GPIO17"), (12, "SCL / GPIO18"),
+                                (17, "3.3 V supply"), (20, "GND")):
+            if physical in configured_pins:
+                continue  # A custom robot map owns this pin; never hide its role.
+            roles[physical] = (f"Optional BNO055 IMU {label}", "reserved")
+            details[physical] = (
+                f"Optional independent IMU connection: {label}. SDA goes to pin 11, SCL to pin 12, "
+                "3.3 V to pin 17, GND to pin 20 and AD0 to pin 6 (address 0x28). Enable the i2c-gpio overlay and reboot; "
+                "see the IMU wiring guide below. This label is a wiring plan, not proof of detection."
+            )
 
     bcm_by_physical = {physical: bcm for bcm, physical in PHYSICAL_BY_BCM.items()}
     rows = []

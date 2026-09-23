@@ -166,6 +166,16 @@ class FakeTerminal:
 
 
 class DashboardTests(unittest.TestCase):
+    def test_debug_exposes_imu_guide_and_check_below_servo_boards(self):
+        page = self.client.get('/diagnostics').get_data(as_text=True)
+        self.assertIn('8 · REST', page)
+        self.assertIn('Never ground it to select I²C', page)
+        header = self.client.get('/api/config').get_json()['header']
+        self.assertIn('IMU SDA', header[10]['role'])
+        checks = self.client.get('/api/diagnostics').get_json()['checks']
+        self.assertEqual(checks[-1]['id'], 'local-imu')
+        self.assertTrue(any(check['id'].startswith('servo-') for check in checks[:-1]))
+
     def setUp(self):
         self.module = FakeModule()
         self.network = FakeNetwork()

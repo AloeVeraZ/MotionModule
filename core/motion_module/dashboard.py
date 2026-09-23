@@ -450,7 +450,7 @@ def create_app(
                 },
                 "motors": motor_rows(module.config),
                 "bench_motors": motor_rows(module.config),
-                "header": header_rows(module.config),
+                "header": header_rows(module.config, imu_guide=True),
                 "hardware_file": {
                     "source": (
                         "runtime" if source_file is None else
