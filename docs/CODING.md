@@ -190,12 +190,18 @@ plugging one in - or back in after it was unplugged - is picked up within a
 few seconds either way. A slot that already has its own URL (an external
 streamer's) is left exactly as given, and leaving `dashboard.py` out
 entirely, or `cameras()` empty, still puts one camera tile up. Streaming a
-USB camera this way needs `opencv-python-headless` installed on the Pi;
-without it, or without a camera plugged in, the tile stays a clearly labelled
-offline placeholder instead of an error. The operator can also rotate any
-camera's view from the Driver Station itself, in the browser, with a slider,
-a quick-rotate button, or by typing an exact angle - that is a per-viewer
-display preference, not something `dashboard.py` configures.
+USB camera this way needs `opencv-python-headless`, which the real Pi
+dashboard installs on its own, quietly, the first time it finds a camera
+project code did not already wire up an external streamer for - the tile
+says so while that install runs, which can take a few minutes the very first
+time. Without a network connection for that one-time install, or without a
+camera plugged in, the tile stays a clearly labelled offline placeholder
+instead of an error, and says what to run by hand
+(`pip install opencv-python-headless`) if the automatic install failed. The
+operator can also rotate any camera's view from the Driver Station itself, in
+the browser, with a slider, a quick-rotate button, or by typing an exact angle
+- that is a per-viewer display preference, not something `dashboard.py`
+configures.
 
 A sensor on a spare Raspberry Pi pin also works: `module.digital_input()`
 accepts only BCM GPIO that remains unused after the active motor map and

@@ -306,6 +306,7 @@ def create_app(
     autonomous_routine=None,
     autonomous_error: str = "",
     project_path: str | os.PathLike[str] | None = None,
+    camera_auto_install: bool = False,
 ) -> Flask:
     app = Flask(
         __name__,
@@ -344,7 +345,9 @@ def create_app(
     firmware_lock = threading.Lock()
     updates = update_checker if update_checker is not None else UpdateChecker()
     app.config["UPDATE_CHECKER"] = updates
-    camera_manager = USBCameraManager()
+    # A test or the offline demo never wants a background pip install; the
+    # real Pi dashboard (serve(), below) opts in explicitly.
+    camera_manager = USBCameraManager(auto_install=camera_auto_install)
     app.config["CAMERA_MANAGER"] = camera_manager
 
     def authorized() -> bool:
@@ -1358,6 +1361,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         autonomous_routine=autonomous_routine,
         autonomous_error=autonomous_error,
         project_path=project_path,
+        camera_auto_install=True,
     )
     # Nginx is the only network-facing listener. Keeping Flask on loopback
     # prevents bypassing the stable port-80 front door and proxy policy.

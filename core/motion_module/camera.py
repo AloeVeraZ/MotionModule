@@ -9,14 +9,20 @@ shows up on its own, bringing up the Driver Station's multi-camera toggle
 without a line of extra code.
 
 Opening a camera needs OpenCV (``opencv-python-headless``), which is an
-optional install, not a hard dependency of MotionModule. Without it, or
-without any camera plugged in, the default camera tile still appears; it
-just stays a clearly labelled offline placeholder.
+optional install, not a hard dependency of MotionModule - it is heavy, and a
+release with a broken install must never be able to brick a robot. Rather
+than leaving the operator to SSH in and install it by hand, a first run
+without it installs it quietly in the background the moment a dashboard
+starts, and the camera tile explains that it is doing so. Without any camera
+plugged in, or if that install fails (no network, most likely), the tile
+stays a clearly labelled offline placeholder instead of an error.
 """
 
 from __future__ import annotations
 
 import glob
+import subprocess
+import sys
 import threading
 import time
 from typing import Iterator
@@ -27,7 +33,13 @@ DEFAULT_CAMERA_NAME = "USB camera"
 _JPEG_QUALITY = 80
 _CAPTURE_FPS = 15.0
 _RETRY_SECONDS = 5.0
-_NO_OPENCV = "Install opencv-python-headless to stream a USB camera automatically."
+_INSTALL_TIMEOUT = 600.0
+_INSTALLING = "Setting up camera support the first time this runs - this can take a few minutes."
+_NO_OPENCV = "Install opencv-python-headless to stream a USB camera: pip install opencv-python-headless."
+_INSTALL_FAILED = (
+    "Couldn't install opencv-python-headless automatically (is the Pi online?). "
+    "Install it yourself: pip install opencv-python-headless, then restart the dashboard."
+)
 _NO_DEVICE = "No USB camera detected. Plug one in; it appears here automatically."
 
 
@@ -133,11 +145,12 @@ class USBCameraManager:
     devices, not sides of a robot.
     """
 
-    def __init__(self, *, dev_root: str = "/dev", auto_start: bool = True):
+    def __init__(self, *, dev_root: str = "/dev", auto_start: bool = True, auto_install: bool = True):
         self._dev_root = dev_root
+        self._auto_install = auto_install
         self._streams: dict[str, _DeviceStream] = {}
         self._lock = threading.Lock()
-        self._opencv_missing = False
+        self._status = ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         if auto_start:
@@ -149,7 +162,34 @@ class USBCameraManager:
         try:
             import cv2  # noqa: F401  # Only a USB camera needs this.
         except ImportError:
-            self._opencv_missing = True
+            if self._auto_install:
+                threading.Thread(target=self._install_then_run, daemon=True).start()
+            else:
+                with self._lock:
+                    self._status = _NO_OPENCV
+            return
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _install_then_run(self) -> None:
+        with self._lock:
+            self._status = _INSTALLING
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless"],
+                check=True, timeout=_INSTALL_TIMEOUT,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            import importlib
+            importlib.invalidate_caches()
+            import cv2  # noqa: F401
+        except Exception:
+            with self._lock:
+                self._status = _INSTALL_FAILED
+            return
+        with self._lock:
+            self._status = ""
+        if self._stop.is_set():
             return
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
@@ -182,8 +222,9 @@ class USBCameraManager:
         with self._lock:
             devices = sorted(self._streams)
             streams = [self._streams[device] for device in devices]
+            status = self._status
         if not streams:
-            detail = _NO_OPENCV if self._opencv_missing else _NO_DEVICE
+            detail = status or _NO_DEVICE
             return [{
                 "id": "camera-usb-1", "name": DEFAULT_CAMERA_NAME, "url": "",
                 "connected": False, "detail": detail,

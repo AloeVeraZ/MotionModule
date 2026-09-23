@@ -1,8 +1,18 @@
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from motion_module.camera import USBCameraManager, list_video_devices
+
+
+def _skip_if_opencv_installed(test):
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        return
+    test.skipTest("This environment has opencv installed")
 
 
 class ListVideoDevicesTests(unittest.TestCase):
@@ -35,19 +45,31 @@ class USBCameraManagerTests(unittest.TestCase):
         self.assertTrue(feed["detail"])
         manager.close()
 
-    def test_starting_without_opencv_never_claims_to_be_connected(self):
-        try:
-            import cv2  # noqa: F401
-        except ImportError:
-            pass
-        else:
-            self.skipTest("This environment has opencv installed")
-        manager = USBCameraManager(auto_start=False)
+    def test_missing_opencv_without_auto_install_says_so_immediately(self):
+        _skip_if_opencv_installed(self)
+        manager = USBCameraManager(auto_start=False, auto_install=False)
         manager.start()
         feed = manager.feeds()[0]
         self.assertFalse(feed["connected"])
-        self.assertIn("opencv", feed["detail"].lower())
+        self.assertIn("pip install opencv-python-headless", feed["detail"])
         manager.close()
+
+    def test_missing_opencv_tries_to_install_it_automatically(self):
+        _skip_if_opencv_installed(self)
+        with patch("motion_module.camera.subprocess.run") as run:
+            run.side_effect = TimeoutError("no network in this test")
+            manager = USBCameraManager(auto_start=False)
+            manager.start()
+            deadline = time.monotonic() + 2
+            detail = ""
+            while time.monotonic() < deadline:
+                detail = manager.feeds()[0]["detail"]
+                if "install it yourself" in detail.lower():
+                    break
+                time.sleep(0.01)
+            manager.close()
+        self.assertTrue(run.called, "A missing opencv must trigger an automatic install attempt")
+        self.assertIn("install it yourself", detail.lower(), "A failed install must fall back to a clear message")
 
     def test_an_out_of_range_slot_streams_nothing_rather_than_raising(self):
         manager = USBCameraManager(auto_start=False)
