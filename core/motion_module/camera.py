@@ -21,6 +21,8 @@ stays a clearly labelled offline placeholder instead of an error.
 from __future__ import annotations
 
 import glob
+import os
+import struct
 import subprocess
 import sys
 import threading
@@ -42,11 +44,51 @@ _INSTALL_FAILED = (
 )
 _NO_DEVICE = "No USB camera detected. Plug one in; it appears here automatically."
 
+# One physical UVC webcam often exposes more than one /dev/videoN node - a
+# real capture node plus a metadata node for embedded timestamps and
+# exposure, on newer kernels. Without filtering these out, one camera looks
+# like two. VIDIOC_QUERYCAP (see linux/videodev2.h) tells them apart:
+# device_caps describes this one node, where capabilities describes every
+# node the physical camera exposes, so a metadata node also reports
+# VIDEO_CAPTURE there even though it cannot actually stream video.
+_VIDIOC_QUERYCAP = 0x80685600
+_V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+_V4L2_CAP_DEVICE_CAPS = 0x80000000
+_V4L2_CAPABILITY_FORMAT = "16s32s32sIII12s"
+_V4L2_CAPABILITY_SIZE = struct.calcsize(_V4L2_CAPABILITY_FORMAT)
+
 
 def list_video_devices(dev_root: str = "/dev") -> list[str]:
     """Video capture device paths, sorted, without opening any of them."""
 
     return sorted(glob.glob(f"{dev_root}/video*"))
+
+
+def _is_capture_device(path: str) -> bool:
+    """True only for a V4L2 node that can actually capture video.
+
+    Off Linux (no fcntl) there is nothing to query and nothing will open
+    anyway, so everything is left as a candidate rather than filtered out.
+    """
+
+    try:
+        import fcntl
+    except ImportError:
+        return True
+    try:
+        fd = os.open(path, os.O_RDWR | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return False
+    try:
+        buffer = bytearray(_V4L2_CAPABILITY_SIZE)
+        fcntl.ioctl(fd, _VIDIOC_QUERYCAP, buffer, True)
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    _, _, _, _, capabilities, device_caps, _ = struct.unpack(_V4L2_CAPABILITY_FORMAT, bytes(buffer))
+    caps = device_caps if capabilities & _V4L2_CAP_DEVICE_CAPS else capabilities
+    return bool(caps & _V4L2_CAP_VIDEO_CAPTURE)
 
 
 class _DeviceStream:
@@ -196,7 +238,8 @@ class USBCameraManager:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            wanted = list_video_devices(self._dev_root)[:MAX_CAMERAS]
+            candidates = list_video_devices(self._dev_root)
+            wanted = [device for device in candidates if _is_capture_device(device)][:MAX_CAMERAS]
             with self._lock:
                 for device in [item for item in self._streams if item not in wanted]:
                     self._streams.pop(device).close()

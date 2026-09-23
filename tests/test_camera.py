@@ -1,10 +1,20 @@
+import struct
+import sys
 import tempfile
 import time
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from motion_module.camera import USBCameraManager, list_video_devices
+from motion_module.camera import (
+    USBCameraManager,
+    _is_capture_device,
+    _V4L2_CAP_DEVICE_CAPS,
+    _V4L2_CAP_VIDEO_CAPTURE,
+    _V4L2_CAPABILITY_FORMAT,
+    list_video_devices,
+)
 
 
 def _skip_if_opencv_installed(test):
@@ -30,6 +40,50 @@ class ListVideoDevicesTests(unittest.TestCase):
             [Path(device).name for device in devices],
             ["video0", "video1", "video10"],
         )
+
+
+def _fake_query_cap(capabilities: int, device_caps: int):
+    """A fake VIDIOC_QUERYCAP response, as bytes shaped like the real ioctl's."""
+
+    return struct.pack(_V4L2_CAPABILITY_FORMAT, b"uvcvideo", b"Generic Camera", b"usb-1", 1,
+                        capabilities, device_caps, b"\0" * 12)
+
+
+class IsCaptureDeviceTests(unittest.TestCase):
+    """One physical UVC webcam often exposes a real capture node plus a
+    metadata-only node; without filtering, MotionModule used to treat one
+    plugged-in camera as two. These pin down the ioctl bit-math that tells
+    them apart, since it can't be exercised against real hardware here."""
+
+    def _is_capture_device(self, capabilities: int, device_caps: int) -> bool:
+        response = _fake_query_cap(capabilities, device_caps)
+
+        def ioctl(fd, request, buffer, mutate=False):
+            buffer[:len(response)] = response
+
+        fake_fcntl = types.SimpleNamespace(ioctl=ioctl)
+        with patch.dict(sys.modules, {"fcntl": fake_fcntl}), \
+                patch("motion_module.camera.os.open", return_value=3), \
+                patch("motion_module.camera.os.close"):
+            return _is_capture_device("/dev/video0")
+
+    def test_a_real_capture_node_passes(self):
+        self.assertTrue(self._is_capture_device(
+            _V4L2_CAP_DEVICE_CAPS | _V4L2_CAP_VIDEO_CAPTURE, _V4L2_CAP_VIDEO_CAPTURE))
+
+    def test_a_metadata_only_node_is_filtered_out(self):
+        v4l2_cap_meta_capture = 0x00800000
+        self.assertFalse(self._is_capture_device(
+            _V4L2_CAP_DEVICE_CAPS | _V4L2_CAP_VIDEO_CAPTURE, v4l2_cap_meta_capture))
+
+    def test_a_driver_without_per_node_device_caps_falls_back_to_capabilities(self):
+        self.assertTrue(self._is_capture_device(_V4L2_CAP_VIDEO_CAPTURE, 0))
+
+    def test_a_device_that_will_not_open_is_not_a_capture_device(self):
+        fake_fcntl = types.SimpleNamespace(ioctl=lambda *a, **k: None)
+        with patch.dict(sys.modules, {"fcntl": fake_fcntl}), \
+                patch("motion_module.camera.os.open", side_effect=OSError):
+            self.assertFalse(_is_capture_device("/dev/video99"))
 
 
 class USBCameraManagerTests(unittest.TestCase):
