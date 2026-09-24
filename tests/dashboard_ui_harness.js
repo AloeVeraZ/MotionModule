@@ -267,6 +267,28 @@ async function run(scenario) {
     assert.equal(app.$('#servoSafe').checked, false);
     await app.$('#servoSet').fire('click');
     assert.equal(app.requests.filter(r => r.url === '/api/servos/set').length, 1);
+    app.$('#servoCustomMin').value = '0';
+    app.$('#servoCustomMax').value = '360';
+    await app.$('#servoCustomMax').fire('input');
+    assert.equal(app.$('#servoMidpoint').textContent, 'Midpoint (180°)');
+    assert.equal(app.$('#servoMaximum').textContent, 'Upper limit (360°)');
+    app.$('#servoSafe').checked = true;
+    for (const [id, value] of [['servoZero', 0], ['servoMidpoint', 180], ['servoMaximum', 360]]) {
+      await app.$('#' + id).fire('click');
+      await app.settle();
+      assert.equal(app.requests.filter(r => r.url === '/api/servos/set').at(-1).payload.value, value);
+    }
+    app.$('#servoCustomMin').value = '-60';
+    app.$('#servoCustomMax').value = '120';
+    await app.$('#servoCustomMax').fire('input');
+    assert.equal(app.$('#servoMidpoint').textContent, 'Midpoint (30°)');
+    assert.equal(app.$('#servoMaximum').textContent, 'Upper limit (120°)');
+    vm.runInContext(`configData.servos.profiles.push({id: 'continuous_rotation', kind: 'continuous', minimum: -1, maximum: 1, zero: 0, step: 0.01, unit: ''})`, app.context);
+    app.$('#servoProfile').value = 'continuous_rotation';
+    await app.$('#servoProfile').fire('change');
+    assert.equal(app.$('#servoMidpoint').hidden, true);
+    assert.equal(app.$('#servoMaximum').hidden, true);
+    assert.equal(app.$('#servoZero').textContent, 'Stop rotation');
   } else if (scenario === 'touch-drive' || scenario === 'touch-stop') {
     await app.releaseForward();
     const grid = app.$(fixture.kind === 'station' ? '#keyGrid' : '#driveKeys');

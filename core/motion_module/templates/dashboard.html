@@ -1458,6 +1458,8 @@ heading = imu.heading() if imu is not None else None
               <div class="button-row">
                 <button class="button primary" id="servoSet" type="button">Send this position</button>
                 <button class="button" id="servoZero" type="button">Zero servo</button>
+                <button class="button" id="servoMidpoint" type="button">Midpoint</button>
+                <button class="button" id="servoMaximum" type="button">Upper limit</button>
                 <button class="button" id="servoRelease" type="button">Release now</button>
               </div>
               </div>
@@ -3576,6 +3578,9 @@ function updateServoProfile() {
   const profile = selectedServoProfile();
   const slider = $('#servoValue');
   slider.disabled = !profile;
+  for (const id of ['servoMidpoint', 'servoMaximum']) {
+    $('#' + id).hidden = !profile || profile.kind === 'continuous';
+  }
   if (!profile) {
     $('#servoProfileHelp').textContent = 'Enter a minimum angle smaller than the maximum angle.';
     $('#servoValueLabel').value = '—';
@@ -3587,6 +3592,8 @@ function updateServoProfile() {
   slider.step = profile.step;
   slider.value = continuous ? 0 : (profile.minimum + profile.maximum) / 2;
   $('#servoZero').textContent = continuous ? 'Stop rotation' : profile.zero === 0 ? 'Zero servo' : `Move to ${profile.zero}°`;
+  $('#servoMidpoint').textContent = `Midpoint (${(profile.minimum + profile.maximum) / 2}°)`;
+  $('#servoMaximum').textContent = `Upper limit (${profile.maximum}°)`;
   $('#servoValueName').textContent = continuous ? 'Rotation speed' : 'Target angle';
   $('#servoValueLabel').value = `${slider.value}${profile.unit}`;
   $('#servoProfileHelp').textContent = continuous
@@ -3639,6 +3646,14 @@ $('#servoSet')?.addEventListener('click', () => pulseServo($('#servoValue').valu
 $('#servoZero')?.addEventListener('click', () => {
   const profile = selectedServoProfile();
   if (profile) pulseServo(profile.zero);
+});
+$('#servoMidpoint')?.addEventListener('click', () => {
+  const profile = selectedServoProfile();
+  if (profile && profile.kind !== 'continuous') pulseServo((profile.minimum + profile.maximum) / 2);
+});
+$('#servoMaximum')?.addEventListener('click', () => {
+  const profile = selectedServoProfile();
+  if (profile && profile.kind !== 'continuous') pulseServo(profile.maximum);
 });
 $('#servoRelease')?.addEventListener('click', async () => {
   try {
