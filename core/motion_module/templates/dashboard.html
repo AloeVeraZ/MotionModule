@@ -1287,29 +1287,30 @@
         </div></article>
 
         <article class="card spaced" id="localImuGuide">
-          <div class="panel-head"><h2>BNO055 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
+          <div class="panel-head"><h2>MPU9255 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
           <div class="panel-body stack">
-            <p>Complete eight-pin guide for the Teyleten Robot GY-BNO055. Match the printed labels, not a mirrored view of the board. Four wires carry power and I²C; AD0 selects the address. The other three pins have no runtime connection. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>GY-BNO055</strong><span>SDA–Tx · SCL–Rx · address 0x28</span></div></div>
-            <div class="table-scroll"><table class="name-table"><thead><tr><th>Header label</th><th>Connection / purpose</th></tr></thead><tbody>
-              <tr><td>1 · VIN</td><td>Pi pin 17 · 3.3 V supply</td></tr>
-              <tr><td>2 · GND</td><td>Pi pin 6 · signal ground</td></tr>
-              <tr><td>3 · SCL–Rx</td><td>Pi pin 12 · GPIO18 · I²C clock</td></tr>
-              <tr><td>4 · SDA–Tx</td><td>Pi pin 11 · GPIO17 · I²C data</td></tr>
-              <tr><td>5 · AD0</td><td>Connect to the same Pi pin 6 ground · selects address 0x28</td></tr>
-              <tr><td>6 · INT</td><td>Leave disconnected. Interrupt output; MotionModule polls over I²C.</td></tr>
-              <tr><td>7 · BOOT</td><td>No Pi GPIO connection. Must remain high for normal boot; verify the board's pull-up. Never ground it to select I²C.</td></tr>
-              <tr><td>8 · REST</td><td>No Pi GPIO connection. Active-low reset (RST); retain the board's pull-up. The driver uses software reset.</td></tr>
+            <p>The JESSINIE MPU9255 uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
+            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU9255</strong><span>SDA · SCL · address 0x68</span></div></div>
+            <div class="table-scroll"><table class="name-table"><thead><tr><th>Board signal</th><th>Connection / purpose</th></tr></thead><tbody>
+              <tr><td>VCC</td><td>Pi pin 17 · 3.3 V supply</td></tr>
+              <tr><td>GND</td><td>Pi pin 6 · signal ground</td></tr>
+              <tr><td>SCL</td><td>Pi pin 12 · GPIO18 · I²C clock</td></tr>
+              <tr><td>SDA</td><td>Pi pin 11 · GPIO17 · I²C data</td></tr>
+              <tr><td>AD0 / SDO</td><td>Existing Pi pin 6 ground · selects address 0x68</td></tr>
+              <tr><td>CS / NCS</td><td>Must be high for I²C; verify the breakout's onboard pull-up. No additional Pi GPIO.</td></tr>
+              <tr><td>INT</td><td>Leave disconnected; MotionModule polls over I²C.</td></tr>
+              <tr><td>Auxiliary pins</td><td>EDA / ECL / FSYNC are unused; leave disconnected.</td></tr>
             </tbody></table></div>
-            <p>Wire with power off. Standard I²C requires PS0 and PS1 low; these are board mode-selection pads, not the BOOT header pin. Confirm the board's jumper configuration before soldering. SDA and SCL need pull-ups to 3.3 V; verify the breakout includes them. Do not connect either signal to 5 V. If BOOT or REST lacks a pull-up, use a 10 kΩ pull-up to 3.3 V. <a href="https://www.amazon.com/dp/B0D47G672B" target="_blank" rel="noopener">Selected board</a> · <a href="https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bno055-ds000.pdf" target="_blank" rel="noopener">BNO055 electrical reference</a></p>
+            <p>Use 3.3 V power and signal pull-ups. Verify the board is configured for I²C. The previous BNO055's BOOT, REST and PS0/PS1 instructions do not apply. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
+            <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. The magnetometer and DMP are unused; heading may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the BNO055 row below the PCA9685 reports whether chip ID 0xA0 answers at 0x28 or 0x29. Detection does not initialize the sensor or prove calibrated heading.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU9255 identity 0x73 at 0x68 or 0x69. Legacy BNO055 identity 0xA0 at 0x28/0x29 is also recognized. Detection does not initialize the sensor or prove calibrated heading.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import GigaIMU
 
 # GigaIMU is a shared chip declaration; this reader uses the Pi.
-imu = module.local_imu(GigaIMU("bno055", "Main IMU", address=0x28))
+imu = module.local_imu(GigaIMU("mpu9255", "Main IMU", address=0x68))
 heading = imu.heading() if imu is not None else None
 # No heading in simulation or without the independent bus.</pre>
           </div>
@@ -1360,7 +1361,7 @@ heading = imu.heading() if imu is not None else None
           <div class="panel-body">
             <p class="small muted">The reference build, from the Pi to the motor drivers, servo board and IMU, with the power connections included. Wire colors match Follow the signal above. Labels show physical Pi header pins.</p>
             <a href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener" aria-label="Open complete wiring diagram at full size">
-              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and BNO055 IMU, plus battery and regulated power rails.">
+              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and MPU9255 IMU, plus battery and regulated power rails.">
             </a>
           </div>
         </article>
@@ -1438,6 +1439,14 @@ heading = imu.heading() if imu is not None else None
                 <label class="field full">What kind of servo is it?
                   <select id="servoProfile" aria-label="Servo behavior"></select>
                 </label>
+                <div id="servoCustomRange" class="fields full" hidden>
+                  <label class="field">Minimum angle (°)
+                    <input id="servoCustomMin" type="number" step="any" value="0">
+                  </label>
+                  <label class="field">Maximum angle (°)
+                    <input id="servoCustomMax" type="number" step="any" value="180">
+                  </label>
+                </div>
                 <label class="field full">
                   <span id="servoValueName">Target angle</span>
                   <output id="servoValueLabel">150&deg;</output>
@@ -2795,7 +2804,7 @@ function pinElement(pin, isEven, motors = []) {
     item.dataset.output = pin.physical === motor.ground_physical ? 'GND' : motor.output;
   } else if ([8, 10, 27, 28].includes(pin.physical)) {
     item.classList.add('header-reserved');
-  } else if (pin.category === 'reserved' && pin.role.startsWith('Optional BNO055 IMU ')) {
+  } else if (pin.category === 'reserved' && pin.role.startsWith('Optional MPU9255 IMU ')) {
     item.classList.add('header-imu');
     if (pin.function === 'GND') item.classList.add('module-ground');
   } else if (pin.category === 'ground' && pin.role.startsWith('Servo controller')) {
@@ -3553,23 +3562,36 @@ $('#motorSafe').addEventListener('change', event => { if (!event.target.checked)
 $('#servoSafe').addEventListener('change', event => { if (!event.target.checked) stopAll(); });
 
 function selectedServoProfile() {
-  return configData?.servos.profiles.find(profile => profile.id === $('#servoProfile').value);
+  const profile = configData?.servos.profiles.find(profile => profile.id === $('#servoProfile').value);
+  if (profile?.id !== 'custom_position') return profile;
+  const minimum = $('#servoCustomMin').value.trim() === '' ? NaN : Number($('#servoCustomMin').value);
+  const maximum = $('#servoCustomMax').value.trim() === '' ? NaN : Number($('#servoCustomMax').value);
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || !Number.isFinite(maximum - minimum) || minimum >= maximum) return null;
+  return {...profile, minimum, maximum, zero: Math.min(maximum, Math.max(minimum, 0))};
 }
 
 function updateServoProfile() {
+  $('#servoCustomRange').hidden = $('#servoProfile').value !== 'custom_position';
+  $('#servoSafe').checked = false;
   const profile = selectedServoProfile();
-  if (!profile) return;
   const slider = $('#servoValue');
+  slider.disabled = !profile;
+  if (!profile) {
+    $('#servoProfileHelp').textContent = 'Enter a minimum angle smaller than the maximum angle.';
+    $('#servoValueLabel').value = '—';
+    return;
+  }
   const continuous = profile.kind === 'continuous';
   slider.min = profile.minimum;
   slider.max = profile.maximum;
   slider.step = profile.step;
   slider.value = continuous ? 0 : (profile.minimum + profile.maximum) / 2;
+  $('#servoZero').textContent = continuous ? 'Stop rotation' : profile.zero === 0 ? 'Zero servo' : `Move to ${profile.zero}°`;
   $('#servoValueName').textContent = continuous ? 'Rotation speed' : 'Target angle';
   $('#servoValueLabel').value = `${slider.value}${profile.unit}`;
   $('#servoProfileHelp').textContent = continuous
-    ? 'Continuous mode: −100% and +100% rotate in opposite directions and 0% is the neutral stop command. The servo must already be set to continuous mode.'
-    : `${profile.label}: ${profile.minimum}–${profile.maximum}${profile.unit} maps to ${profile.minimum_pulse_us}–${profile.maximum_pulse_us} µs. "Zero servo" commands ${profile.zero}${profile.unit}, which may be a mechanical endpoint.`;
+    ? 'Continuous mode: −1 and +1 rotate in opposite directions; 0 stops. Uses the goBILDA 2000 Series example: 900–2100 µs, neutral at 1500 µs. The servo must already be in continuous mode.'
+    : `${profile.label}: ${profile.minimum}–${profile.maximum}${profile.unit} maps to ${profile.minimum_pulse_us}–${profile.maximum_pulse_us} µs. "Zero servo" commands ${profile.zero}${profile.unit}, which may be a mechanical endpoint. Match the selected travel and hardware.py pulse limits to your servo’s manufacturer specifications; this selector does not reprogram the servo.`;
   $('#servoSafe').checked = false;
 }
 
@@ -3591,6 +3613,7 @@ async function pulseServo(value) {
         board: Number($('#servoBoard').value),
         channel: Number($('#servoChannel').value),
         profile: profile.id,
+        ...(profile.id === 'custom_position' ? {custom_range: {minimum: profile.minimum, maximum: profile.maximum}} : {}),
         value: Number(value),
         confirmed: true,
       }),
@@ -3606,6 +3629,8 @@ async function pulseServo(value) {
 
 $('#servoBoard')?.addEventListener('change', renderServoChannels);
 $('#servoProfile')?.addEventListener('change', updateServoProfile);
+$('#servoCustomMin')?.addEventListener('input', updateServoProfile);
+$('#servoCustomMax')?.addEventListener('input', updateServoProfile);
 $('#servoValue')?.addEventListener('input', () => {
   const profile = selectedServoProfile();
   if (profile) $('#servoValueLabel').value = `${$('#servoValue').value}${profile.unit}`;

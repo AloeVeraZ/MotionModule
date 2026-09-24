@@ -1,7 +1,7 @@
-"""The Mecanum robot's BNO055, wired directly to the Raspberry Pi.
+"""The Mecanum robot's MPU9255, wired directly to the Raspberry Pi.
 
 Use the single wiring plan in Debug > Wiring and docs/PINOUT.md:
-VIN -> physical 17, GND and AD0 -> 6, SDA -> 11, SCL -> 12.
+VCC -> physical 17, GND and AD0 -> 6, SDA -> 11, SCL -> 12.
 Enable dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 and reboot.
 The Pi reads the independent bus; no Arduino is part of this setup.
 
@@ -14,7 +14,7 @@ from motion_module.telemetry import IMUReading
 
 
 # GigaIMU is the shared chip-declaration type; this uses the local Pi reader.
-IMU = GigaIMU("bno055", "Main IMU", address=0x28)
+IMU = GigaIMU("mpu9255", "Main IMU", address=0x68)
 
 
 class RobotSensors:
@@ -37,7 +37,7 @@ class RobotSensors:
             return self.imu.reading()
         return IMUReading(
             name=IMU.name, connected=False, calibrated=False,
-            detail="Pi BNO055 unavailable. On the Pi, enable the i2c-gpio overlay and reboot; see Debug > Wiring.",
+            detail="Pi MPU9255 unavailable. On the Pi, enable the i2c-gpio overlay and reboot; see Debug > Wiring.",
         )
 
 

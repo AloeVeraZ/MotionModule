@@ -71,11 +71,11 @@ servos one channel at a time after selecting the correct voltage and behavior.
 
 ## 5. Connect the Pi IMU
 
-The reference Mecanum setup keeps its motors, servo controller and BNO055
+The reference Mecanum setup keeps its motors, servo controller and MPU9255
 on the Pi. The IMU uses the independent bus shown in **Debug → Wiring**:
-VIN to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
-Follow the [complete BNO055 guide](PINOUT.md#optional-gy-bno055-nine-axis-imu),
-including the board's BOOT, REST and mode-selection notes.
+VCC to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
+Follow the [complete MPU9255 guide](PINOUT.md#optional-mpu9255-nine-axis-imu),
+including the board's I2C mode and pull-up notes.
 
 The Pi installer adds this under `[all]` in `/boot/firmware/config.txt` and
 reboots. If setting up without the installer, add it yourself and reboot:
@@ -85,7 +85,7 @@ dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
 Use `i2cdetect -l` to confirm the independent adapter exists, then run
-**Debug → Checks & logs**. The sample's `sensors.py` reads the BNO055 on that
+**Debug → Checks & logs**. The sample's `sensors.py` reads the MPU9255 on that
 bus automatically. It does not use the servo bus or an Arduino for heading.
 Without the IMU the robot still drives, with heading unavailable.
 
@@ -110,7 +110,7 @@ After flashing, declare only the extra inputs you actually wire, using
 [the Python GPIO API](CODING.md#optional-usb-gpio-expansion). Board detection
 does not identify attached sensors. The Pi sends your declarations on each
 connection; a pin-list change does not require reflashing. GIGA GPIO takes
-3.3 V maximum. The robot's BNO055 stays connected directly to the Pi.
+3.3 V maximum. The robot's MPU9255 stays connected directly to the Pi.
 
 ## 6. Create and deploy robot code
 
@@ -130,7 +130,7 @@ MyRobot/
 Edit the local folder in any editor. `hardware.py` owns this robot's pins,
 inversion, PWM, watchdog, and servo board list. `robot.py` defines
 `create_drive(module)` and imports `sensors.py`, which reads the Pi-connected
-BNO055. See [CODING.md](CODING.md) for the APIs and examples.
+MPU9255. See [CODING.md](CODING.md) for the APIs and examples.
 
 Return to Code, choose the whole folder, review its files, accept the output
 stop/restart confirmation, and press **Deploy and run**. The Pi validates it,

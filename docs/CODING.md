@@ -23,7 +23,7 @@ MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── test.py        # optional: Debug Drive Test motor/servo mapping (Mecanum by default)
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
-├── sensors.py     # BNO055 wired directly to the Pi
+├── sensors.py     # MPU9255 wired directly to the Pi
 ├── autonomous.py  # optional: the routine the robot runs by itself
 ├── dashboard.py   # optional: Driver Station cameras, sensors, keys, sticks
 └── helpers.py     # optional: any other Python files you want
@@ -203,13 +203,12 @@ the browser, with a slider, a quick-rotate button, or by typing an exact angle
 - that is a per-viewer display preference, not something `dashboard.py`
 configures.
 
-## Pi-connected BNO055 IMU
+## Pi-connected MPU9255 IMU
 
-The Mecanum setup uses one BNO055 wired directly to the Pi. Follow the
-[complete wiring plan](PINOUT.md#optional-gy-bno055-nine-axis-imu): VIN to
+The Mecanum setup uses one MPU9255 wired directly to the Pi. Follow the
+[complete wiring plan](PINOUT.md#optional-mpu9255-nine-axis-imu): VCC to
 physical pin 17, GND and AD0 to pin 6, SDA to 11 (GPIO17) and SCL to 12
-(GPIO18). Grounding AD0 selects address 0x28. BOOT and REST retain their pull-ups; INT is
-left disconnected. The motor and PCA9685 wiring stays as shipped.
+(GPIO18). Grounding AD0 selects address 0x68. The board must be in I2C mode (CS high); INT is left disconnected. The motor and PCA9685 wiring stays as shipped.
 
 The Pi installer adds this under `[all]` in `/boot/firmware/config.txt` and
 reboots. Add it manually only for a setup without the installer:
@@ -224,13 +223,13 @@ The sample's `sensors.py` already opens the IMU through MotionModule:
 from motion_module.imu import GigaIMU
 
 # GigaIMU is the shared chip declaration; it does not select an Arduino.
-imu = module.local_imu(GigaIMU("bno055", "Main IMU", address=0x28))
+imu = module.local_imu(GigaIMU("mpu9255", "Main IMU", address=0x68))
 heading = imu.heading() if imu is not None else None
 ```
 
 `module.local_imu()` discovers the independent `i2c-gpio` adapter by name,
-creates one `motion_module.pi_imu.LocalIMU` reader, checks both BNO055
-addresses (0x28 and 0x29), and closes the reader when the
+creates one `motion_module.pi_imu.LocalIMU` reader, checks both MPU9255
+addresses (0x68 and 0x69), and closes the reader when the
 module shuts down. It returns `None` in simulation or without the overlay;
 it never falls back to the servo bus. Enable the overlay and restart after
 rebooting. With the bus present but the sensor missing, the reader reports
@@ -240,8 +239,19 @@ it offline and retries. `smbus2` is included as a runtime dependency.
 turns left, or `None` until usable readings arrive. `imu.zero()` sets the
 current heading to zero. `imu.reading()` supplies the Driver Station;
 `connected`, `calibrated`, `pitch()`, `roll()`, `rate()` and `describe()`
-provide status and other readings. The BNO055 handles its own fusion; the
-sample does not include the old six-axis gyro calibration control.
+provide status and other readings. Keep the robot still for initial gyro
+calibration. The Pi fuses gyro and accelerometer readings for relative yaw;
+the magnetometer and DMP are unused. Heading can drift over time, so zero it
+before a run. Compass mode is unsupported for this driver. Mount +Y toward
+the front and +Z upward to match the pitch/roll convention.
+
+On an existing robot folder that you have customized, update its own
+`sensors.py` declaration to `GigaIMU("mpu9255", "Main IMU", address=0x68)`.
+The installer preserves customized robot folders; untouched shipped samples
+receive the new declaration automatically.
+
+Existing BNO055 projects remain supported with `GigaIMU("bno055")`; those
+boards use addresses 0x28/0x29 and their own onboard fusion.
 
 The sample shares this single reader between robot.py, autonomous.py and
 dashboard.py. Autonomous uses measured turns when heading is available,

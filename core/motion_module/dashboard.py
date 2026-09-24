@@ -91,71 +91,52 @@ def install_ref(release_root: Path | None = None) -> str:
 def servo_profiles(config) -> list[dict]:
     """Profiles exposed by the guarded dashboard servo commissioning tool."""
 
-    common = {"zero": 0, "step": 1}
-    return [
+    # Travel and pulse limits must match the actual servo's specification.
+    positions = [
         {
-            **common,
-            "id": "gobilda_300_position",
-            "label": "goBILDA 25-2 · 300° positional",
+            "id": f"generic_{degrees}_position",
+            "label": f"{degrees}° positional",
             "kind": "position",
             "minimum": 0,
-            "maximum": 300,
-            "unit": "°",
-            "minimum_pulse_us": 500,
-            "maximum_pulse_us": 2500,
-        },
-        {
-            **common,
-            "id": "gobilda_5_turn_position",
-            "label": "goBILDA 25-2 · 5-turn positional",
-            "kind": "position",
-            "minimum": 0,
-            "maximum": 1800,
-            "unit": "°",
-            "minimum_pulse_us": 500,
-            "maximum_pulse_us": 2500,
-        },
-        {
-            **common,
-            "id": "gobilda_continuous",
-            "label": "goBILDA 25-2 · continuous rotation",
-            "kind": "continuous",
-            "minimum": -100,
-            "maximum": 100,
-            "unit": "%",
-            "minimum_pulse_us": 900,
-            "maximum_pulse_us": 2100,
-        },
-        {
-            **common,
-            "id": "generic_180_position",
-            "label": "Generic · 180° positional",
-            "kind": "position",
-            "minimum": 0,
-            "maximum": 180,
+            "maximum": degrees,
+            "zero": 0,
+            "step": 1,
             "unit": "°",
             "minimum_pulse_us": config.minimum_pulse_us,
             "maximum_pulse_us": config.maximum_pulse_us,
-        },
-        {
-            **common,
-            "id": "generic_360_position",
-            "label": "Generic · 360° positional",
-            "kind": "position",
-            "minimum": 0,
-            "maximum": 360,
-            "unit": "°",
-            "minimum_pulse_us": config.minimum_pulse_us,
-            "maximum_pulse_us": config.maximum_pulse_us,
-        },
+        }
+        for degrees in (90, 180, 270, 360)
     ]
+    return positions + [{
+        "id": "continuous_rotation",
+        "label": "Continuous rotation",
+        "kind": "continuous",
+        "minimum": -1,
+        "maximum": 1,
+        "zero": 0,
+        "step": 0.01,
+        "unit": "",
+        # goBILDA 2000 Series continuous-mode example: 1500 us neutral.
+        "minimum_pulse_us": 900,
+        "maximum_pulse_us": 2100,
+    }, {**positions[1], "id": "custom_position", "label": "Custom", "step": 0.1}]
 
 
-def servo_profile_command(config, profile_id: str, value: float) -> tuple[dict, float]:
+def servo_profile_command(config, profile_id: str, value: float, custom_range=None) -> tuple[dict, float]:
     profiles = {profile["id"]: profile for profile in servo_profiles(config)}
     if profile_id not in profiles:
         raise ValueError("Unknown servo profile")
     profile = profiles[profile_id]
+    if profile_id == "custom_position":
+        if not isinstance(custom_range, dict):
+            raise ValueError("Provide a custom minimum and maximum angle")
+        minimum = float(custom_range.get("minimum"))
+        maximum = float(custom_range.get("maximum"))
+        if not (math.isfinite(minimum) and math.isfinite(maximum)
+                and math.isfinite(maximum - minimum) and minimum < maximum):
+            raise ValueError("Custom angles must be finite, with minimum less than maximum")
+        profile = {**profile, "minimum": minimum, "maximum": maximum,
+                   "zero": min(maximum, max(minimum, 0))}
     value = float(value)
     if not math.isfinite(value) or not profile["minimum"] <= value <= profile["maximum"]:
         raise ValueError(
@@ -1083,7 +1064,9 @@ def create_app(
             legacy_angle = "profile" not in body and "value" not in body
             profile_id = str(body.get("profile", "generic_180_position"))
             value = float(body.get("angle", 90) if legacy_angle else body.get("value"))
-            profile, pulse_us = servo_profile_command(module.config.servos, profile_id, value)
+            profile, pulse_us = servo_profile_command(
+                module.config.servos, profile_id, value, body.get("custom_range")
+            )
             if not module.servo_outputs_enabled:
                 return jsonify({
                     "ok": False,

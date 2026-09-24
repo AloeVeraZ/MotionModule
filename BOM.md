@@ -85,18 +85,18 @@ and is not used in this build. Swapping which bullet lands on which terminal
 reverses that motor, but set direction with `inverted` in `hardware.py` rather
 than in the wiring.
 
-## Recommended · Pi-connected BNO055
+## Recommended · Pi-connected MPU9255
 
 The Mecanum robot's IMU connects directly to the Pi on the independent
 `i2c-gpio` bus. No Arduino is needed for the reference robot.
 
 | Qty | Part | Selection | Notes |
 | ---: | --- | --- | --- |
-| 1 | 9-axis IMU | [Teyleten Robot BNO055 breakout](https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/) | Read by the Pi; address 0x28 |
+| 1 | 9-axis IMU | [JESSINIE MPU9255 breakout](https://www.amazon.com/dp/B0GTVCCY6B) | Read by the Pi; address 0x68 |
 
 VIN goes to physical pin 17, GND to 20, SDA to 11, SCL to 12, and AD0 to 6.
-Use the [complete wiring guide](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu)
-and [Pi IMU setup](docs/CODING.md#pi-connected-bno055-imu). The robot can drive
+Use the [complete wiring guide](docs/PINOUT.md#optional-mpu9255-nine-axis-imu)
+and [Pi IMU setup](docs/CODING.md#pi-connected-mpu9255-imu). The robot can drive
 without the IMU, but heading will be unavailable.
 
 ## Optional · USB GPIO expansion

@@ -129,10 +129,10 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertIn("Experimental", group["note"])
         self.assertIn("3.3 V", group["note"])
 
-    def test_pi_i2c_sensor_group_names_a_bno055_and_points_at_pi_imu(self):
+    def test_pi_i2c_sensor_group_names_a_mpu9255_and_points_at_pi_imu(self):
         group = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "pi-i2c-sensors")
         selected = {part["name"] for part in group["items"] if part["status"] == "selected"}
-        self.assertIn("BNO055 9-axis IMU breakout", selected)
+        self.assertIn("MPU9255 9-axis IMU breakout", selected)
         self.assertIn("motion_module.pi_imu.LocalIMU", group["note"])
         self.assertIn("i2c-gpio", group["note"])
 

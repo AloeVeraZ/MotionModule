@@ -125,7 +125,7 @@ See the root-level **[bill of materials](BOM.md)** for the reference parts:
   and to a separate regulated rail for the servos;
 - Wago 221 lever connectors for the 12 V joins and ordinary jumper wires for
   the Pi's control signals; and
-- a BNO055 IMU on the Pi's independent I2C bus for heading; the robot can
+- a MPU9255 IMU on the Pi's independent I2C bus for heading; the robot can
   also drive without it. Optional USB GPIO expansion is separate from this setup.
 
 Read the complete **[pinout and power boundaries](docs/PINOUT.md)** before
@@ -142,7 +142,7 @@ connection.
 ### Wiring diagram
 
 The complete reference wiring below shows the Pi, all four motor drivers,
-the PCA9685 servo board, the BNO055 IMU and the power rails. Labels use
+the PCA9685 servo board, the MPU9255 IMU and the power rails. Labels use
 **physical Pi header pin numbers**. Wire colors match **Debug → Wiring →
 Follow the signal** in the dashboard, which also includes this diagram below
 **Names you can use in code**.
@@ -301,7 +301,7 @@ Every project is self-contained, and only the first file is required:
 MyRobot/
 ├── robot.py          # required browser-control entry point
 ├── hardware.py       # optional: your own names, pins, and inversions
-├── sensors.py        # the BNO055 wired directly to the Pi
+├── sensors.py        # the MPU9255 wired directly to the Pi
 ├── autonomous.py     # optional: the routine the robot runs by itself
 ├── dashboard.py      # optional: Driver Station cameras, sensors, keys, sticks
 ├── drivetrain.py     # optional Python modules
@@ -376,12 +376,12 @@ automatically and is not required for drivetrain debugging or robot control.
 The complete contract and copyable example are in
 [docs/CODING.md](docs/CODING.md#optional-full-driver-station-telemetry).
 
-### Sensors: the Pi-connected BNO055
+### Sensors: the Pi-connected MPU9255
 
-The Mecanum robot's motors, PCA9685 servo controller and BNO055 IMU connect
-directly to the Raspberry Pi. `sensors.py` reads one BNO055 on the independent
-`i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VIN on 17, and GND and
-AD0 on 6. Use the single [IMU wiring plan](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu).
+The Mecanum robot's motors, PCA9685 servo controller and MPU9255 IMU connect
+directly to the Raspberry Pi. `sensors.py` reads one MPU9255 on the independent
+`i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VCC on 17, and GND and
+AD0 on 6. Use the single [IMU wiring plan](docs/PINOUT.md#optional-mpu9255-nine-axis-imu).
 The Pi installer enables this bus for its next reboot. No extra sensors are declared.
 The robot can still drive without an IMU; heading stays unavailable and the
 sample autonomous routine uses timed turns.

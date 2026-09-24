@@ -149,8 +149,8 @@ not driving that pin — including through boot, before Linux claims GPIO4. That
 is safe, because the PCA9685 powers up with every channel off, but it does mean
 **OE is an enable line, not a power cutoff.** Keep the physical cutoff.
 
-Set `servos.output_enable_gpio` in `hardware.py` to move it, or to `None` if you
-leave OE unconnected. From robot code:
+The reference `servos.output_enable_gpio` stays fixed at GPIO4. A separately
+wired robot uses its own `hardware.py`. From robot code:
 
 ```python
 module.set_servo_outputs_enabled(False)   # cut all 16 outputs at the board
@@ -266,28 +266,34 @@ the reference label. For example, using a UART GPIO for a motor requires
 disabling its serial-console/UART use first. Do not treat an unused label as a
 guarantee that another Pi service is not using that pin.
 
-## Optional GY-BNO055 nine-axis IMU
+## Optional MPU9255 nine-axis IMU
 
-The [selected Teyleten Robot board](https://www.amazon.com/dp/B0D47G672B)
-has eight header pins. Match the labels shown on its underside; numbering
-below follows VIN through REST and is not Pi header numbering.
-This extension leaves every motor and PCA9685 wire in place.
+The [selected JESSINIE MPU9255 board](https://www.amazon.com/dp/B0GTVCCY6B)
+uses the same independent Pi I2C connection as the previous BNO055.
+Match printed signal labels, not header positions. Every motor and PCA9685
+wire stays in place.
 
-| Board header | Connection / purpose |
+| Board signal | Connection / purpose |
 | --- | --- |
-| 1 · VIN | Pi pin 17, 3.3 V |
-| 2 · GND | Pi pin 6, ground |
-| 3 · SCL–Rx | Pi pin 12, GPIO18, software I2C clock |
-| 4 · SDA–Tx | Pi pin 11, GPIO17, software I2C data |
-| 5 · AD0 | Same Pi pin 6 ground, selects address 0x28 |
-| 6 · INT | Leave disconnected; the driver polls the sensor |
-| 7 · BOOT | No Pi GPIO; retain pull-up for normal boot, never ground for I2C |
-| 8 · REST | No Pi GPIO; active-low reset, retain pull-up; driver uses software reset |
+| VCC | Pi pin 17, 3.3 V |
+| GND | Pi pin 6, ground |
+| SCL | Pi pin 12, GPIO18, software I2C clock |
+| SDA | Pi pin 11, GPIO17, software I2C data |
+| AD0 / SDO | Existing Pi pin 6 ground, selects address 0x68 |
+| CS / NCS | Must be high for I2C; verify the breakout's onboard pull-up |
+| INT | Leave disconnected; the driver polls the sensor |
+| EDA / ECL / FSYNC and other auxiliary pins | Leave disconnected; not used by MotionModule |
 
-Use a 10 kΩ pull-up to 3.3 V if BOOT or REST lacks one on the board.
-SDA/SCL also require pull-ups to 3.3 V. Standard I2C requires PS0 and PS1 low;
-verify the board's mode-selection pads before soldering. BOOT is not PS0/PS1.
-See the [Bosch datasheet](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bno055-ds000.pdf).
+SDA/SCL need pull-ups to 3.3 V. Verify the board's I2C mode and pull-ups;
+never use 5 V. No additional Pi GPIO is used. The previous BNO055's BOOT,
+REST and PS0/PS1 instructions do not apply to this board.
+
+The driver checks WHO_AM_I register 0x75 for 0x73, initializes the gyro and
+accelerometer, and calibrates while still. It supplies relative heading,
+pitch, roll and turn rate; it does not use the magnetometer or DMP. Mount
++Y forward and +Z upward. Relative heading can drift; zero before a run.
+Existing BNO055 projects remain supported at 0x28/0x29 with their original
+board-specific mode and reset pull-ups.
 
 With power off, wire the board. The Pi installer adds this under `[all]` in
 `/boot/firmware/config.txt` (older Pi OS: `/boot/config.txt`) and reboots.
@@ -298,7 +304,7 @@ dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
 Debug → Wiring shows the optional connections even before hardware is present.
-Checks & logs verifies the BNO055 chip ID on the independent bus, below the
+Checks & logs verifies the MPU9255 (or legacy BNO055) chip ID on the independent bus, below the
 PCA9685 checks. Detection is not proof of calibration or usable heading.
 [LocalIMU setup](CODING.md) explains how robot code initializes and reads it.
 

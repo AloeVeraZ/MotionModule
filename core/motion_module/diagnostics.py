@@ -13,7 +13,7 @@ from .pi_imu import find_i2c_gpio_bus
 
 
 def local_imu_check(hardware: bool) -> dict:
-    """Identify the optional BNO055 without resetting or configuring the chip."""
+    """Identify a supported reference IMU without resetting or configuring the chip."""
     check = {"id": "local-imu", "title": "BNO055 IMU · independent I2C bus", "level": "info"}
     if not hardware:
         return {**check, "detail": "Simulation: physical IMU detection is unavailable."}
@@ -31,15 +31,18 @@ def local_imu_check(hardware: bool) -> dict:
         with smbus2.SMBus(bus_number) as bus:
             answers = []
             read_errors = []
-            for address in (0x28, 0x29):
+            for address, register, expected, chip in (
+                (0x28, 0x00, 0xA0, "BNO055"), (0x29, 0x00, 0xA0, "BNO055"),
+                (0x68, 0x75, 0x73, "MPU9255"), (0x69, 0x75, 0x73, "MPU9255"),
+            ):
                 try:
-                    chip_id = bus.read_byte_data(address, 0x00)
+                    chip_id = bus.read_byte_data(address, register)
                 except OSError as error:
                     read_errors.append(f"0x{address:02X}: {error}")
                     continue
-                if chip_id == 0xA0:
+                if chip_id == expected:
                     return {**check, "level": "pass", "detail": (
-                        f"BNO055 detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0xA0). "
+                        f"{chip} detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0x{expected:02X}). "
                         "The chip responds; this does not verify calibration or live heading. "
                         "LocalIMU in robot code initializes and reads the sensor."
                     )}
@@ -50,8 +53,8 @@ def local_imu_check(hardware: bool) -> dict:
             "the i2c-dev module and the service user's i2c group permissions."
         )}
     return {**check, "level": "warn", "detail": (
-        f"No BNO055 identified on I2C bus {bus_number}. "
-        + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x28 or 0x29. ")
+        f"No MPU9255 or BNO055 identified on I2C bus {bus_number}. "
+        + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x28, 0x29, 0x68 or 0x69. ")
         + ("I2C read errors: " + "; ".join(read_errors) + ". " if read_errors else "")
         + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and the board's I2C mode."
     )}

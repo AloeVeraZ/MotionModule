@@ -9,7 +9,7 @@ what is connected, normally in ``sensors.py``::
     giga = module.giga(pins=pins)
     # giga.value(name) reads a declared input, or None when not streaming.
 
-The reference Mecanum robot uses a Pi-connected BNO055 and does not start
+The reference Mecanum robot uses a Pi-connected MPU9255 and does not start
 this extension. The bridge discovers a supported board, not its attached
 sensors. Its bundled firmware targets GIGA R1 WiFi, not Uno or Mega.
 
@@ -31,7 +31,7 @@ import zlib
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
-from .imu import IMU_CHIPS, LSM6_CHIPS, GigaIMU, Read, Write, driver_for
+from .imu import IMU_CHIPS, LSM6_CHIPS, GigaIMU, Read, Write, driver_for, wrap180
 from .telemetry import IMUReading, SensorReading, USBController
 from .usb import sensor_controllers
 
@@ -66,10 +66,6 @@ def _finite(value) -> float | None:
         return None
     number = float(value)
     return number if math.isfinite(number) else None
-
-
-def _wrap180(angle: float) -> float:
-    return (angle + 180.0) % 360.0 - 180.0
 
 
 def _version(text: str) -> tuple[int, ...]:
@@ -222,7 +218,7 @@ class LiveIMU:
 
     @property
     def chip(self) -> str:
-        """The chip that answered, such as BNO055 or ISM330DHCX."""
+        """The chip that answered, such as MPU9255 or ISM330DHCX."""
 
         with self._bridge._lock:
             return self.driver.chip
@@ -235,7 +231,7 @@ class LiveIMU:
         """
 
         total = self.total_rotation()
-        return None if total is None else _wrap180(total)
+        return None if total is None else wrap180(total)
 
     def total_rotation(self) -> float | None:
         """Degrees turned since zero, counting whole turns: two left turns read 720."""
@@ -326,7 +322,7 @@ class LiveIMU:
                 name=self.name,
                 connected=self._present(now),
                 calibrated=usable and driver.calibrated,
-                yaw=_wrap180(driver.yaw - self._offset) if usable else None,
+                yaw=wrap180(driver.yaw - self._offset) if usable else None,
                 pitch=driver.pitch if usable else None,
                 roll=driver.roll if usable else None,
                 rate=driver.rate if usable else None,
@@ -338,7 +334,7 @@ class LiveIMU:
         present = self._present(now)
         return SensorReading(
             f"{self.name} heading",
-            _wrap180(self.driver.yaw - self._offset) if usable else None,
+            wrap180(self.driver.yaw - self._offset) if usable else None,
             kind="analog",
             unit="°",
             channel=f"I2C 0x{self.declaration.address:02X}",

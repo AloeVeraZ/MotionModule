@@ -133,7 +133,7 @@ class MecanumDashboard(TelemetryDashboard):
     def imu(self):
         if self.sensors is None:
             return IMUReading(name="Robot IMU", connected=False, calibrated=False,
-                              detail="Pi BNO055 is not configured in sensors.py.")
+                              detail="Pi MPU9255 is not configured in sensors.py.")
         return self.sensors.reading()
 
     def usb_controllers(self):

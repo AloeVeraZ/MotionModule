@@ -30,12 +30,36 @@ class FakeBus:
         if self.writes_fail:
             raise OSError(121, "Remote I/O error")
         self.blocks.append((address, register, list(payload)))
+        # Model the chip's register pointer, not just the outgoing payload.
+        # MODE1.AI (bit 5) is required for sequential multi-byte writes.
+        increment = bool(self.registers.get((address, 0x00), 0) & 0x20)
+        for value in payload:
+            self.registers[(address, register)] = value
+            if increment:
+                register += 1
 
     def close(self):
         self.closed = True
 
 
 class ServoTests(unittest.TestCase):
+    def test_commands_program_pwm_registers_on_every_channel(self):
+        bus = FakeBus()
+        controller = PCA9685Controller(load_config().servos, bus=bus)
+        for channel in range(16):
+            register = LED0_ON_L + 4 * channel
+            with self.subTest(channel=channel):
+                self.assertEqual(bus.read_byte_data(0x40, register + 3), 0x10)
+                for angle, pulse_us in [(0, 500), (90, 1500), (180, 2500)]:
+                    controller.set_angle(0, channel, angle)
+                    counts = round(pulse_us * 50 * 4096 / 1_000_000)
+                    self.assertEqual(
+                        [bus.read_byte_data(0x40, register + i) for i in range(4)],
+                        [0, 0, counts & 0xFF, counts >> 8],
+                    )
+                controller.release(0, channel)
+                self.assertEqual(bus.read_byte_data(0x40, register + 3), 0x10)
+
     def test_angle_generates_pca9685_counts(self):
         config = load_config().servos
         bus = FakeBus()

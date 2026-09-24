@@ -8,7 +8,7 @@ browser → nginx :80 → versioned dashboard :8080
                            ├── browser project deployment
 active robot folder ───────┤
                            ├── GPIO PWM → four dual H-bridges → eight motors
-                           ├── independent Pi I2C → BNO055 IMU
+                           ├── independent Pi I2C → MPU9255 IMU
                            ├── I2C → PCA9685 board(s) → servos
                            ├── USB serial → optional GIGA GPIO inputs (experimental)
                            ├── dfu-util → GIGA bootloader (firmware installs)
@@ -112,9 +112,9 @@ USB discovery alone cannot identify which physical sensor is wired to a pin.
 
 ## Reference Pi IMU
 
-The Mecanum sample declares one BNO055 at its default address 0x28.
+The Mecanum sample declares one MPU9255 at its default address 0x68.
 `module.local_imu()` finds the independent `i2c-gpio` adapter, detects the
-chip at 0x28 or 0x29, creates a `LocalIMU` and closes it on
+chip at 0x68 or 0x69, creates a `LocalIMU` and closes it on
 module shutdown. Simulation and a missing overlay return no reader; the
 sample reports heading unavailable. The wiring is the single plan in
 Debug → Wiring and PINOUT.md. Motors and the PCA9685 also connect to the Pi.
@@ -150,7 +150,7 @@ holds the drivers: each writes its chip's set-up registers through one-off
 `MM3 I2C` commands (written as a generator of reads, writes and waits, so the
 reader thread never blocks), declares the registers to repeat, and decodes
 them. A BNO055 is put in fusion mode and its heading is unwrapped on the Pi;
-an LSM6-family 6-axis IMU is fused on the Pi, with the gyro bias measured
+an MPU9255 or LSM6-family IMU is fused on the Pi, with the gyro bias measured
 while still and re-measured whenever the robot rests, and yaw integrated about
 the measured up direction so tilt never reads as turning. Readings carry the
 GIGA's own millisecond clock, so integration does not depend on USB timing.

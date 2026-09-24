@@ -1,9 +1,9 @@
-"""Read the robot's BNO055 directly on the Pi's independent I2C bus.
+"""Read the robot's IMU directly on the Pi's independent I2C bus.
 
-The reference wiring is VIN to physical pin 17, GND and AD0 to 6, SDA to 11,
+The reference wiring is VCC to physical pin 17, GND and AD0 to 6, SDA to 11,
 and SCL to 12. Enable the i2c-gpio overlay on GPIO17/18;
 see docs/PINOUT.md and Debug > Wiring for the complete board guide.
-BOOT and REST retain their pull-ups; INT is left disconnected.
+The MPU9255 board must be in I2C mode; INT is left disconnected.
 
 The chip drivers in imu.py are transport-independent. LocalIMU executes
 those register operations on the Pi; the Mecanum sample uses this path.
@@ -17,17 +17,13 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from .imu import GigaIMU, Read, driver_for
+from .imu import GigaIMU, IMU_CHIPS, Read, driver_for, wrap180
 from .telemetry import IMUReading
 
 POLL_SECONDS = 0.02   # ~50 Hz, the same cadence the GIGA bridge reads at
 STALE_AFTER = 1.0     # seconds; an older reading is treated as disconnected
 RETRY_SECONDS = 2.0
 _NO_SMBUS2 = "Install smbus2 to read an IMU wired directly to the Pi."
-
-
-def _wrap180(degrees: float) -> float:
-    return ((degrees + 180.0) % 360.0) - 180.0
 
 
 def find_i2c_gpio_bus(sysfs_root: str | Path = "/sys/class/i2c-dev") -> int | None:
@@ -91,7 +87,7 @@ class LocalIMU:
         self._bus = None
         self._clock = clock if clock is not None else time.monotonic
         self._driver = driver_for(declaration)
-        self._auto_address = auto_address and declaration.chip == "bno055"
+        self._auto_address = auto_address and declaration.chip in ("bno055", "mpu9255")
         self._next_address_probe = 0.0
         self._lock = threading.Lock()
         self._offset = 0.0
@@ -153,12 +149,12 @@ class LocalIMU:
             self._bus = self._open_bus()
             if self._bus is None:
                 return False
-            self._detect_bno055_address(now)
+            self._detect_address(now)
             with self._lock:
                 self._error = ""
                 self._driver.begin(now)
             return True
-        if self._driver.state == "missing" and self._detect_bno055_address(now):
+        if self._driver.state in ("missing", "wrong-chip", "failed") and self._detect_address(now):
             with self._lock:
                 self._driver.begin(now)
         with self._lock:
@@ -168,8 +164,8 @@ class LocalIMU:
             self._read_streams(self._driver, now)
         return True
 
-    def _detect_bno055_address(self, now: float) -> bool:
-        """Find a BNO055 at either address without writing to the chip.
+    def _detect_address(self, now: float) -> bool:
+        """Find the declared chip at either address without writing to it.
 
         A missing board is checked again so connecting it after startup works.
         Only a matching chip ID may replace the declared default address.
@@ -177,15 +173,20 @@ class LocalIMU:
         if not self._auto_address or now < self._next_address_probe:
             return False
         self._next_address_probe = now + RETRY_SECONDS
-        for address in (0x28, 0x29):
+        register, expected = (0x00, 0xA0) if self.declaration.chip == "bno055" else (0x75, 0x73)
+        # Prefer the selected address when two boards answer on the bus.
+        addresses = dict.fromkeys((self._driver.address, *IMU_CHIPS[self.declaration.chip][1:]))
+        for address in addresses:
             try:
-                chip_id = self._bus.read_i2c_block_data(address, 0x00, 1)[0]
+                chip_id = self._bus.read_i2c_block_data(address, register, 1)[0]
             except (OSError, IndexError):
                 continue
-            if chip_id == 0xA0 and address != self._driver.address:
-                with self._lock:
-                    self._driver = driver_for(replace(self.declaration, address=address))
-                return True
+            if chip_id == expected:
+                if address != self._driver.address:
+                    with self._lock:
+                        self._driver = driver_for(replace(self.declaration, address=address))
+                    return True
+                return False
         return False
 
     def _run(self) -> None:
@@ -197,6 +198,8 @@ class LocalIMU:
             close = getattr(self._bus, "close", None)
             if callable(close):
                 close()
+            with self._lock:
+                self._driver.stop()
 
     def _read_streams(self, driver, now: float) -> None:
         """One cycle of the registers this driver reads, outside the lock -
@@ -259,7 +262,7 @@ class LocalIMU:
         """
 
         total = self.total_rotation()
-        return None if total is None else _wrap180(total)
+        return None if total is None else wrap180(total)
 
     def total_rotation(self) -> float | None:
         """Degrees turned since zero, counting whole turns: two left turns read 720."""
@@ -318,7 +321,7 @@ class LocalIMU:
         if state == "missing":
             return (
                 f"Nothing answers at 0x{driver.address:02X} on I2C bus {self._bus_number}. "
-                "Check the reference Pi wiring: VIN pin 17, GND and AD0 pin 6, "
+                "Check the reference Pi wiring: 3.3 V pin 17, GND and AD0 pin 6, "
                 "SDA pin 11 and SCL pin 12."
             )
         if state == "wrong-chip":
@@ -327,6 +330,8 @@ class LocalIMU:
             return f"{where} {driver.message or 'could not be set up'}. Retrying every 2 seconds."
         if state == "starting":
             return f"{where} is starting."
+        if state in ("ok", "calibrating") and self._clock() - driver.updated > STALE_AFTER:
+            return f"{where}: readings are stale; heading unavailable."
         described = driver.describe()
         if state == "calibrating":
             return f"{where}: {described or 'calibrating'}. Keep the robot still."
@@ -343,9 +348,11 @@ class LocalIMU:
             driver = self._driver
             return IMUReading(
                 name=self.name,
-                connected=driver.state not in ("waiting", "missing", "wrong-chip", "failed"),
+                connected=(driver.state == "starting" or (
+                    driver.state in ("ok", "calibrating") and now - driver.updated <= STALE_AFTER
+                )),
                 calibrated=usable and driver.calibrated,
-                yaw=_wrap180(driver.yaw - self._offset) if usable else None,
+                yaw=wrap180(driver.yaw - self._offset) if usable else None,
                 pitch=driver.pitch if usable else None,
                 roll=driver.roll if usable else None,
                 rate=driver.rate if usable else None,
@@ -356,3 +363,10 @@ class LocalIMU:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+        else:
+            # A manually polled reader owns its bus just as a threaded one does.
+            close = getattr(self._bus, "close", None)
+            if callable(close):
+                close()
+            with self._lock:
+                self._driver.stop()

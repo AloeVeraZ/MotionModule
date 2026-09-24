@@ -15,6 +15,7 @@ MODE2 = 0x01
 LED0_ON_L = 0x06
 PRESCALE = 0xFE
 RESTART = 0x80
+AUTO_INCREMENT = 0x20
 SLEEP = 0x10
 OUTDRV = 0x04
 
@@ -89,7 +90,10 @@ class PCA9685Controller:
                 self.faults.pop(address, None)
 
     def _initialize(self, address: int) -> None:
-        self._bus.write_byte_data(address, MODE1, 0x00)
+        # Each channel update writes four consecutive PWM registers. Without
+        # MODE1.AI, the chip keeps writing the first register and emits no
+        # usable servo pulse even though the I2C transaction succeeds.
+        self._bus.write_byte_data(address, MODE1, AUTO_INCREMENT)
         self._bus.write_byte_data(address, MODE2, OUTDRV)
         old_mode = self._bus.read_byte_data(address, MODE1)
         sleep_mode = (old_mode & 0x7F) | SLEEP

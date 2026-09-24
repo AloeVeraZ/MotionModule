@@ -259,13 +259,13 @@ for i,(p,target) in enumerate(servo_pts.items()):
     line([(sx,sy),(sx+18,sy+15),(lane,sy+15),(lane,target[1]),target],color,5,True)
     hole(*target);circle(*target,4,color)
 
-# BNO055 on the independent GPIO17/GPIO18 I2C bus.
+# MPU9255 on the independent GPIO17/GPIO18 I2C bus.
 # The owner's selected extension uses spare pins; motor/servo wiring is unchanged.
 rect((360,2730,955,3240),'#284f84','#5180b7',16)
-text(650,2750,'BNO055 IMU • 0x28',33,'white',True,'ma')
+text(650,2750,'MPU9255 IMU • 0x68',33,'white',True,'ma')
 chip(407,2880,110,115)
-text(480,3060,'GY-BNO055',24,'white')
-imu_pads=['VIN','GND','SCL','SDA','AD0','BOOT','REST','INT']
+text(480,3060,'MPU9255',24,'white')
+imu_pads=['VCC','GND','SCL','SDA','AD0','CS','AUX','INT']
 imu_wires=[(17,0,PALETTE['imu-supply']),(6,1,PALETTE['imu-ground']),
            (12,2,PALETTE['imu-signal']),(11,3,PALETTE['imu-signal']),
            (6,4,PALETTE['imu-ground'])]
@@ -280,8 +280,8 @@ for i,(p,row,color) in enumerate(imu_wires):
     hole(912,ty);circle(912,ty,4,color)
     label={17:'P17 · 3.3 V',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND'}[p]
     text(540,ty-12,label,19,INK if p == 6 else color,bold=True)
-text(1030,3090,'BOOT / REST: retain onboard pull-ups',23,color='#aabecd')
-text(1030,3130,'INT: disconnected • AD0 grounded for 0x28',23,color='#aabecd')
+text(1030,3090,'CS high for I2C: verify onboard pull-up',23,color='#aabecd')
+text(1030,3130,'INT: disconnected • AD0 grounded for 0x68',23,color='#aabecd')
 
 # All forty physical header positions are visible; unused ones stay empty.
 used={p for p,*_ in destinations}|set(servo_pts)|{p for p,_,_ in imu_wires}

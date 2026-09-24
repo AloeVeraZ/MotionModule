@@ -1,7 +1,7 @@
 """IMU drivers that run on the Raspberry Pi.
 
 These transport-independent drivers initialize the chip and interpret its
-registers. The reference robot uses LocalIMU to access the BNO055 directly
+registers. The reference robot uses LocalIMU to access the MPU9255 directly
 from the Pi. The USB bridge also retains compatibility with these drivers.
 
 Angles are degrees. Yaw counts up as the robot turns counter-clockwise seen
@@ -13,11 +13,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from struct import unpack
 
 
 # chip name -> (driver, default address, address with the jumper set)
 IMU_CHIPS = {
     "bno055": ("BNO055", 0x28, 0x29),
+    "mpu9255": ("MPU9255", 0x68, 0x69),
     "ism330dhcx": ("LSM6", 0x6A, 0x6B),
     "lsm6dsox": ("LSM6", 0x6A, 0x6B),
     "lsm6dso": ("LSM6", 0x6A, 0x6B),
@@ -33,11 +35,13 @@ RETRY_SECONDS = 2.0
 class GigaIMU:
     """A transport-independent IMU chip declaration (the name is historical).
 
-    ``chip`` is ``"bno055"`` for the 9-axis BNO055, or ``"ism330dhcx"``,
+    ``chip`` is ``"mpu9255"`` (gyro/accelerometer fusion on the Pi),
+    ``"bno055"`` for the BNO055 with onboard fusion, or ``"ism330dhcx"``,
     ``"lsm6dsox"``, ``"lsm6dso"``, or ``"lsm6ds3trc"`` for a 6-axis IMU.
     ``address`` defaults to the board's own (0x28 for the BNO055, 0x6A for the
-    6-axis boards). ``compass=True`` lets a BNO055 use its magnetometer for a
-    north-referenced heading, which motors and steel can disturb.
+    ST boards, 0x68 for MPU9255). ``compass=True`` lets a BNO055 use its
+    magnetometer for a north-referenced heading, which motors and steel
+    can disturb. The MPU9255 driver does not use its magnetometer.
     """
 
     chip: str
@@ -50,7 +54,7 @@ class GigaIMU:
         chip = str(self.chip).strip().casefold().replace("-", "").replace("_", "")
         if chip not in IMU_CHIPS:
             raise ValueError(
-                "GIGA IMUs are bno055 (9-axis) or ism330dhcx, lsm6dsox, lsm6dso, lsm6ds3trc (6-axis)"
+                "Supported IMUs: " + ", ".join(IMU_CHIPS)
             )
         driver, default_address, jumper_address = IMU_CHIPS[chip]
         address = default_address if self.address is None else self.address
@@ -60,9 +64,9 @@ class GigaIMU:
                 "with its address jumper set"
             )
         if self.compass and driver != "BNO055":
-            raise ValueError("Only the 9-axis BNO055 has a compass")
+            raise ValueError("Only the BNO055 driver supports compass fusion")
         if not str(self.name).strip():
-            raise ValueError("Every GIGA IMU needs a name")
+            raise ValueError("Every IMU needs a name")
         object.__setattr__(self, "chip", chip)
         object.__setattr__(self, "name", str(self.name).strip())
         object.__setattr__(self, "address", address)
@@ -73,7 +77,7 @@ class GigaIMU:
         return IMU_CHIPS[self.chip][0]
 
 
-# -- what a driver asks the GIGA to do ------------------------------------
+# -- transport-independent register operations --------------------------
 
 @dataclass(frozen=True, slots=True)
 class Read:
@@ -115,6 +119,10 @@ def _int16(data: bytes, index: int) -> int:
     return value - 0x10000 if value & 0x8000 else value
 
 
+def wrap180(degrees: float) -> float:
+    return (degrees + 180.0) % 360.0 - 180.0
+
+
 def _length(vector) -> float:
     return math.sqrt(vector[0] ** 2 + vector[1] ** 2 + vector[2] ** 2)
 
@@ -148,7 +156,7 @@ def _tilt(up) -> tuple[float, float]:
 
 
 class ImuDriver:
-    """Sets one IMU up through the GIGA, then reads its registers.
+    """Sets one IMU up through its transport, then reads its registers.
 
     Start-up is written as a generator of Read, Write, and Wait steps, so it
     reads in order while the reader thread stays free between answers.
@@ -219,7 +227,7 @@ class ImuDriver:
         self._pump(io, now, answer)
 
     def on_answer(self, data: bytes | None, _now: float) -> None:
-        """One Read or Write the GIGA carried out; the next step sends it on."""
+        """One Read or Write the transport carried out; the next step sends it on."""
 
         if self._pending is None:
             return
@@ -243,7 +251,7 @@ class ImuDriver:
         self.decode(values, board_ms, now)
 
     def recalibrate(self) -> None:
-        """Measure what the sensor reads at rest again. 6-axis IMUs only."""
+        """Measure bias again for sensors whose raw readings are fused on the Pi."""
 
     # -- for subclasses ----------------------------------------------------
 
@@ -425,30 +433,15 @@ class Bno055Driver(ImuDriver):
         return ""
 
 
-class Lsm6Driver(ImuDriver):
-    """ST's 6-axis family: ISM330DHCX, LSM6DSOX, LSM6DSO, LSM6DS3TR-C.
+class RawImuDriver(ImuDriver):
+    """Shared calibration and tilt-compensated relative yaw for raw sensors."""
 
-    These report only a raw gyro and accelerometer, so the Pi does the rest:
-    it measures what the gyro reads at rest, carries the up direction along
-    with the gyro while leaning it toward the accelerometer, and turns the
-    part of the rotation that is about "up" into the robot's heading.
-    """
-
-    WHO_AM_I = 0x0F
-    CTRL1_XL = 0x10
-    CTRL2_G = 0x11
-    CTRL3_C = 0x12
-    CTRL9_XL = 0x18
-    OUTPUT = 0x22        # gyro x, y, z, then accelerometer x, y, z
-    DPS_PER_COUNT = 0.070          # at the +-2000 degrees per second range
     STILL_WINDOW = 1.0             # seconds of quiet needed to trust a rest reading
     STILL_SPREAD_DPS = 1.5         # how much a resting gyro may wobble
     STILL_RATE_DPS = 10.0          # a steady turn wobbles too little to spot otherwise
     BIAS_TRACK_LIMIT_DPS = 0.2     # never mistake a slow turn for drift
     UP_TIME_CONSTANT = 1.0         # seconds for the accelerometer to correct tilt
     MAXIMUM_STEP = 0.2             # seconds; a long gap is not a long turn
-
-    streams = ((OUTPUT, 12),)
 
     def __init__(self, declaration: GigaIMU) -> None:
         super().__init__(declaration)
@@ -459,47 +452,8 @@ class Lsm6Driver(ImuDriver):
         self._window_start = 0.0
         self._window: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
 
-    @property
-    def chip(self) -> str:
-        return LSM6_CHIPS.get(self.chip_id, self.declaration.chip.upper())
-
-    def _setup(self):
-        answer = yield Read(self.WHO_AM_I, 1)
-        if answer is None:
-            if self._patient(0.3):
-                yield Wait(0.05)
-                answer = yield Read(self.WHO_AM_I, 1)
-            if answer is None:
-                raise Missing()
-        self.chip_id = answer[0]
-        if answer[0] not in LSM6_CHIPS:
-            raise WrongChip(f"chip id 0x{answer[0]:02X} is not a supported 6-axis IMU")
-
-        yield Write(self.CTRL3_C, b"\x01")   # software reset
-        yield Wait(0.02)
-        for _attempt in range(20):
-            answer = yield Read(self.CTRL3_C, 1)
-            if answer is not None and not answer[0] & 0x01:
-                break
-            yield Wait(0.01)
-        else:
-            raise Unusable("it did not reset")
-
-        # Block data update keeps each reading's two bytes from one sample.
-        if (yield Write(self.CTRL3_C, b"\x44")) is None:
-            raise Unusable("it stopped answering while starting")
-        # Bit 1 of CTRL9_XL switches I3C off on the LSM6DSOX and LSM6DSO, and
-        # is DEVICE_CONF, which ST says to set, on the ISM330DHCX.
-        if self.chip_id in (0x6B, 0x6C):
-            answer = yield Read(self.CTRL9_XL, 1)
-            if answer is None:
-                raise Unusable("it stopped answering while starting")
-            yield Write(self.CTRL9_XL, bytes([answer[0] | 0x02]))
-        if (yield Write(self.CTRL1_XL, b"\x48")) is None:   # accelerometer 104 Hz, +-4 g
-            raise Unusable("it stopped answering while starting")
-        if (yield Write(self.CTRL2_G, b"\x6c")) is None:    # gyro 416 Hz, +-2000 dps
-            raise Unusable("it stopped answering while starting")
-        yield Wait(0.1)  # let the gyro settle
+    def _vectors(self, data: bytes):
+        raise NotImplementedError
 
     def _begin_running(self, now: float) -> None:
         self._start_calibration(now)
@@ -517,9 +471,7 @@ class Lsm6Driver(ImuDriver):
         self._window.clear()
 
     def decode(self, values: list[bytes], board_ms: int, now: float) -> None:
-        data = values[0]
-        gyro = tuple(_int16(data, index * 2) * self.DPS_PER_COUNT for index in range(3))
-        accel = tuple(float(_int16(data, 6 + index * 2)) for index in range(3))
+        gyro, accel = self._vectors(values[0])
         seconds = 0.0
         if self._last_ms is not None:
             seconds = min(((board_ms - self._last_ms) & 0xFFFFFFFF) / 1000.0, self.MAXIMUM_STEP)
@@ -600,6 +552,134 @@ class Lsm6Driver(ImuDriver):
                 return False
         return True
 
+class Lsm6Driver(RawImuDriver):
+    """ST's 6-axis family: ISM330DHCX, LSM6DSOX, LSM6DSO, LSM6DS3TR-C.
+
+    These report only a raw gyro and accelerometer, so the Pi does the rest:
+    it measures what the gyro reads at rest, carries the up direction along
+    with the gyro while leaning it toward the accelerometer, and turns the
+    part of the rotation that is about "up" into the robot's heading.
+    """
+
+    WHO_AM_I = 0x0F
+    CTRL1_XL = 0x10
+    CTRL2_G = 0x11
+    CTRL3_C = 0x12
+    CTRL9_XL = 0x18
+    OUTPUT = 0x22        # gyro x, y, z, then accelerometer x, y, z
+    DPS_PER_COUNT = 0.070          # at the +-2000 degrees per second range
+    streams = ((OUTPUT, 12),)
+
+    @property
+    def chip(self) -> str:
+        return LSM6_CHIPS.get(self.chip_id, self.declaration.chip.upper())
+
+    def _setup(self):
+        answer = yield Read(self.WHO_AM_I, 1)
+        if answer is None:
+            if self._patient(0.3):
+                yield Wait(0.05)
+                answer = yield Read(self.WHO_AM_I, 1)
+            if answer is None:
+                raise Missing()
+        self.chip_id = answer[0]
+        if answer[0] not in LSM6_CHIPS:
+            raise WrongChip(f"chip id 0x{answer[0]:02X} is not a supported 6-axis IMU")
+
+        yield Write(self.CTRL3_C, b"\x01")   # software reset
+        yield Wait(0.02)
+        for _attempt in range(20):
+            answer = yield Read(self.CTRL3_C, 1)
+            if answer is not None and not answer[0] & 0x01:
+                break
+            yield Wait(0.01)
+        else:
+            raise Unusable("it did not reset")
+
+        # Block data update keeps each reading's two bytes from one sample.
+        if (yield Write(self.CTRL3_C, b"\x44")) is None:
+            raise Unusable("it stopped answering while starting")
+        # Bit 1 of CTRL9_XL switches I3C off on the LSM6DSOX and LSM6DSO, and
+        # is DEVICE_CONF, which ST says to set, on the ISM330DHCX.
+        if self.chip_id in (0x6B, 0x6C):
+            answer = yield Read(self.CTRL9_XL, 1)
+            if answer is None:
+                raise Unusable("it stopped answering while starting")
+            yield Write(self.CTRL9_XL, bytes([answer[0] | 0x02]))
+        if (yield Write(self.CTRL1_XL, b"\x48")) is None:   # accelerometer 104 Hz, +-4 g
+            raise Unusable("it stopped answering while starting")
+        if (yield Write(self.CTRL2_G, b"\x6c")) is None:    # gyro 416 Hz, +-2000 dps
+            raise Unusable("it stopped answering while starting")
+        yield Wait(0.1)  # let the gyro settle
+
+    def _vectors(self, data: bytes):
+        gx, gy, gz, ax, ay, az = unpack("<6h", data)
+        gyro = (gx * self.DPS_PER_COUNT, gy * self.DPS_PER_COUNT, gz * self.DPS_PER_COUNT)
+        accel = (ax, ay, az)
+        return gyro, accel
+
+
+class Mpu9255Driver(RawImuDriver):
+    """MPU9255 over I2C, with relative heading fused on the Pi.
+
+    Uses the MPU9255 register map: WHO_AM_I 0x75 = 0x73; big-endian
+    accelerometer, temperature, gyro burst at 0x3B. The AK8963 magnetometer
+    and DMP are unused, matching the reference robot's compass-free heading.
+    """
+
+    WHO_AM_I = 0x75
+    EXPECTED_ID = 0x73
+    POWER = 0x6B
+    OUTPUT = 0x3B
+    DPS_PER_COUNT = 1.0 / 16.4  # GYRO_CONFIG FS_SEL=3: +/-2000 dps
+    streams = ((OUTPUT, 14),)
+
+    def _setup(self):
+        while True:
+            answer = yield Read(self.WHO_AM_I, 1)
+            if answer:
+                self.chip_id = answer[0]
+                if self.chip_id != self.EXPECTED_ID:
+                    raise WrongChip(f"chip id 0x{self.chip_id:02X} is not an MPU9255 (expected 0x73)")
+                break
+            if not self._patient(0.3):
+                raise Missing()
+            yield Wait(0.05)
+
+        # Reset may remove the device before the write is acknowledged.
+        yield Write(self.POWER, b"\x80")
+        yield Wait(0.1)
+        for _attempt in range(20):
+            answer = yield Read(self.POWER, 1)
+            if answer and not answer[0] & 0x80:
+                break
+            yield Wait(0.01)
+        else:
+            raise Unusable("it did not reset")
+
+        # PLL clock, all axes enabled; FIFO/DMP/master disabled. Filter the
+        # gyro and accel at ~20 Hz and sample at 100 Hz for our 50 Hz reader.
+        settings = (
+            (self.POWER, 0x01), (0x6C, 0x00), (0x6A, 0x00), (0x23, 0x00),
+            (0x1A, 0x04), (0x19, 0x09), (0x1B, 0x18), (0x1C, 0x08), (0x1D, 0x04),
+        )
+        for register, value in settings:
+            if (yield Write(register, bytes([value]))) is None:
+                raise Unusable("it stopped answering while starting")
+        yield Wait(0.1)
+        # Acknowledged but ineffective writes must not silently mis-scale yaw.
+        for register, value in settings:
+            answer = yield Read(register, 1)
+            if not answer or answer[0] != value:
+                raise Unusable(f"configuration register 0x{register:02X} did not retain its setting")
+
+    def _vectors(self, data: bytes):
+        ax, ay, az, _temperature, gx, gy, gz = unpack(">7h", data)
+        accel = (ax, ay, az)
+        gyro = (gx * self.DPS_PER_COUNT, gy * self.DPS_PER_COUNT, gz * self.DPS_PER_COUNT)
+        return gyro, accel
+
 
 def driver_for(declaration: GigaIMU) -> ImuDriver:
-    return Bno055Driver(declaration) if declaration.driver == "BNO055" else Lsm6Driver(declaration)
+    drivers = {"BNO055": Bno055Driver, "LSM6": Lsm6Driver, "MPU9255": Mpu9255Driver}
+    return drivers[declaration.driver](declaration)

@@ -21,6 +21,7 @@ from motion_module.dashboard import (
     load_drive,
     static_asset_version,
     serve,
+    servo_profile_command,
 )
 from motion_module.gpio import MockGPIO
 from motion_module.servo import MockServoController, Servo
@@ -169,8 +170,9 @@ class FakeTerminal:
 class DashboardTests(unittest.TestCase):
     def test_debug_exposes_imu_guide_and_check_below_servo_boards(self):
         page = self.client.get('/diagnostics').get_data(as_text=True)
-        self.assertIn('8 · REST', page)
-        self.assertIn('Never ground it to select I²C', page)
+        self.assertIn('MPU9255', page)
+        self.assertIn('Must be high for I²C', page)
+        self.assertIn('address=0x68', page)
         header = self.client.get('/api/config').get_json()['header']
         self.assertIn('IMU SDA', header[10]['role'])
         checks = self.client.get('/api/diagnostics').get_json()['checks']
@@ -392,9 +394,10 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(
             profile_ids,
             {
-                "gobilda_300_position",
-                "gobilda_5_turn_position",
-                "gobilda_continuous",
+                "generic_270_position",
+                "generic_90_position",
+                "continuous_rotation",
+                "custom_position",
                 "generic_180_position",
                 "generic_360_position",
             },
@@ -1191,15 +1194,58 @@ class DashboardTests(unittest.TestCase):
             "0:3", self.client.get("/api/status").get_json()["robot"]["servo_commands"]
         )
 
-    def test_servo_profiles_map_go_bilda_position_and_continuous_modes(self):
+    def test_debug_servo_zero_and_move_reach_hardware_registers(self):
+        from motion_module.servo import LED0_ON_L, PCA9685Controller
+        from test_servo import FakeBus
+
+        bus = FakeBus()
+        self.module._servos = PCA9685Controller(self.module.config.servos, bus=bus)
+        register = LED0_ON_L + 4 * 3
+        with patch("motion_module.dashboard.threading.Timer"):
+            for value, pulse in [(0, 500), (90, 1500)]:
+                response = self.client.post(
+                    "/api/servos/set", headers=self.headers,
+                    json={"board": 0, "channel": 3, "profile": "generic_180_position",
+                          "value": value, "confirmed": True},
+                )
+                self.assertEqual(response.status_code, 200)
+                counts = round(pulse * 50 * 4096 / 1_000_000)
+                self.assertEqual(
+                    [bus.read_byte_data(0x40, register + i) for i in range(4)],
+                    [0, 0, counts & 0xFF, counts >> 8],
+                )
+            response = self.client.post(
+                "/api/servos/release", headers=self.headers,
+                json={"board": 0, "channel": 3},
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(bus.read_byte_data(0x40, register + 3), 0x10)
+
+    def test_servo_profiles_map_position_and_continuous_modes(self):
+        config = self.module.config.servos
+        for degrees in (90, 180, 270, 360):
+            for value, expected in [(0, 500), (degrees / 2, 1500), (degrees, 2500)]:
+                with self.subTest(degrees=degrees, value=value):
+                    _, pulse = servo_profile_command(config, f"generic_{degrees}_position", value)
+                    self.assertEqual(pulse, expected)
+        for value, expected in [(-1, 900), (-0.5, 1200), (0, 1500), (0.5, 1800), (1, 2100)]:
+            profile, pulse = servo_profile_command(config, "continuous_rotation", value)
+            self.assertEqual(pulse, expected)
+            self.assertEqual(profile["step"], 0.01)
+        for value in (-1.01, 1.01, float("nan")):
+            with self.assertRaises(ValueError):
+                servo_profile_command(config, "continuous_rotation", value)
+        calibrated = replace(config, minimum_pulse_us=600, maximum_pulse_us=2400)
+        self.assertEqual(servo_profile_command(calibrated, "generic_180_position", 0)[1], 600)
+        self.assertEqual(servo_profile_command(calibrated, "generic_180_position", 180)[1], 2400)
         position = self.client.post(
             "/api/servos/set",
             headers=self.headers,
             json={
                 "board": 0,
                 "channel": 15,
-                "profile": "gobilda_5_turn_position",
-                "value": 900,
+                "profile": "generic_90_position",
+                "value": 45,
                 "confirmed": True,
             },
         )
@@ -1213,14 +1259,14 @@ class DashboardTests(unittest.TestCase):
             json={
                 "board": 0,
                 "channel": 2,
-                "profile": "gobilda_continuous",
+                "profile": "continuous_rotation",
                 "value": 0,
                 "confirmed": True,
             },
         )
         self.assertEqual(stopped.status_code, 200)
         self.assertEqual(stopped.get_json()["pulse_us"], 1500)
-        self.assertEqual(stopped.get_json()["unit"], "%")
+        self.assertEqual(stopped.get_json()["unit"], "")
 
         out_of_range = self.client.post(
             "/api/servos/set",
@@ -1228,7 +1274,7 @@ class DashboardTests(unittest.TestCase):
             json={
                 "board": 0,
                 "channel": 2,
-                "profile": "gobilda_300_position",
+                "profile": "generic_270_position",
                 "value": 301,
                 "confirmed": True,
             },
@@ -1240,12 +1286,30 @@ class DashboardTests(unittest.TestCase):
             json={
                 "board": 0,
                 "channel": 16,
-                "profile": "gobilda_300_position",
+                "profile": "generic_270_position",
                 "value": 150,
                 "confirmed": True,
             },
         )
         self.assertEqual(invalid_channel.status_code, 400)
+
+    def test_custom_servo_range_maps_angles_and_rejects_invalid_ranges(self):
+        with patch("motion_module.dashboard.threading.Timer"):
+            for value, pulse in [(-90, 500), (0, 1500), (90, 2500)]:
+                response = self.client.post("/api/servos/set", headers=self.headers, json={
+                    "profile": "custom_position", "value": value, "confirmed": True,
+                    "custom_range": {"minimum": -90, "maximum": 90},
+                })
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json()["pulse_us"], pulse)
+            for bounds in [None, {}, {"minimum": 10, "maximum": 10},
+                           {"minimum": 20, "maximum": 10}, {"minimum": "nan", "maximum": 90},
+                           {"minimum": 10, "maximum": 90}]:
+                response = self.client.post("/api/servos/set", headers=self.headers, json={
+                    "profile": "custom_position", "value": 0, "confirmed": True,
+                    "custom_range": bounds,
+                })
+                self.assertEqual(response.status_code, 400)
 
     def test_web_terminal_requires_both_dashboard_and_temporary_session_tokens(self):
         no_dashboard_token = self.client.post(

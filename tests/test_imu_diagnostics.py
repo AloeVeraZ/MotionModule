@@ -12,7 +12,7 @@ from motion_module.pinout import header_rows
 class IMUDiagnosticsTests(unittest.TestCase):
     def report(self, reads):
         bus = MagicMock()
-        bus.read_byte_data.side_effect = reads
+        bus.read_byte_data.side_effect = [*reads, OSError(), OSError()]
         factory = MagicMock()
         factory.return_value.__enter__.return_value = bus
         with patch('motion_module.diagnostics.find_i2c_gpio_bus', return_value=11), \
@@ -34,6 +34,21 @@ class IMUDiagnosticsTests(unittest.TestCase):
     def test_missing_and_wrong_chip_are_not_success(self):
         for reads in ([OSError(), OSError()], [0x12, 0x34]):
             self.assertEqual(self.report(reads)['level'], 'warn')
+
+    def test_mpu9255_identity_at_both_addresses(self):
+        for reads, address in (
+            ([OSError(), OSError(), 0x73], '0x68'),
+            ([OSError(), OSError(), OSError(), 0x73], '0x69'),
+        ):
+            report = self.report(reads)
+            self.assertEqual(report['level'], 'pass')
+            self.assertIn('MPU9255', report['detail'])
+            self.assertIn(address, report['detail'])
+
+    def test_mpu9250_identity_is_not_misreported_as_mpu9255(self):
+        report = self.report([OSError(), OSError(), 0x71, OSError()])
+        self.assertEqual(report['level'], 'warn')
+        self.assertIn('0x68 returned chip ID 0x71', report['detail'])
 
     def test_read_errors_preserve_linux_failure_details(self):
         report = self.report([
