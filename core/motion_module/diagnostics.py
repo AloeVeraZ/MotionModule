@@ -30,10 +30,12 @@ def local_imu_check(hardware: bool) -> dict:
     try:
         with smbus2.SMBus(bus_number) as bus:
             answers = []
+            read_errors = []
             for address in (0x28, 0x29):
                 try:
                     chip_id = bus.read_byte_data(address, 0x00)
-                except OSError:
+                except OSError as error:
+                    read_errors.append(f"0x{address:02X}: {error}")
                     continue
                 if chip_id == 0xA0:
                     return {**check, "level": "pass", "detail": (
@@ -49,7 +51,8 @@ def local_imu_check(hardware: bool) -> dict:
         )}
     return {**check, "level": "warn", "detail": (
         f"No BNO055 identified on I2C bus {bus_number}. "
-        + ("; ".join(answers) + ". " if answers else "No response at 0x28 or 0x29. ")
+        + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x28 or 0x29. ")
+        + ("I2C read errors: " + "; ".join(read_errors) + ". " if read_errors else "")
         + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and the board's I2C mode."
     )}
 

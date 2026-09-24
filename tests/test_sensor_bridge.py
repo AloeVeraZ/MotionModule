@@ -237,7 +237,7 @@ class NineAxisTests(BridgeTestCase):
         self.imu = self.bridge.imu()
 
     def test_the_pi_sets_the_sensor_up_and_reads_its_heading(self):
-        self.run_for(2.0)
+        self.run_for(3.0)  # reset, external clock startup, then calibration
         self.assertEqual(self.imu.state, "ok")
         self.assertEqual(self.imu.chip, "BNO055")
         self.assertEqual(self.chip.resets, 1)         # the Pi restarts it cleanly
@@ -290,7 +290,7 @@ class NineAxisTests(BridgeTestCase):
         self.assertEqual(chip.mode, 0x0C)
 
     def test_driver_station_reading_matches_robot_code(self):
-        self.run_for(2.0)
+        self.run_for(3.0)
         panel = self.imu.reading()
         self.assertTrue(panel.connected)
         self.assertTrue(panel.calibrated)

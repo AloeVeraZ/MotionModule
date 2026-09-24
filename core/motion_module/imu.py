@@ -311,6 +311,7 @@ class Bno055Driver(ImuDriver):
     PAGE = 0x07
     MOTION = 0x14        # gyro x, y, z, then heading, roll, pitch
     GRAVITY = 0x2E       # gravity x, y, z, temperature, calibration
+    CLOCK_STATUS = 0x38
     UNIT_SELECT = 0x3B
     MODE = 0x3D
     POWER = 0x3E
@@ -364,8 +365,19 @@ class Bno055Driver(ImuDriver):
         for register, value in ((self.PAGE, 0), (self.POWER, 0), (self.UNIT_SELECT, 0), (self.TRIGGER, 0x80)):
             if (yield Write(register, bytes([value]))) is None:
                 raise Unusable("it stopped answering while starting")
-        yield Wait(0.02)
-        yield Write(self.MODE, bytes([wanted]))
+        # Bosch datasheet 5.5.1: selecting the external crystal takes at
+        # least ~600 ms. Wait before polling ST_MAIN_CLK; writing MODE
+        # while the clock is starting can leave the chip in CONFIG mode.
+        yield Wait(0.65)
+        for _attempt in range(20):
+            answer = yield Read(self.CLOCK_STATUS, 1)
+            if answer is not None and not (answer[0] & 0x01):
+                break
+            yield Wait(0.05)
+        else:
+            raise Unusable("its clock did not become ready")
+        if (yield Write(self.MODE, bytes([wanted]))) is None:
+            raise Unusable("it did not accept its fusion mode")
         yield Wait(0.03)
         answer = yield Read(self.MODE, 1)
         if answer is None or (answer[0] & 0x0F) != wanted:

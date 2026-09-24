@@ -105,8 +105,68 @@ class NineAxisOverPiI2cTests(LocalImuTestCase):
         self.chip = SimBno055(self.world)
         self.build(NINE_AXIS, self.chip, self.world)
 
+    def test_waits_for_external_crystal_before_entering_fusion(self):
+        class SlowCrystal(SimBno055):
+            def write(self, register, data, now_ms):
+                accepted = super().write(register, data, now_ms)
+                if accepted and register == 0x3F and data == b"\x80":
+                    # Bosch specifies approximately 600 ms minimum for the
+                    # clock switch; configuration writes during it can fail.
+                    self.ready_at = now_ms + 600
+                return accepted
+
+        self.imu.close()
+        self.chip = SlowCrystal(self.world)
+        self.build(NINE_AXIS, self.chip, self.world)
+        self.run_for(3.0)
+        self.assertEqual(self.imu.state, "ok")
+        self.assertEqual(self.chip.mode, 0x08)
+        self.assertEqual(self.chip.resets, 1)
+        self.assertIsNotNone(self.imu.heading())
+
+    def test_polls_a_clock_that_takes_longer_than_the_minimum(self):
+        class BusyClock(SimBno055):
+            clock_ready_at = 0
+
+            def write(self, register, data, now_ms):
+                if register == 0x3D and data == b"\x08" and now_ms < self.clock_ready_at:
+                    return False
+                accepted = super().write(register, data, now_ms)
+                if accepted and register == 0x3F and data == b"\x80":
+                    self.clock_ready_at = now_ms + 1000
+                return accepted
+
+            def read(self, register, length, now_ms):
+                if register == 0x38:
+                    return bytes([int(now_ms < self.clock_ready_at)])
+                return super().read(register, length, now_ms)
+
+        self.imu.close()
+        self.chip = BusyClock(self.world)
+        self.build(NINE_AXIS, self.chip, self.world)
+        self.run_for(3.5)
+        self.assertEqual(self.imu.state, "ok")
+        self.assertEqual(self.chip.resets, 1)
+        self.assertTrue(self.imu.calibrated)
+
+    def test_a_clock_that_never_becomes_ready_has_a_bounded_failure(self):
+        class StuckClock(SimBno055):
+            def read(self, register, length, now_ms):
+                if register == 0x38:
+                    return b"\x01"
+                return super().read(register, length, now_ms)
+
+        self.imu.close()
+        self.chip = StuckClock(self.world)
+        self.build(NINE_AXIS, self.chip, self.world)
+        self.run_for(4.0)
+        self.assertEqual(self.imu.state, "failed")
+        self.assertIn("clock did not become ready", self.imu.describe())
+        self.assertEqual(self.chip.mode, 0)
+        self.assertIsNone(self.imu.heading())
+
     def test_the_pi_sets_the_sensor_up_and_reads_its_heading(self):
-        self.run_for(2.0)
+        self.run_for(3.0)  # reset, external clock startup, then calibration
         self.assertEqual(self.imu.state, "ok")
         self.assertEqual(self.imu.chip, "BNO055")
         self.assertEqual(self.chip.resets, 1)
@@ -135,7 +195,7 @@ class NineAxisOverPiI2cTests(LocalImuTestCase):
         self.assertAlmostEqual(self.imu.heading(), 45.0, delta=0.1)
 
     def test_driver_station_reading_matches_robot_code(self):
-        self.run_for(2.0)
+        self.run_for(3.0)
         panel = self.imu.reading()
         self.assertTrue(panel.connected)
         self.assertTrue(panel.calibrated)

@@ -1,3 +1,4 @@
+import errno
 import sys
 import unittest
 from types import SimpleNamespace
@@ -33,6 +34,24 @@ class IMUDiagnosticsTests(unittest.TestCase):
     def test_missing_and_wrong_chip_are_not_success(self):
         for reads in ([OSError(), OSError()], [0x12, 0x34]):
             self.assertEqual(self.report(reads)['level'], 'warn')
+
+    def test_read_errors_preserve_linux_failure_details(self):
+        report = self.report([
+            OSError(errno.ETIMEDOUT, 'Connection timed out'),
+            OSError(errno.EOPNOTSUPP, 'Operation not supported'),
+        ])
+        self.assertEqual(report['level'], 'warn')
+        self.assertIn('0x28: [Errno', report['detail'])
+        self.assertIn('Connection timed out', report['detail'])
+        self.assertIn('0x29: [Errno', report['detail'])
+        self.assertIn('Operation not supported', report['detail'])
+        self.assertNotIn('No response', report['detail'])
+
+    def test_wrong_chip_and_read_error_are_both_reported(self):
+        report = self.report([0x12, OSError(errno.EIO, 'Input/output error')])
+        self.assertIn('0x28 returned chip ID 0x12', report['detail'])
+        self.assertIn('0x29: [Errno', report['detail'])
+        self.assertIn('Input/output error', report['detail'])
 
     def test_simulation_does_not_probe(self):
         with patch('motion_module.diagnostics.find_i2c_gpio_bus') as find:
