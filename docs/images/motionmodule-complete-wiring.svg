@@ -1035,12 +1035,12 @@
 <circle cx="912" cy="2820" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>
 <circle cx="912" cy="2820" r="4" fill="#c7d66d" stroke="#c7d66d" stroke-width="2"/>
 <text x="540" y="2823.96" font-family="Arial,sans-serif" font-size="19" font-weight="700" fill="#c7d66d" text-anchor="start">P17 · 3.3 V</text>
-<polyline points="1045,1438 1063,1438 1141,1438 1141,2871 912,2871" fill="none" stroke="#111820" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1045,1438 1063,1438 1141,1438 1141,2871 912,2871" fill="none" stroke="#52731b" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1045,1144 1063,1144 1141,1144 1141,2871 912,2871" fill="none" stroke="#111820" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1045,1144 1063,1144 1141,1144 1141,2871 912,2871" fill="none" stroke="#52731b" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="912" cy="2871" r="10" fill="#e7bd50" stroke="#6d5521" stroke-width="2"/>
 <circle cx="912" cy="2871" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>
 <circle cx="912" cy="2871" r="4" fill="#52731b" stroke="#52731b" stroke-width="2"/>
-<text x="540" y="2874.96" font-family="Arial,sans-serif" font-size="19" font-weight="700" fill="#e9f0f5" text-anchor="start">P20 · GND</text>
+<text x="540" y="2874.96" font-family="Arial,sans-serif" font-size="19" font-weight="700" fill="#e9f0f5" text-anchor="start">P6 · GND</text>
 <polyline points="1045,1270 1063,1270 1162,1270 1162,2922 912,2922" fill="none" stroke="#111820" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="1045,1270 1063,1270 1162,1270 1162,2922 912,2922" fill="none" stroke="#a3e635" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
 <circle cx="912" cy="2922" r="10" fill="#e7bd50" stroke="#6d5521" stroke-width="2"/>
@@ -1134,7 +1134,6 @@
 <text x="1000" y="1426.28" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">19</text>
 <circle cx="1045" cy="1438" r="10" fill="#e7bd50" stroke="#6d5521" stroke-width="2"/>
 <circle cx="1045" cy="1438" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>
-<circle cx="1045" cy="1438" r="5" fill="#52731b" stroke="#52731b" stroke-width="2"/>
 <text x="1045" y="1426.28" font-family="Arial,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">20</text>
 <circle cx="1000" cy="1480" r="10" fill="#e7bd50" stroke="#6d5521" stroke-width="2"/>
 <circle cx="1000" cy="1480" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>

@@ -1293,18 +1293,18 @@
             <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>GY-BNO055</strong><span>SDA–Tx · SCL–Rx · address 0x28</span></div></div>
             <div class="table-scroll"><table class="name-table"><thead><tr><th>Header label</th><th>Connection / purpose</th></tr></thead><tbody>
               <tr><td>1 · VIN</td><td>Pi pin 17 · 3.3 V supply</td></tr>
-              <tr><td>2 · GND</td><td>Pi pin 20 · signal ground</td></tr>
+              <tr><td>2 · GND</td><td>Pi pin 6 · signal ground</td></tr>
               <tr><td>3 · SCL–Rx</td><td>Pi pin 12 · GPIO18 · I²C clock</td></tr>
               <tr><td>4 · SDA–Tx</td><td>Pi pin 11 · GPIO17 · I²C data</td></tr>
-              <tr><td>5 · AD0</td><td>Pi pin 6 · GND · selects address 0x28</td></tr>
+              <tr><td>5 · AD0</td><td>Connect to the same Pi pin 6 ground · selects address 0x28</td></tr>
               <tr><td>6 · INT</td><td>Leave disconnected. Interrupt output; MotionModule polls over I²C.</td></tr>
               <tr><td>7 · BOOT</td><td>No Pi GPIO connection. Must remain high for normal boot; verify the board's pull-up. Never ground it to select I²C.</td></tr>
               <tr><td>8 · REST</td><td>No Pi GPIO connection. Active-low reset (RST); retain the board's pull-up. The driver uses software reset.</td></tr>
             </tbody></table></div>
             <p>Wire with power off. Standard I²C requires PS0 and PS1 low; these are board mode-selection pads, not the BOOT header pin. Confirm the board's jumper configuration before soldering. SDA and SCL need pull-ups to 3.3 V; verify the breakout includes them. Do not connect either signal to 5 V. If BOOT or REST lacks a pull-up, use a 10 kΩ pull-up to 3.3 V. <a href="https://www.amazon.com/dp/B0D47G672B" target="_blank" rel="noopener">Selected board</a> · <a href="https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bno055-ds000.pdf" target="_blank" rel="noopener">BNO055 electrical reference</a></p>
-            <p>Add this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>), then reboot:</p>
+            <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>Run <code>i2cdetect -l</code> to confirm the new adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the BNO055 row below the PCA9685 reports whether chip ID 0xA0 answers at 0x28 or 0x29. Detection does not initialize the sensor or prove calibrated heading.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the BNO055 row below the PCA9685 reports whether chip ID 0xA0 answers at 0x28 or 0x29. Detection does not initialize the sensor or prove calibrated heading.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import GigaIMU
 

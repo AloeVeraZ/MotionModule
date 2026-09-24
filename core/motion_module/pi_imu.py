@@ -1,7 +1,7 @@
 """Read the robot's BNO055 directly on the Pi's independent I2C bus.
 
-The reference wiring is VIN to physical pin 17, GND to 20, SDA to 11,
-SCL to 12 and AD0 to 6. Enable the i2c-gpio overlay on GPIO17/18;
+The reference wiring is VIN to physical pin 17, GND and AD0 to 6, SDA to 11,
+and SCL to 12. Enable the i2c-gpio overlay on GPIO17/18;
 see docs/PINOUT.md and Debug > Wiring for the complete board guide.
 BOOT and REST retain their pull-ups; INT is left disconnected.
 
@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from .imu import GigaIMU, Read, driver_for
@@ -81,6 +82,7 @@ class LocalIMU:
         auto_start: bool = True,
         bus_factory=None,
         clock=None,
+        auto_address: bool = False,
     ):
         self.declaration = declaration
         self.name = declaration.name
@@ -89,6 +91,8 @@ class LocalIMU:
         self._bus = None
         self._clock = clock if clock is not None else time.monotonic
         self._driver = driver_for(declaration)
+        self._auto_address = auto_address and declaration.chip == "bno055"
+        self._next_address_probe = 0.0
         self._lock = threading.Lock()
         self._offset = 0.0
         self._pending_zero: float | None = None
@@ -149,16 +153,40 @@ class LocalIMU:
             self._bus = self._open_bus()
             if self._bus is None:
                 return False
+            self._detect_bno055_address(now)
             with self._lock:
                 self._error = ""
                 self._driver.begin(now)
             return True
+        if self._driver.state == "missing" and self._detect_bno055_address(now):
+            with self._lock:
+                self._driver.begin(now)
         with self._lock:
             self._driver.step(self, now)
             state = self._driver.state
         if state in ("ok", "calibrating"):
             self._read_streams(self._driver, now)
         return True
+
+    def _detect_bno055_address(self, now: float) -> bool:
+        """Find a BNO055 at either address without writing to the chip.
+
+        A missing board is checked again so connecting it after startup works.
+        Only a matching chip ID may replace the declared default address.
+        """
+        if not self._auto_address or now < self._next_address_probe:
+            return False
+        self._next_address_probe = now + RETRY_SECONDS
+        for address in (0x28, 0x29):
+            try:
+                chip_id = self._bus.read_i2c_block_data(address, 0x00, 1)[0]
+            except (OSError, IndexError):
+                continue
+            if chip_id == 0xA0 and address != self._driver.address:
+                with self._lock:
+                    self._driver = driver_for(replace(self.declaration, address=address))
+                return True
+        return False
 
     def _run(self) -> None:
         try:
@@ -285,16 +313,16 @@ class LocalIMU:
         driver = self._driver
         if self._error:
             return self._error
-        where = f"{driver.chip} at 0x{self.declaration.address:02X}"
+        where = f"{driver.chip} at 0x{driver.address:02X}"
         state = driver.state
         if state == "missing":
             return (
-                f"Nothing answers at 0x{self.declaration.address:02X} on I2C bus {self._bus_number}. "
-                "Check the reference Pi wiring: VIN pin 17, GND pin 20, "
-                "SDA pin 11, SCL pin 12 and AD0 pin 6."
+                f"Nothing answers at 0x{driver.address:02X} on I2C bus {self._bus_number}. "
+                "Check the reference Pi wiring: VIN pin 17, GND and AD0 pin 6, "
+                "SDA pin 11 and SCL pin 12."
             )
         if state == "wrong-chip":
-            return f"0x{self.declaration.address:02X} answered, but {driver.message}."
+            return f"0x{driver.address:02X} answered, but {driver.message}."
         if state == "failed":
             return f"{where} {driver.message or 'could not be set up'}. Retrying every 2 seconds."
         if state == "starting":

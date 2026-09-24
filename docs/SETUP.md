@@ -73,11 +73,12 @@ servos one channel at a time after selecting the correct voltage and behavior.
 
 The reference Mecanum setup keeps its motors, servo controller and BNO055
 on the Pi. The IMU uses the independent bus shown in **Debug → Wiring**:
-VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12, and AD0 to 6.
+VIN to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
 Follow the [complete BNO055 guide](PINOUT.md#optional-gy-bno055-nine-axis-imu),
 including the board's BOOT, REST and mode-selection notes.
 
-Add under `[all]` in `/boot/firmware/config.txt`, then reboot:
+The Pi installer adds this under `[all]` in `/boot/firmware/config.txt` and
+reboots. If setting up without the installer, add it yourself and reboot:
 
 ```ini
 dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18

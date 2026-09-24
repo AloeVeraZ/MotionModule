@@ -178,7 +178,7 @@ class MecanumSensorTests(unittest.TestCase):
                 reader.return_value.declaration = sensors.IMU
                 reader.return_value.heading.return_value = 42.0
                 drive = create_drive(module)
-                reader.assert_called_once_with(sensors.IMU, bus=11)
+                reader.assert_called_once_with(sensors.IMU, bus=11, auto_address=True)
                 self.assertEqual(drive.sensors.heading(), 42.0)
                 self.assertIs(module.local_imu(sensors.IMU), drive.sensors.imu)
                 drive.sensors.zero_heading()

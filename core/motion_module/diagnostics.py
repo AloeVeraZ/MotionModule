@@ -21,7 +21,7 @@ def local_imu_check(hardware: bool) -> dict:
     if bus_number is None:
         return {**check, "detail": (
             "IMU bus not enabled. Add dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 "
-            "to /boot/firmware/config.txt and reboot. See Wiring for pins 11/12, 17 and 20."
+            "to /boot/firmware/config.txt and reboot. See Wiring for pins 11/12, 17 and 6."
         )}
     try:
         import smbus2
@@ -50,7 +50,7 @@ def local_imu_check(hardware: bool) -> dict:
     return {**check, "level": "warn", "detail": (
         f"No BNO055 identified on I2C bus {bus_number}. "
         + ("; ".join(answers) + ". " if answers else "No response at 0x28 or 0x29. ")
-        + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 20 and the board's I2C mode."
+        + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and the board's I2C mode."
     )}
 
 

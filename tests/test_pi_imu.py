@@ -78,13 +78,13 @@ class FakeBus:
 class LocalImuTestCase(unittest.TestCase):
     """A LocalIMU wired to a simulated chip, with a clock the test moves."""
 
-    def build(self, declaration, chip, world):
+    def build(self, declaration, chip, world, *, auto_address=False, bus_factory=None):
         self.clock = Clock()
         self.world = world
         self.bus = FakeBus(chip, self.clock)
         self.imu = LocalIMU(
-            declaration, auto_start=False, clock=self.clock,
-            bus_factory=lambda _bus_number: self.bus,
+            declaration, auto_start=False, clock=self.clock, auto_address=auto_address,
+            bus_factory=bus_factory or (lambda _bus_number: self.bus),
         )
         self.addCleanup(self.imu.close)
         return self.imu
@@ -149,6 +149,34 @@ class NineAxisOverPiI2cTests(LocalImuTestCase):
         self.assertIn("Nothing answers at 0x28", self.imu.describe())
         self.assertIsNone(self.imu.heading())
         self.assertFalse(self.imu.reading().connected)
+
+    def test_auto_detection_finds_alternate_address_after_startup(self):
+        class AddressedBus(FakeBus):
+            def read_i2c_block_data(self, address, register, length):
+                if address != 0x29:
+                    raise OSError("no answer")
+                return super().read_i2c_block_data(address, register, length)
+
+            def write_i2c_block_data(self, address, register, data):
+                if address != 0x29:
+                    raise OSError("no answer")
+                return super().write_i2c_block_data(address, register, data)
+
+        self.imu.close()
+        bus = AddressedBus(self.chip, self.clock)
+        self.imu = LocalIMU(
+            NINE_AXIS, auto_start=False, clock=self.clock, auto_address=True,
+            bus_factory=lambda _number: bus,
+        )
+        self.addCleanup(self.imu.close)
+        self.chip.present = False
+        self.run_for(3.0)
+        self.assertEqual(self.imu.state, "missing")
+        self.chip.present = True
+        self.run_for(3.0)
+        self.assertEqual(self.imu.state, "ok")
+        self.assertEqual(self.imu._driver.address, 0x29)
+        self.assertIn("0x29", self.imu.describe())
 
 
 class SixAxisOverPiI2cTests(LocalImuTestCase):

@@ -119,9 +119,10 @@ routine cannot fight over the motors.
 
 `sensors.py` reads one BNO055 directly from the Pi, shared by `robot.py`,
 `autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-gy-bno055-nine-axis-imu):
-VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12 and AD0 to 6.
-Enable the documented `i2c-gpio` overlay and reboot. The module discovers the
-bus and closes its reader on shutdown. Motors and servos keep their Pi wiring.
+VIN to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
+The Pi installer enables the `i2c-gpio` overlay for its next reboot. The module
+discovers the bus and BNO055 address, then closes its reader on shutdown.
+Motors and servos keep their Pi wiring.
 
 **Zero heading** sets the current direction to zero. Heading increases turning
 left, like `rotate`. Autonomous uses measured turns when the IMU is ready,

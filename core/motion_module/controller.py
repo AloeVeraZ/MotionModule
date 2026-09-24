@@ -126,7 +126,7 @@ class MotionModule:
             bus = find_i2c_gpio_bus()
             if bus is None:
                 return None
-            self._local_imu = LocalIMU(declaration, bus=bus)
+            self._local_imu = LocalIMU(declaration, bus=bus, auto_address=True)
             return self._local_imu
 
     def giga(self, pins=(), imus=(), *, serial: str = ""):

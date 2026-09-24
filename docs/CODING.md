@@ -207,11 +207,12 @@ configures.
 
 The Mecanum setup uses one BNO055 wired directly to the Pi. Follow the
 [complete wiring plan](PINOUT.md#optional-gy-bno055-nine-axis-imu): VIN to
-physical pin 17, GND to 20, SDA to 11 (GPIO17), SCL to 12 (GPIO18), and AD0
-to ground pin 6 for address 0x28. BOOT and REST retain their pull-ups; INT is
+physical pin 17, GND and AD0 to pin 6, SDA to 11 (GPIO17) and SCL to 12
+(GPIO18). Grounding AD0 selects address 0x28. BOOT and REST retain their pull-ups; INT is
 left disconnected. The motor and PCA9685 wiring stays as shipped.
 
-Add this under `[all]` in `/boot/firmware/config.txt`, then reboot:
+The Pi installer adds this under `[all]` in `/boot/firmware/config.txt` and
+reboots. Add it manually only for a setup without the installer:
 
 ```ini
 dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
@@ -228,7 +229,8 @@ heading = imu.heading() if imu is not None else None
 ```
 
 `module.local_imu()` discovers the independent `i2c-gpio` adapter by name,
-creates one `motion_module.pi_imu.LocalIMU` reader, and closes it when the
+creates one `motion_module.pi_imu.LocalIMU` reader, checks both BNO055
+addresses (0x28 and 0x29), and closes the reader when the
 module shuts down. It returns `None` in simulation or without the overlay;
 it never falls back to the servo bus. Enable the overlay and restart after
 rebooting. With the bus present but the sensor missing, the reader reports

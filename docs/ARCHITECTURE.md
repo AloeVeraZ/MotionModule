@@ -112,8 +112,9 @@ USB discovery alone cannot identify which physical sensor is wired to a pin.
 
 ## Reference Pi IMU
 
-The Mecanum sample declares one BNO055 at 0x28. `module.local_imu()` finds
-the independent `i2c-gpio` adapter, creates a `LocalIMU` and closes it on
+The Mecanum sample declares one BNO055 at its default address 0x28.
+`module.local_imu()` finds the independent `i2c-gpio` adapter, detects the
+chip at 0x28 or 0x29, creates a `LocalIMU` and closes it on
 module shutdown. Simulation and a missing overlay return no reader; the
 sample reports heading unavailable. The wiring is the single plan in
 Debug → Wiring and PINOUT.md. Motors and the PCA9685 also connect to the Pi.

@@ -56,7 +56,7 @@ class IMUDiagnosticsTests(unittest.TestCase):
         base = header_rows(config)
         guide = header_rows(config, imu_guide=True)
         for old, new in zip(base, guide):
-            if old['physical'] in {6, 11, 12, 17, 20}:
+            if old['physical'] in {6, 11, 12, 17}:
                 self.assertIn('IMU', new['role'])
                 self.assertFalse(new['configured'])
             else:

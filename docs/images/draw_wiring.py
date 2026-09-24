@@ -266,27 +266,28 @@ text(650,2750,'BNO055 IMU • 0x28',33,'white',True,'ma')
 chip(407,2880,110,115)
 text(480,3060,'GY-BNO055',24,'white')
 imu_pads=['VIN','GND','SCL','SDA','AD0','BOOT','REST','INT']
-imu_wires={17:(0,PALETTE['imu-supply']),20:(1,PALETTE['imu-ground']),
-           12:(2,PALETTE['imu-signal']),11:(3,PALETTE['imu-signal']),6:(4,PALETTE['imu-ground'])}
+imu_wires=[(17,0,PALETTE['imu-supply']),(6,1,PALETTE['imu-ground']),
+           (12,2,PALETTE['imu-signal']),(11,3,PALETTE['imu-signal']),
+           (6,4,PALETTE['imu-ground'])]
 for i,label in enumerate(imu_pads):
     yy=2820+i*51
     text(740,yy-13,label,24,'white',True)
     hole(912,yy)
-for i,(p,(row,color)) in enumerate(imu_wires.items()):
+for i,(p,row,color) in enumerate(imu_wires):
     sx,sy=P[p]; lane=1120+i*21; ty=2820+row*51
     escape=sy+15 if p%2 else sy
     line([(sx,sy),(sx+18,escape),(lane,escape),(lane,ty),(912,ty)],color,5,True)
     hole(912,ty);circle(912,ty,4,color)
-    label={17:'P17 · 3.3 V',20:'P20 · GND',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND'}[p]
-    text(540,ty-12,label,19,INK if p in (6,20) else color,bold=True)
+    label={17:'P17 · 3.3 V',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND'}[p]
+    text(540,ty-12,label,19,INK if p == 6 else color,bold=True)
 text(1030,3090,'BOOT / REST: retain onboard pull-ups',23,color='#aabecd')
 text(1030,3130,'INT: disconnected • AD0 grounded for 0x28',23,color='#aabecd')
 
 # All forty physical header positions are visible; unused ones stay empty.
-used={p for p,*_ in destinations}|set(servo_pts)|set(imu_wires)
+used={p for p,*_ in destinations}|set(servo_pts)|{p for p,_,_ in imu_wires}
 pin_colors={p:color for p,_,color,_,_ in destinations}
 pin_colors.update(SERVO_COLORS)
-pin_colors.update({p:color for p,(_,color) in imu_wires.items()})
+pin_colors.update({p:color for p,_,color in imu_wires})
 for p,(x,y) in P.items():
     hole(x,y)
     if p in used:circle(x,y,5,pin_colors.get(p,'#eef5f0'))

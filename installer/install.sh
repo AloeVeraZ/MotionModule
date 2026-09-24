@@ -148,6 +148,19 @@ if command -v raspi-config >/dev/null 2>&1; then
     sudo raspi-config nonint do_i2c 0
 fi
 
+# The IMU uses a separate software I2C bus; the hardware bus above belongs
+# to the PCA9685. Enable the reference pins once, even when no IMU is fitted.
+imu_overlay='dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18'
+boot_config=/boot/firmware/config.txt
+if [ ! -f "$boot_config" ]; then
+    boot_config=/boot/config.txt
+fi
+[ -f "$boot_config" ] || fail "Raspberry Pi boot config was not found; cannot enable the IMU bus."
+if ! sudo grep -Fqx "$imu_overlay" "$boot_config"; then
+    printf '\n[all]\n%s\n' "$imu_overlay" | sudo tee -a "$boot_config" >/dev/null
+    say "Enabled the independent IMU I2C bus on GPIO17/18 for the next reboot."
+fi
+
 # dialout opens the Arduino GIGA's USB serial port; plugdev lets the udev rule
 # below give the same user its bootloader for firmware installs.
 for group in gpio i2c dialout plugdev; do

@@ -1,7 +1,7 @@
 """The Mecanum robot's BNO055, wired directly to the Raspberry Pi.
 
 Use the single wiring plan in Debug > Wiring and docs/PINOUT.md:
-VIN -> physical 17, GND -> 20, SDA -> 11, SCL -> 12, AD0 -> 6.
+VIN -> physical 17, GND and AD0 -> 6, SDA -> 11, SCL -> 12.
 Enable dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 and reboot.
 The Pi reads the independent bus; no Arduino is part of this setup.
 

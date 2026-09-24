@@ -380,9 +380,9 @@ The complete contract and copyable example are in
 
 The Mecanum robot's motors, PCA9685 servo controller and BNO055 IMU connect
 directly to the Raspberry Pi. `sensors.py` reads one BNO055 on the independent
-`i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VIN on 17, GND on 20 and
-AD0 on 6. Use the single [IMU wiring plan](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu)
-and enable its overlay before starting the robot. No extra sensors are declared.
+`i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VIN on 17, and GND and
+AD0 on 6. Use the single [IMU wiring plan](docs/PINOUT.md#optional-gy-bno055-nine-axis-imu).
+The Pi installer enables this bus for its next reboot. No extra sensors are declared.
 The robot can still drive without an IMU; heading stays unavailable and the
 sample autonomous routine uses timed turns.
 

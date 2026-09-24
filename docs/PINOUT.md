@@ -249,7 +249,7 @@ when only some have explicit names.
 
 "Reserved" means kept for a specific electrical interface. It does not mean
 that a sensor is connected. The base harness leaves the following spare pins
-available; the optional IMU extension below uses pins 6, 11, 12, 17 and 20.
+available; the optional IMU extension below uses pins 6, 11, 12 and 17.
 
 | Physical pin(s) | Reference purpose | What to do |
 | --- | --- | --- |
@@ -276,10 +276,10 @@ This extension leaves every motor and PCA9685 wire in place.
 | Board header | Connection / purpose |
 | --- | --- |
 | 1 · VIN | Pi pin 17, 3.3 V |
-| 2 · GND | Pi pin 20, ground |
+| 2 · GND | Pi pin 6, ground |
 | 3 · SCL–Rx | Pi pin 12, GPIO18, software I2C clock |
 | 4 · SDA–Tx | Pi pin 11, GPIO17, software I2C data |
-| 5 · AD0 | Pi pin 6, ground, selects address 0x28 |
+| 5 · AD0 | Same Pi pin 6 ground, selects address 0x28 |
 | 6 · INT | Leave disconnected; the driver polls the sensor |
 | 7 · BOOT | No Pi GPIO; retain pull-up for normal boot, never ground for I2C |
 | 8 · REST | No Pi GPIO; active-low reset, retain pull-up; driver uses software reset |
@@ -289,8 +289,9 @@ SDA/SCL also require pull-ups to 3.3 V. Standard I2C requires PS0 and PS1 low;
 verify the board's mode-selection pads before soldering. BOOT is not PS0/PS1.
 See the [Bosch datasheet](https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bno055-ds000.pdf).
 
-With power off, wire the board, then add under `[all]` in
-`/boot/firmware/config.txt` (older Pi OS: `/boot/config.txt`) and reboot:
+With power off, wire the board. The Pi installer adds this under `[all]` in
+`/boot/firmware/config.txt` (older Pi OS: `/boot/config.txt`) and reboots.
+For a setup without the installer, add it manually and reboot:
 
 ```ini
 dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18

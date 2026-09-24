@@ -114,6 +114,11 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("motionmodule-network hostname", self.script)
         self.assertNotIn('sudo hostnamectl set-hostname "$TARGET_HOSTNAME"', self.script)
 
+    def test_install_enables_the_reference_imu_bus_once(self):
+        self.assertIn("imu_overlay='dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18'", self.script)
+        self.assertIn('if ! sudo grep -Fqx "$imu_overlay" "$boot_config"; then', self.script)
+        self.assertIn("printf '\\n[all]\\n%s\\n' \"$imu_overlay\" | sudo tee -a \"$boot_config\"", self.script)
+
     def test_root_bootstrap_enters_the_root_system_installer(self):
         bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
         self.assertIn('${BASH_SOURCE[0]:-}', bootstrap)

@@ -74,7 +74,7 @@ def parts_groups() -> list[dict]:
             "items": [
                 _part("1", "BNO055 9-axis IMU breakout", "Teyleten Robot BNO055 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/Teyleten-Robot-Attitude-Acceleration-Geomagnetic/dp/B0D47G672B/"),
             ],
-            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VIN to physical pin 17, GND to 20, SDA to 11, SCL to 12 and AD0 to 6. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
+            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VIN to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
         },
         {
             "id": "sensors", "title": "Optional USB GPIO expansion",

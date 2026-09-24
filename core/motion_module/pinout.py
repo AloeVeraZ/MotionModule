@@ -178,15 +178,15 @@ def header_rows(config, *, imu_guide: bool = False) -> list[dict]:
             configured_pins.add(physical)
 
     if imu_guide:
-        for physical, label in ((6, "AD0 address-select ground (0x28)"), (11, "SDA / GPIO17"), (12, "SCL / GPIO18"),
-                                (17, "3.3 V supply"), (20, "GND")):
+        for physical, label in ((6, "GND and AD0 address-select ground (0x28)"), (11, "SDA / GPIO17"),
+                                (12, "SCL / GPIO18"), (17, "3.3 V supply")):
             if physical in configured_pins:
                 continue  # A custom robot map owns this pin; never hide its role.
             roles[physical] = (f"Optional BNO055 IMU {label}", "reserved")
             details[physical] = (
                 f"Optional independent IMU connection: {label}. SDA goes to pin 11, SCL to pin 12, "
-                "3.3 V to pin 17, GND to pin 20 and AD0 to pin 6 (address 0x28). Enable the i2c-gpio overlay and reboot; "
-                "see the IMU wiring guide below. This label is a wiring plan, not proof of detection."
+                "3.3 V to pin 17, GND and AD0 to pin 6 (address 0x28). The installer enables the i2c-gpio overlay; reboot to activate it. "
+                "See the IMU wiring guide below. This label is a wiring plan, not proof of detection."
             )
 
     bcm_by_physical = {physical: bcm for bcm, physical in PHYSICAL_BY_BCM.items()}
