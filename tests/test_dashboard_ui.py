@@ -99,6 +99,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
 
+    def test_custom_servo_range_updates_slider_and_command(self):
+        self.run_behavior("custom-servo")
+
     def test_shared_themes_follow_system_and_work_with_blocked_storage(self):
         result = subprocess.run(
             [NODE, str(ROOT / "tests/appearance_ui_harness.js"),

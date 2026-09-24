@@ -242,7 +242,32 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'touch-drive' || scenario === 'touch-stop') {
+  if (scenario === 'custom-servo') {
+    vm.runInContext(`configData = {servos: {profiles: [{id: 'custom_position', label: 'Custom', kind: 'position', step: 0.1, unit: '°', minimum_pulse_us: 500, maximum_pulse_us: 2500}]}}`, app.context);
+    app.$('#servoProfile').value = 'custom_position';
+    await app.$('#servoProfile').fire('change');
+    assert.equal(app.$('#servoCustomRange').hidden, false);
+    app.$('#servoCustomMin').value = '-90';
+    app.$('#servoCustomMax').value = '90';
+    await app.$('#servoCustomMin').fire('input');
+    assert.equal(Number(app.$('#servoValue').min), -90);
+    assert.equal(Number(app.$('#servoValue').max), 90);
+    assert.equal(Number(app.$('#servoValue').value), 0);
+    assert.equal(app.requests.filter(r => r.url === '/api/servos/set').length, 0);
+    app.$('#servoSafe').checked = true;
+    app.$('#servoValue').value = '45';
+    await app.$('#servoSet').fire('click');
+    await app.settle();
+    const command = app.requests.find(r => r.url === '/api/servos/set').payload;
+    assert.deepEqual(command.custom_range, {minimum: -90, maximum: 90});
+    assert.equal(command.value, 45);
+    app.$('#servoCustomMin').value = '100';
+    await app.$('#servoCustomMin').fire('input');
+    assert.equal(app.$('#servoValue').disabled, true);
+    assert.equal(app.$('#servoSafe').checked, false);
+    await app.$('#servoSet').fire('click');
+    assert.equal(app.requests.filter(r => r.url === '/api/servos/set').length, 1);
+  } else if (scenario === 'touch-drive' || scenario === 'touch-stop') {
     await app.releaseForward();
     const grid = app.$(fixture.kind === 'station' ? '#keyGrid' : '#driveKeys');
     if (fixture.kind === 'station') vm.runInContext('renderKeys()', app.context);
