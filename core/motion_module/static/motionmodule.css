@@ -135,54 +135,56 @@
 html[data-theme="light"] {
   color-scheme: light;
 
-  /* Dimmed slate, not white paper: the brightest surface sits near 75%
-     luminance so a bright room or a phone at full brightness is not glare.
-     Every text colour below is at least 4.9:1 on a panel and a well. */
-  --bg: #c3cad5;
-  --surface: #d2d8e1;
-  --surface-2: #d8dde5;
-  --well: #c9d0da;
-  --control: #dce1e8;
-  --ink: #101722;
-  --muted: #2c3441;             /* 8.7:1 on a panel */
-  --faint: #3d4654;             /* 6.7:1 on a panel, 6.1:1 in a well */
-  --line: rgba(16, 23, 34, .16);
-  --line-soft: rgba(16, 23, 34, .09);
-  --edge-top: rgba(255, 255, 255, .4);
-  --dim: .75;                   /* stale or offline readouts stay legible */
+  /* Dimmed slate, not white paper: the brightest surface sits near 50%
+     luminance and the page near 36%, so a bright room or a phone at full
+     brightness is not glare. Ink is near-black for contrast instead of the
+     ground being near-white. Every text colour below is at least 4.5:1 on
+     the page and 5:1 on a panel. */
+  --bg: #97a2b4;
+  --surface: #a6b0bf;
+  --surface-2: #aeb7c5;
+  --well: #9ea8b9;
+  --control: #b4bcc9;
+  --ink: #0a0f17;
+  --muted: #161d28;             /* 7.7:1 on a panel */
+  --faint: #222a36;             /* 6.6:1 on a panel, 6:1 in a well */
+  --line: rgba(10, 15, 23, .2);
+  --line-soft: rgba(10, 15, 23, .11);
+  --edge-top: rgba(255, 255, 255, .28);
+  --dim: .8;                    /* stale or offline readouts stay legible */
 
   --accent: #1d4a7a;
-  --accent-light: #1d4a7a;
-  --accent-text: #1d4a7a;
-  --accent-soft: rgba(29, 74, 122, .13);
-  --accent-line: rgba(29, 74, 122, .45);
+  --accent-light: #13355a;
+  --accent-text: #13355a;       /* 5.7:1 on a panel */
+  --accent-soft: rgba(19, 53, 90, .16);
+  --accent-line: rgba(19, 53, 90, .5);
   --accent-fill: linear-gradient(180deg, #275789, #1d4a7a);
   --accent-ink: #ffffff;
-  --accent-glow: 0 8px 20px -10px rgba(29, 74, 122, .5);
+  --accent-glow: 0 8px 20px -10px rgba(19, 53, 90, .55);
 
-  --green: #0a5343;
-  --green-soft: rgba(10, 83, 67, .12);
-  --green-line: rgba(10, 83, 67, .4);
-  --amber: #664306;
-  --amber-soft: rgba(102, 67, 6, .12);
-  --amber-line: rgba(102, 67, 6, .4);
-  --red: #8e2834;
-  --red-soft: rgba(142, 40, 52, .1);
-  --red-line: rgba(142, 40, 52, .4);
-  --blue: #1d4f96;
-  --blue-soft: rgba(29, 79, 150, .1);
-  --blue-line: rgba(29, 79, 150, .38);
+  --green: #05392d;
+  --green-soft: rgba(5, 57, 45, .15);
+  --green-line: rgba(5, 57, 45, .45);
+  --amber: #4a3004;
+  --amber-soft: rgba(74, 48, 4, .15);
+  --amber-line: rgba(74, 48, 4, .45);
+  --red: #6a1b25;
+  --red-soft: rgba(106, 27, 37, .13);
+  --red-line: rgba(106, 27, 37, .45);
+  --blue: #143b72;
+  --blue-soft: rgba(20, 59, 114, .13);
+  --blue-line: rgba(20, 59, 114, .42);
 
-  --motor: #1c4884;
-  --motor-soft: rgba(28, 72, 132, .09);
-  --motor-line: rgba(28, 72, 132, .36);
-  --servo: #523593;
-  --servo-soft: rgba(82, 53, 147, .09);
-  --servo-line: rgba(82, 53, 147, .36);
-  --ground: #3b4a59;
-  --power: #8e2834;
-  --power-line: rgba(142, 40, 52, .36);
-  --reserved: #664306;
+  --motor: #143668;
+  --motor-soft: rgba(20, 54, 104, .12);
+  --motor-line: rgba(20, 54, 104, .4);
+  --servo: #3d2570;
+  --servo-soft: rgba(61, 37, 112, .12);
+  --servo-line: rgba(61, 37, 112, .4);
+  --ground: #26323e;
+  --power: #6a1b25;
+  --power-line: rgba(106, 27, 37, .4);
+  --reserved: #4a3004;
   --chip-ink: #ffffff;
 
   --code-bg: #0e1116;
@@ -194,11 +196,11 @@ html[data-theme="light"] {
   --board-text: #eff9f6;
   --board-muted: #b5d3cc;
 
-  --grid-major: rgba(29, 74, 122, .07);
-  --grid-minor: rgba(16, 23, 34, .03);
+  --grid-major: rgba(19, 53, 90, .09);
+  --grid-minor: rgba(10, 15, 23, .04);
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='rgb(44,52,65)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
-  --focus: #1d4a7a;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='rgb(22,29,40)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  --focus: #13355a;
 }
 
 /* ------------------------------------------------------------- baseline */
