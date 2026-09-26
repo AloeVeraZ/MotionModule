@@ -698,14 +698,23 @@ def create_app(
             active = project_name
         return jsonify({"ok": True, "available": True, "active": active, "projects": projects})
 
+    def sample_files() -> list[tuple[str, bytes]]:
+        """The Mecanum sample this release ships, as (Mecanum/path, contents)."""
+
+        sample = Path(__file__).resolve().parents[2] / "examples" / "Mecanum"
+        return [
+            ((Path("Mecanum") / source.relative_to(sample)).as_posix(), source.read_bytes())
+            for source in sorted(sample.rglob("*"))
+            if source.is_file() and "__pycache__" not in source.parts
+            and source.suffix.casefold() in {".py", ".md", ".txt", ".ino"}
+        ]
+
     @app.get("/api/projects/sample")
     def project_sample():
-        sample = Path(__file__).resolve().parents[2] / "examples" / "Mecanum"
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as output:
-            for source in sorted(sample.rglob("*")):
-                if source.is_file() and source.suffix.casefold() in {".py", ".md", ".txt", ".ino"}:
-                    output.write(source, (Path("Mecanum") / source.relative_to(sample)).as_posix())
+            for name, content in sample_files():
+                output.writestr(name, content)
         archive.seek(0)
         return send_file(
             archive,
@@ -713,6 +722,70 @@ def create_app(
             as_attachment=True,
             download_name="MotionModule-Mecanum-Sample.zip",
         )
+
+    def install_project(entries: list[tuple[str, bytes]], name: str | None) -> dict:
+        """Stop every output, then validate, install and activate a robot folder.
+
+        The caller holds deployment_lock. A folder with the same name is kept
+        under backups, exactly as for a browser upload.
+        """
+
+        active_drive.stop()
+        module.stop_all()
+        result = deploy_project_files(entries, workspace / "robots", workspace / "backups", name)
+        activate_project(result["target"], workspace / "active")
+        return result
+
+    def restart_soon() -> None:
+        def restart_after_response():
+            time.sleep(0.8)
+            restart_callback()
+
+        threading.Thread(
+            target=restart_after_response,
+            name="motionmodule-browser-deploy-restart",
+            daemon=True,
+        ).start()
+
+    @app.post("/api/projects/sample/install")
+    def project_sample_install():
+        """Replace the robot's Mecanum folder with the sample this release ships.
+
+        An update keeps a robot folder anyone edited, so a newer sample never
+        reaches it by itself. This is the one-click way to take it, keeping the
+        old folder under backups.
+        """
+
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        if workspace is None or restart_callback is None:
+            return jsonify({"ok": False, "error": "Installing the sample is available on the installed Pi runtime"}), 503
+        body = request.get_json(silent=True) or {}
+        if body.get("confirmed") is not True:
+            return jsonify({"ok": False, "error": "Confirm replacing the robot folder first"}), 400
+        if not deployment_lock.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "Another robot folder is already being deployed"}), 409
+        try:
+            result = install_project(sample_files(), "Mecanum")
+        except MotionModuleError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        except OSError as error:
+            return jsonify({"ok": False, "error": f"Could not install the sample: {error}"}), 500
+        finally:
+            deployment_lock.release()
+        restart_soon()
+        return jsonify({
+            "ok": True,
+            "restarting": True,
+            "project": result["name"],
+            "files": result["files"],
+            "backup": result["backup"],
+            "message": (
+                "The Mecanum sample from this release is installed and active"
+                + (f"; the old folder is kept at {result['backup']}" if result["backup"] else "")
+                + ". MotionModule is restarting."
+            ),
+        }), 202
 
     @app.post("/api/projects/deploy")
     def project_deploy():
@@ -733,31 +806,14 @@ def create_app(
                 if len(content) > MAX_BROWSER_FILE_BYTES:
                     return jsonify({"ok": False, "error": f"{upload.filename} is larger than 2 MiB"}), 413
                 entries.append((paths[index] if paths else upload.filename or "", content))
-            active_drive.stop()
-            module.stop_all()
-            result = deploy_project_files(
-                entries,
-                workspace / "robots",
-                workspace / "backups",
-                request.form.get("project_name", "").strip() or None,
-            )
-            activate_project(result["target"], workspace / "active")
+            result = install_project(entries, request.form.get("project_name", "").strip() or None)
         except MotionModuleError as error:
             return jsonify({"ok": False, "error": str(error)}), 400
         except OSError as error:
             return jsonify({"ok": False, "error": f"Could not activate the robot folder: {error}"}), 500
         finally:
             deployment_lock.release()
-
-        def restart_after_response():
-            time.sleep(0.8)
-            restart_callback()
-
-        threading.Thread(
-            target=restart_after_response,
-            name="motionmodule-browser-deploy-restart",
-            daemon=True,
-        ).start()
+        restart_soon()
         return jsonify({
             "ok": True,
             "restarting": True,
@@ -829,6 +885,7 @@ def create_app(
                 "error": "The autonomous routine is driving. Disable it before taking manual control.",
             }), 409
         body = request.get_json(silent=True) or {}
+        forward, strafe, rotate = body.get("forward", 0), body.get("strafe", 0), body.get("rotate", 0)
         try:
             if allow_mecanum_selection:
                 drive_model = body.get("drive_model", "project")
@@ -846,12 +903,13 @@ def create_app(
                 if drive_test_timer is not None and selected_drive is not project_test_drive:
                     stop_outputs()
                 cancel_drive_test_timeout()
-                result = selected_drive.drive(
-                    body.get("forward", 0),
-                    body.get("strafe", 0),
-                    body.get("rotate", 0),
-                    body.get("speed", 0.4),
-                )
+                if selected_drive is mecanum_test_drive:
+                    # The confirmed mixer still gets the project's driving
+                    # assist (heading hold, snap turns) if robot.py has one.
+                    steer = getattr(active_drive, "steer", None)
+                    if callable(steer):
+                        forward, strafe, rotate = steer(forward, strafe, rotate, body.get("speed", 0.4))
+                result = selected_drive.drive(forward, strafe, rotate, body.get("speed", 0.4))
                 response = jsonify({**result, "ok": True})
                 if selected_drive is project_test_drive:
                     arm_drive_test_timeout()

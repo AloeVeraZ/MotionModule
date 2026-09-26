@@ -77,6 +77,16 @@ class MecanumDrive:
         by itself, like autonomous.py, calls move() instead.
         """
 
+        forward, strafe, rotate = self.steer(forward, strafe, rotate, speed)
+        return self.move(forward, strafe, rotate, speed=speed)
+
+    def steer(self, forward, strafe, rotate, speed=0.5):
+        """The driving assist: the driver's command with the IMU's turn added.
+
+        The Driver Station calls this too when "Use confirmed Mecanum mixer" is
+        ticked, so heading hold and snap turns work with either mixer.
+        """
+
         forward, strafe, rotate = clamp(forward), clamp(strafe), clamp(rotate)
         limit = clamp(speed, 0.0, 1.0)
         if self.sensors is not None:
@@ -84,7 +94,7 @@ class MecanumDrive:
             if turn is not None:
                 # The assist works in real motor power; rotate is scaled by the limit.
                 rotate = clamp(turn / limit) if limit > 0 else 0.0
-        return self.move(forward, strafe, rotate, speed=limit)
+        return forward, strafe, rotate
 
     def move(self, forward, strafe, rotate, speed=0.5):
         """Set the wheels exactly as asked, with no assist."""

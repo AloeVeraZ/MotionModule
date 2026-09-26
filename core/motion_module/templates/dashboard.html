@@ -1887,6 +1887,14 @@ heading = imu.heading() if imu is not None else None
                 <a class="button" href="/api/projects/sample" download>Download Mecanum sample</a>
               </div>
               <div class="panel-body stack">
+                <div class="notice">An update never overwrites a robot folder
+                  someone edited, so a newer sample does not reach it by itself.
+                  <strong>Use this sample on the robot</strong> replaces
+                  <code>robots/Mecanum</code> with the sample this release ships,
+                  keeps the old folder under <code>backups</code>, and restarts.
+                  <div class="button-row"><button class="button" id="installSample" type="button">Use this sample on the robot</button></div>
+                  <p class="message" id="installSampleMessage" hidden></p>
+                </div>
                 <div class="format-file">
                   <span class="tag">Required</span>
                   <code>MyRobot/robot.py</code>
@@ -3835,6 +3843,33 @@ async function deploySelectedProject() {
 $('#projectFolder')?.addEventListener('change', selectProjectFolder);
 $('#deployConfirm')?.addEventListener('change', updateDeployButton);
 $('#deployProject')?.addEventListener('click', deploySelectedProject);
+
+async function installSample() {
+  const message = $('#installSampleMessage');
+  if (!window.confirm('Replace the robot folder "Mecanum" with the sample from this release? '
+    + 'Every output stops, the old folder is kept in backups, and the robot software restarts.')) return;
+  const button = $('#installSample');
+  button.disabled = true;
+  message.hidden = false;
+  message.classList.remove('error');
+  message.textContent = 'Installing the sample…';
+  try {
+    const response = await fetch('/api/projects/sample/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-MotionModule-Token': dashboardToken },
+      body: JSON.stringify({ confirmed: true }),
+    });
+    const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+    if (!response.ok) throw new Error(data.error || `Install failed (${response.status})`);
+    message.textContent = `${data.message} Waiting for the dashboard to return…`;
+    waitForRobot();
+  } catch (error) {
+    message.textContent = error.message;
+    message.classList.add('error');
+    button.disabled = false;
+  }
+}
+$('#installSample')?.addEventListener('click', installSample);
 
 /* ---------------------------------------------------------- terminal */
 

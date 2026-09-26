@@ -353,6 +353,52 @@ class AutonomousSquareTests(unittest.TestCase):
         self.assertFalse(robot.moving())
 
 
+class StillSensors:
+    """An IMU on a robot that is not moving."""
+
+    def __init__(self, heading):
+        self.value = heading
+
+    def heading(self):
+        return self.value
+
+    def rate(self):
+        return 0.0
+
+
+class DriverStationPathTests(unittest.TestCase):
+    """The Driver Station's "confirmed Mecanum mixer" box must keep the assist."""
+
+    def post_drive(self, drive_model):
+        from motion_module.config import default_config
+        from motion_module.controller import MotionModule
+        from motion_module.dashboard import create_app
+        from motion_module.gpio import MockGPIO
+
+        module = MotionModule(default_config(), gpio=MockGPIO())
+        self.addCleanup(module.close)
+        drive = MecanumDrive(module, wheels=("driver_1a", "driver_1b", "driver_2a", "driver_2b"),
+                             sensors=StillSensors(0.0))
+        drive.control("turn_left_90", 1)
+        app = create_app(module, drive)
+        client = app.test_client()
+        response = client.post("/api/drive", headers={"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]},
+                               json={"sequence": 1, "forward": 0, "strafe": 0, "rotate": 0,
+                                     "speed": 0.5, "drive_model": drive_model})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        return dict(module.motor_values)
+
+    def test_a_snap_turn_turns_the_wheels_with_either_mixer(self):
+        project = self.post_drive("project")
+        confirmed = self.post_drive("mecanum")
+        self.assertEqual(project, confirmed)
+        # A left turn: the same wheel directions as holding Q (rotate +1).
+        from motion_module.mecanum import mix
+        left = mix(0, 0, 1)
+        for channel in (1, 2, 3, 4):
+            self.assertGreater(confirmed[channel] * left[channel], 0, channel)
+
+
 class ControlBindingTests(unittest.TestCase):
     def test_keys_and_buttons_can_press_a_declared_control(self):
         snapshot = normalize_snapshot({

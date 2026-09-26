@@ -826,6 +826,37 @@ class DashboardTests(unittest.TestCase):
             self.assertTrue((Path(directory) / "robots" / "TestBot" / "hardware.py").is_file())
             activate.assert_called_once()
 
+    def test_use_this_sample_replaces_an_edited_folder_and_keeps_a_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            robot = Path(directory) / "robots" / "Mecanum"
+            robot.mkdir(parents=True)
+            (robot / "robot.py").write_text("# someone's own robot\n", encoding="utf-8")
+            restarted = threading.Event()
+            app = create_app(
+                self.module, MecanumDrive(self.module), self.network, project_name="Mecanum",
+                terminal_manager=self.terminal, workspace_directory=directory,
+                restart_callback=restarted.set,
+            )
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            self.assertEqual(client.post("/api/projects/sample/install", json={"confirmed": True}).status_code, 403)
+            self.assertEqual(client.post("/api/projects/sample/install", headers=headers, json={}).status_code, 400)
+            self.assertEqual((robot / "robot.py").read_text(encoding="utf-8"), "# someone's own robot\n")
+            with patch("motion_module.dashboard.activate_project") as activate, patch(
+                "motion_module.dashboard.time.sleep", return_value=None
+            ):
+                accepted = client.post("/api/projects/sample/install", headers=headers, json={"confirmed": True})
+                self.assertEqual(accepted.status_code, 202, accepted.get_json())
+                self.assertTrue(restarted.wait(1))
+            activate.assert_called_once()
+            self.assertTrue(self.module.stopped)
+            for name in ("robot.py", "sensors.py", "dashboard.py", "autonomous.py", "hardware.py"):
+                self.assertEqual((robot / name).read_bytes(), (EXAMPLE_DIR / name).read_bytes(), name)
+            backups = list((Path(directory) / "backups").iterdir())
+            self.assertEqual(len(backups), 1)
+            self.assertEqual((backups[0] / "robot.py").read_text(encoding="utf-8"), "# someone's own robot\n")
+            self.assertIn("backups", accepted.get_json()["message"])
+
     def test_usb_api_exposes_read_only_inventory(self):
         with patch("motion_module.dashboard.usb_devices", return_value={
             "available": True,
