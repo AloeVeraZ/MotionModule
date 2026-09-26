@@ -935,6 +935,39 @@
   .test-row { grid-template-columns: 1fr 1fr; }
   .test-row > span { grid-column: 1 / -1; }
 }
+.imu-body { display: grid; justify-items: center; gap: .75rem; }
+.heading-dial {
+  --yaw: 0deg;
+  position: relative;
+  display: grid; place-items: center;
+  width: min(11.25rem, 100%);
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--surface) 0 60%, transparent 60.5%),
+    conic-gradient(from -2deg, var(--accent) 0 4deg, transparent 4deg),
+    repeating-conic-gradient(from -1deg, var(--line) 0 2deg, transparent 2deg 30deg),
+    var(--well);
+}
+.heading-dial::before {
+  content: "";
+  position: absolute; left: 50%; top: 13%;
+  width: 2px; height: 37%;
+  border-radius: 2px;
+  background: var(--accent);
+  transform-origin: 50% 100%;
+  transform: translateX(-50%) rotate(var(--yaw));
+}
+.heading-dial::after { content: ""; position: absolute; width: .5rem; height: .5rem; border-radius: 50%; background: var(--ink); }
+.heading-readout { position: relative; z-index: 2; min-width: 4.75rem; padding: .375rem .5rem; border-radius: var(--radius-xs); background: var(--surface); text-align: center; }
+.heading-readout strong { display: block; font: 700 1.625rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.heading-readout small { color: var(--faint); font: 700 .6875rem/1 var(--font-display); letter-spacing: var(--tracking-label); }
+.imu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .375rem; width: 100%; }
+.imu-value { padding: .5rem .25rem; border: 1px solid var(--line-soft); border-radius: var(--radius-xs); background: var(--well); text-align: center; }
+.imu-value small { display: block; color: var(--faint); font: 700 .6875rem/1 var(--font-display); letter-spacing: var(--tracking-label); }
+.imu-value strong { display: block; margin-top: .25rem; font: 700 1rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.imu-detail { color: var(--faint); font-size: .6875rem; line-height: 1.5; text-align: center; }
 </style>
 </head>
 <body>
@@ -1380,6 +1413,20 @@ heading = imu.heading() if imu is not None else None
 
       <!-- ----------------------------------------------------- tests -->
       <div data-panel="tests" hidden>
+    <section class="card spaced">
+      <div class="panel-head"><h2>IMU calibration</h2><span id="imuStatus">Not configured</span></div>
+      <div class="panel-body imu-body">
+        <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
+        <div class="imu-grid">
+          <div class="imu-value"><small>PITCH</small><strong id="imuPitch">—</strong></div>
+          <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
+          <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
+        </div>
+        <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
+        <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
+        <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
+      </div>
+    </section>
         <div class="notice danger page-notice">
           <strong>Raise the robot first.</strong> Both tools below move real
           hardware. Every wheel must be off the ground, the mechanism path must
@@ -4239,6 +4286,36 @@ $$('[data-copy]').forEach(button => button.addEventListener('click', async () =>
 /* ------------------------------------------------------------ startup */
 
 loadConfig().then(refreshStatus);
+const numberText = (value, suffix='°') => Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : '—';
+function renderImu(imu) {
+  const available = Boolean(imu && imu.connected);
+  $('#imuStatus').textContent = !imu ? 'Not configured' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
+  // Yaw counts up turning left (counter-clockwise), as robot code and rotate
+  // do. Shown from -180 to 180; the needle turns the way the robot turned.
+  const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
+  $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
+  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
+}
+
+$('#calibrateImu').addEventListener('click', async () => {
+  $('#calibrateImu').disabled = true;
+  try {
+    for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) $('#'+id).checked = false;
+    if (!await stopAll()) throw new Error('Could not confirm stopped outputs. Reconnect before calibrating.');
+    const result = await jsonFetch('/api/imu/calibrate', {method: 'POST', headers: apiHeaders, body: '{}'});
+    $('#imuCalibration').textContent = result.message;
+  } catch (error) { $('#imuCalibration').textContent = error.message; }
+  finally { $('#calibrateImu').disabled = false; }
+});
+
+async function refreshTestImu() {
+  if (document.querySelector('[data-panel="tests"]').hidden) return;
+  try { renderImu((await jsonFetch('/api/drive/telemetry')).imu); }
+  catch (_) { renderImu(null); }
+}
+setInterval(refreshTestImu, 500);
+refreshTestImu();
+
 setInterval(refreshStatus, 1000);
 refreshNetwork(true);
 setInterval(() => refreshNetwork(true), 5000);

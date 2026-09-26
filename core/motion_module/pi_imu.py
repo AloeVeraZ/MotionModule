@@ -95,6 +95,7 @@ class LocalIMU:
         self._lock = threading.Lock()
         self._offset = 0.0
         self._pending_zero: float | None = None
+        self._pending_level = False
         # Pitch and roll that read as level, set by zero(level=True).
         self._level = (0.0, 0.0)
         self._error = ""
@@ -226,6 +227,9 @@ class LocalIMU:
         if self._pending_zero is not None and self._driver.state == "ok" and self._driver.yaw is not None:
             self._offset = self._driver.yaw - self._pending_zero
             self._pending_zero = None
+            if self._pending_level and self._driver.pitch is not None and self._driver.roll is not None:
+                self._level = (self._driver.pitch, self._driver.roll)
+                self._pending_level = False
 
     # -- read by robot code --------------------------------------------------
 
@@ -336,6 +340,15 @@ class LocalIMU:
             raise ValueError("A level offset is two angles between -90 and 90 degrees")
         with self._lock:
             self._level = values
+
+    def calibrate_zero(self) -> None:
+        """Measure bias at rest, then make the first usable pose the new zero."""
+        with self._lock:
+            if not self._usable(self._clock()):
+                raise ValueError("Wait for a connected, calibrated IMU before calibrating again")
+            self._driver.recalibrate()
+            self._pending_zero = 0.0
+            self._pending_level = True
 
     def recalibrate(self) -> None:
         """Measure the gyro at rest again; keep the robot still for a second.

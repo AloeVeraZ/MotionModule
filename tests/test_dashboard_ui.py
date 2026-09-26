@@ -132,6 +132,12 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_q_and_e_continuously_send_pure_rotation_to_the_full_station(self):
         self.run_behavior("rotation-held", self.station_fixture)
 
+    def test_autonomous_selection_enable_start_and_progress(self):
+        self.run_behavior('station-autonomous', self.station_fixture)
+
+    def test_station_calibration_disarms(self):
+        self.run_behavior('station-calibration', self.station_fixture)
+
     def test_full_station_mixer_selection_stops_and_requires_reenabling(self):
         self.run_behavior("station-drive-model", self.station_fixture)
 

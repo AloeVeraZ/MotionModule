@@ -294,7 +294,7 @@ class FakeTime:
         self.robot.advance(seconds)
 
 
-class AutonomousSquareTests(unittest.TestCase):
+class AutonomousTurnTests(unittest.TestCase):
     def run_plan(self, robot, stop=None):
         drive = MecanumDrive(robot, sensors=robot)
         routine = sample_autonomous.MecanumAutonomous(robot, drive)
@@ -306,7 +306,7 @@ class AutonomousSquareTests(unittest.TestCase):
             sample_autonomous.time = original
         return routine
 
-    def test_the_square_ends_facing_where_it_started_without_zeroing(self):
+    def test_four_turns_end_facing_where_it_started_without_zeroing(self):
         robot = SimRobot(heading=30, drift=8)
         headings = []
         original = robot.advance
@@ -327,7 +327,8 @@ class AutonomousSquareTests(unittest.TestCase):
     def test_without_an_imu_it_does_not_move(self):
         robot = SimRobot()
         robot.imu_ok = False
-        self.run_plan(robot)
+        with self.assertRaisesRegex(RuntimeError, "IMU is not ready"):
+            self.run_plan(robot)
         self.assertFalse(robot.moving())
         self.assertEqual(robot.now, 0.0)
 
@@ -341,9 +342,38 @@ class AutonomousSquareTests(unittest.TestCase):
                 robot.imu_ok = False
 
         robot.advance = failing
-        self.run_plan(robot)
+        with self.assertRaisesRegex(RuntimeError, "IMU heading lost"):
+            self.run_plan(robot)
         self.assertFalse(robot.moving())
         self.assertLess(robot.now, 1.0)
+
+    def test_stalled_turn_fails_and_does_not_advance(self):
+        robot = SimRobot()
+        robot.advance = lambda seconds: setattr(robot, 'now', robot.now + seconds)
+        with self.assertRaisesRegex(RuntimeError, 'did not settle'):
+            self.run_plan(robot)
+        self.assertFalse(robot.moving())
+        self.assertLess(robot.now, 7)
+
+    def test_turns_use_the_confirmed_teleop_motor_sequence_and_can_rerun(self):
+        from motion_module.mecanum import mix as confirmed_mix
+        robot = SimRobot()
+        recorded = []
+        original = robot.set_motors
+        def record(outputs):
+            original(outputs)
+            if any(robot.outputs.values()):
+                recorded.append(dict(robot.outputs))
+        robot.set_motors = record
+        for _ in range(2):
+            routine = self.run_plan(robot)
+            self.assertEqual(routine.progress['completed'], 4)
+            self.assertLessEqual(abs(routine.progress['error']), 2)
+        self.assertTrue(recorded)
+        for outputs in recorded:
+            turn = outputs['front_left']
+            names = ('front_left', 'rear_left', 'front_right', 'rear_right')
+            self.assertEqual(dict(enumerate((outputs[name] for name in names), 1)), confirmed_mix(0, 0, turn))
 
     def test_disable_stops_it(self):
         stop = threading.Event()

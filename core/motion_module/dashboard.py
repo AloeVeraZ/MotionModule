@@ -1003,6 +1003,27 @@ def create_app(
     def drive_control_list():
         return jsonify({"ok": True, "controls": drive_controls(), "project": project_name})
 
+    @app.post("/api/imu/calibrate")
+    def calibrate_imu():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        with command_lock:
+            if autonomous.running:
+                return jsonify({"ok": False, "error": "Disable autonomous before calibrating"}), 409
+            sensors = getattr(active_drive, "sensors", None)
+            imu = getattr(sensors, "imu", None) or getattr(module, "_local_imu", None)
+            if not callable(getattr(imu, "calibrate_zero", None)):
+                return jsonify({"ok": False, "error": "The active project has no supported Pi IMU. Load its sensors.py first."}), 409
+            stop_outputs()
+            try:
+                imu.calibrate_zero()
+            except ValueError as error:
+                return jsonify({"ok": False, "error": str(error)}), 409
+            assist = getattr(active_drive, "assist", None)
+            if callable(getattr(assist, "cancel", None)):
+                assist.cancel()
+        return jsonify({"ok": True, "message": "Calibrating gyroscope. Keep the robot still; heading, pitch and roll will read zero when ready."})
+
     @app.get("/api/camera/usb-<int:slot>.mjpg")
     def usb_camera_stream(slot: int):
         return Response(

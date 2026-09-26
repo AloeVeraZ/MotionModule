@@ -449,6 +449,35 @@ async function run(scenario) {
     const next = reloaded.driveRequests().at(-1).payload.sequence;
     assert(Number.isSafeInteger(next), 'Sequence must retain integer precision');
     assert(next > previous, 'A reloaded page must not restart its sequence below the server watermark');
+  } else if (scenario === 'station-autonomous') {
+    await app.$('#disableButton').fire('click');
+    vm.runInContext("autoState = {configured:false, state:'idle'}; updateEnableButton()", app.context);
+    assert.equal(app.$('#modeAuto').disabled, false);
+    await app.$('#modeAuto').fire('click');
+    assert.equal(app.$('#driverInputPanel').hidden, true);
+    assert.equal(app.$('#autoPanel').hidden, false);
+    assert.match(app.$('#autoPlanHelp').textContent, /no autonomous.py/);
+    assert.equal(app.$('#enableButton').disabled, true);
+    vm.runInContext("autoState = {configured:true, state:'idle', progress:{steps:[['turn',90],['turn',180]]}}; renderAutoStatus(); updateEnableButton()", app.context);
+    app.$('#armConfirm').checked = true;
+    await app.$('#armConfirm').fire('change');
+    await app.$('#enableButton').fire('click');
+    assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Enable must not start motion');
+    assert.equal(app.$('#startAuto').disabled, false);
+    await app.$('#startAuto').fire('click');
+    assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 1);
+    vm.runInContext("autoState = {configured:true,state:'running',elapsed_seconds:1,progress:{steps:[['turn',90]],step:0,target:90,heading:88,error:2}};renderAutoStatus();updateEnableButton()", app.context);
+    assert.match(app.$('#autoLive').textContent, /Error 2.0/);
+    assert.equal(app.$('#startAuto').disabled, true);
+    await app.$('#disableButton').fire('click');
+    assert.equal(app.$('#startAuto').disabled, true);
+    assert(app.requests.some(r => r.url === '/api/stop'));
+  } else if (scenario === 'station-calibration') {
+    await app.$('#calibrateImu').fire('click');
+    await app.settle();
+    assert.equal(app.$('#startAuto').disabled, true);
+    assert(app.requests.some(r => r.url === '/api/imu/calibrate'));
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED');
   } else if (scenario === 'station-telemetry-layout') {
     await app.context.dashboard.refreshTelemetry();
     await app.settle();

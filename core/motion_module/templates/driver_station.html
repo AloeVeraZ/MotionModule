@@ -651,7 +651,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
       <div class="panel-body stack">
         <div class="mode-switch" role="group" aria-label="Robot mode">
           <button type="button" id="modeTeleop" class="active" data-mode="teleop">Teleoperated</button>
-          <button type="button" id="modeAuto" data-mode="autonomous" disabled>Autonomous</button>
+          <button type="button" id="modeAuto" data-mode="autonomous">Autonomous</button>
         </div>
         <div class="auto-status" id="autoStatus" hidden>
           <span class="eyebrow">Autonomous routine</span>
@@ -676,7 +676,16 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
       </div>
     </section>
 
-    <section class="panel input-panel">
+    <section class="panel" id="autoPanel" hidden>
+      <div class="panel-head"><h2>Autonomous commands</h2><span>autonomous.py</span></div>
+      <div class="panel-body stack">
+        <p id="autoPlanHelp">Loading the active project…</p>
+        <ol id="autoCommands"></ol>
+        <p id="autoLive" aria-live="polite"></p>
+        <button class="command enable" id="startAuto" type="button" disabled>START AUTONOMOUS</button>
+      </div>
+    </section>
+    <section class="panel input-panel" id="driverInputPanel">
       <div class="panel-head"><h2>Driver input</h2><span id="controllerSummary">Keyboard</span></div>
       <div class="panel-body stack">
         <div class="controller-name" id="controllerName">No game controller detected</div>
@@ -730,6 +739,8 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
           <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
           <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
         </div>
+        <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
+        <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
         <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
       </div>
     </section>
@@ -888,11 +899,12 @@ function setSignal(id, state, text) {
 function updateEnableButton() {
   const ready = connected && $('#armConfirm').checked && !armed;
   $('#enableButton').disabled = !ready || (mode === 'autonomous' && !autoState.configured);
-  $('#enableButton').textContent = mode === 'autonomous' ? 'RUN AUTO' : 'ENABLE';
+  $('#enableButton').textContent = 'ENABLE';
+  $('#startAuto').disabled = !armed || !connected || !autoState.configured || autoState.state === 'running';
   // Switching modes mid-run would leave the routine driving under a teleop
   // label, so the choice is locked while the robot is enabled.
   $('#modeTeleop').disabled = armed;
-  $('#modeAuto').disabled = armed || !autoState.configured;
+  $('#modeAuto').disabled = armed;
   $('#touchDrive').classList.toggle('locked', !canDrive());
 }
 
@@ -902,6 +914,8 @@ function setMode(next) {
   $$('.mode-switch button').forEach(button =>
     button.classList.toggle('active', button.dataset.mode === mode));
   $('#autoStatus').hidden = mode !== 'autonomous';
+  $('#autoPanel').hidden = mode !== 'autonomous';
+  $('#driverInputPanel').hidden = mode === 'autonomous';
   $('#robotState').querySelector('small').textContent = mode === 'autonomous'
     ? 'The routine will not start until you enable it'
     : 'Driver commands are blocked';
@@ -929,7 +943,18 @@ function renderAutoStatus() {
     : title;
   $('#autoDetail').textContent = autoState.configured
     ? (autoState.error || detail)
-    : 'This project has no autonomous.py, so it has no autonomous routine. Adding one is optional.';
+    : (autoState.load_error || 'The active robot folder has no autonomous.py. Open Code to deploy your routine or install the Mecanum sample, then reload.');
+  const progress = autoState.progress;
+  $('#autoPlanHelp').textContent = !autoState.configured ? $('#autoDetail').textContent
+    : 'Enable after confirming the area is clear, then press Start. Angles count from the starting direction.';
+  replaceWith($('#autoCommands'), (progress?.steps || []).map((step, index) => {
+    const done = index < (progress.completed || 0);
+    const active = index === progress.step && autoState.state === 'running';
+    return element('li', '', `${done ? '✓ ' : active ? '▶ ' : ''}${step.join(' ')}${step[0] === 'turn' ? '° from start' : ''}`);
+  }));
+  $('#autoLive').textContent = progress && Number.isFinite(progress.error)
+    ? `Target ${progress.target.toFixed(1)}° · Heading ${progress.heading.toFixed(1)}° · Error ${progress.error.toFixed(1)}° (±2° tolerance)`
+    : autoState.configured ? 'Live commands appear when the routine reports progress.' : '';
 }
 
 async function refreshAutonomous() {
@@ -964,7 +989,7 @@ function setArmed(value) {
   state.classList.toggle('armed', armed);
   state.querySelector('strong').textContent = armed ? 'ENABLED' : 'DISABLED';
   state.querySelector('small').textContent = armed
-    ? (mode === 'autonomous' ? 'The autonomous routine is running' : 'Driver commands are live')
+    ? (mode === 'autonomous' ? (autoState.state === 'running' ? 'The autonomous routine is running' : 'Ready to start autonomous') : 'Driver commands are live')
     : (mode === 'autonomous' ? 'The routine will not start until you enable it' : 'Driver commands are blocked');
   setSignal('#inputSignal', armed ? 'good' : '',
     armed ? (mode === 'autonomous' ? 'Autonomous' : 'Ready') : 'Blocked');
@@ -1525,14 +1550,30 @@ async function loadControls() {
     }));
   } catch (error) { replaceWith($('#controlList'), [element('p','empty-copy',error.message)]); }
 }
-async function sendControl(name,value) { if(!armed) return; try{await jsonFetch('/api/drive/control',{method:'POST',headers:apiHeaders,body:JSON.stringify({name,value:Number(value)})});}catch(_){setArmed(false);} }
+async function sendControl(name,value) { if(!canDrive()) return; try{await jsonFetch('/api/drive/control',{method:'POST',headers:apiHeaders,body:JSON.stringify({name,value:Number(value)})});}catch(_){setArmed(false);} }
+
+$('#calibrateImu').addEventListener('click', async () => {
+  setArmed(false); await stopAll();
+  $('#calibrateImu').disabled = true;
+  try {
+    const result = await jsonFetch('/api/imu/calibrate', {method: 'POST', headers: apiHeaders, body: '{}'});
+    $('#imuCalibration').textContent = result.message;
+  } catch (error) { $('#imuCalibration').textContent = error.message; }
+  finally { $('#calibrateImu').disabled = false; }
+});
 
 $('#armConfirm').addEventListener('change', updateEnableButton);
 $$('.mode-switch button').forEach(button =>
   button.addEventListener('click', () => setMode(button.dataset.mode)));
 $('#enableButton').addEventListener('click', async () => {
-  if (mode === 'autonomous' && !await startAutonomous()) return;
+  if (!connected || !$('#armConfirm').checked || (mode === 'autonomous' && !autoState.configured)) return;
   setArmed(true);
+});
+$('#startAuto').addEventListener('click', async () => {
+  if (!armed || !connected || mode !== 'autonomous' || !$('#armConfirm').checked) return;
+  $('#startAuto').disabled = true;
+  if (!await startAutonomous()) setArmed(false);
+  updateEnableButton();
 });
 $('#disableButton').addEventListener('click', () => setArmed(false));
 $('#stopButton').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });

@@ -227,11 +227,16 @@ class MecanumSensorTests(unittest.TestCase):
         sensors = FakeHeadingSensors()
         sensors.value = 170.0
         module = TurningModule(sensors)
-        drive = MecanumDrive(module, sensors=sensors)
+        # This instantaneous, frictionless fixture needs no breakaway power.
+        # The dynamic heading tests exercise the real minimum-power setting.
+        from motion_module.heading import HeadingController
+        drive = MecanumDrive(module, sensors=sensors, heading=HeadingController(min_turn_power=0))
         routine = MecanumAutonomous(module, drive)
         routine.turn_to(-170, threading.Event())
         # Turning left 20 degrees from 170 lands on -170 after passing 180.
         self.assertGreater(sensors.value, 180)
+        self.assertAlmostEqual(sensors.value, 190, delta=2)
+        self.assertEqual(set(module.outputs.values()), {0})
 
     def test_autonomous_turn_stops_when_disabled(self):
         sensors = FakeHeadingSensors()

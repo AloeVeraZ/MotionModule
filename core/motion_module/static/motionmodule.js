@@ -15,7 +15,7 @@
 
   const root = document.documentElement;
   const THEME_KEY = 'motionmodule-theme';
-  const THEME_COLORS = { dark: '#080808', light: '#f3f1ec' };
+  const THEME_COLORS = { dark: '#080808', light: '#d5dce7' };
 
   const read = key => {
     try { return localStorage.getItem(key); } catch (error) { return null; }

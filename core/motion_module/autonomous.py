@@ -137,6 +137,7 @@ class AutonomousRunner:
                 "load_error": self._load_error,
                 "elapsed_seconds": elapsed,
                 "duration_seconds": self._duration() if self.configured else None,
+                "progress": getattr(self._routine, "progress", None),
             }
 
     def start(self) -> None:

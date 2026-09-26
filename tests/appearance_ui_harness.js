@@ -40,7 +40,7 @@ for (const blockedStorage of [false, true]) {
   };
   expect('dark', 'dark');
   buttons[0].click(); expect('light', 'light');
-  assert.equal(meta.content, '#f3f1ec');
+  assert.equal(meta.content, '#d5dce7');
   buttons[1].click(); expect('dark', 'dark');
   buttons[2].click(); expect('dark', 'system');
   scheme.matches = true; scheme.follow(); expect('light', 'system');

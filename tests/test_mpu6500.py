@@ -326,6 +326,20 @@ class ManualZeroTests(LocalImuTestCase):
         self.run_for(5)
         self.assertAlmostEqual(self.imu.heading(), 30, delta=2)
 
+    def test_calibrate_zero_measures_bias_and_zeros_all_angles(self):
+        self.turn(90)
+        self.world.pitch, self.world.roll = 6, -4
+        self.run_for(3)
+        self.imu.calibrate_zero()
+        self.assertEqual(self.imu.state, 'calibrating')
+        self.assertIsNone(self.imu.heading())
+        with self.assertRaises(ValueError):
+            self.imu.calibrate_zero()
+        self.run_for(3)
+        self.assertTrue(self.imu.calibrated)
+        for value in (self.imu.heading(), self.imu.pitch(), self.imu.roll(), self.imu.rate()):
+            self.assertAlmostEqual(value, 0, delta=0.5)
+
     def test_recalibrating_keeps_the_heading_and_its_zero(self):
         self.turn(40)
         before = self.imu.heading()

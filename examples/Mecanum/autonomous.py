@@ -1,21 +1,21 @@
-"""Optional autonomous routine for the Mecanum sample: an IMU-guided square.
+"""Optional autonomous routine for the Mecanum sample: four IMU-guided turns.
 
 This file is optional. Delete it and the robot still drives; the Driver
-Station simply shows no autonomous mode. Add it and an AUTONOMOUS button
-appears next to TELEOPERATED, and RUN AUTO starts what is written here.
+Station explains that no routine is loaded. Choose Autonomous, Enable,
+then Start Autonomous to run what is written here.
 
 MotionModule calls `create_autonomous(module, drive)` once at startup, then
 calls `run(stop)` on the object it returns each time the operator starts
 autonomous.
 
-What it does: drive forward holding its heading, turn exactly 90° left by the
-IMU, and repeat four times, finishing where it started, facing the same way.
+What it does: turn left to 90, 180, 270 and 360 degrees from the starting
+direction, settling within two degrees at each stop. It never translates.
 Change PLAN to make your own. The heading loop is the one FTC teams use (see
 motion_module/heading.py) and shares its tuning, HEADING in robot.py, with
 the Driver Station's snap turns.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
-faces when RUN AUTO is pressed, so line the robot up first; press Zero IMU in
+faces when Start Autonomous is pressed, so line the robot up first; press Zero IMU in
 the Driver Station only when you want to set 0° yourself.
 
 The robot has no wheel encoders, so a "drive" step goes for a set time, not
@@ -38,10 +38,7 @@ from motion_module.heading import HeadingController, Settle, wrap180
 #                                         start heading (negative = right)
 #   ("hold", seconds)                     stay put, correcting the heading
 PLAN = [
-    ("drive", 1.0, 0.0, 1.0), ("turn", 90), ("hold", 0.3),
-    ("drive", 1.0, 0.0, 1.0), ("turn", 180), ("hold", 0.3),
-    ("drive", 1.0, 0.0, 1.0), ("turn", 270), ("hold", 0.3),
-    ("drive", 1.0, 0.0, 1.0), ("turn", 360), ("hold", 0.3),
+    ("turn", 90), ("turn", 180), ("turn", 270), ("turn", 360),
 ]
 
 
@@ -54,7 +51,7 @@ class MecanumAutonomous:
     duration_seconds = 30.0
 
     DRIVE_SPEED = 0.35      # power limit while driving a step
-    TURN_TIMEOUT = 3.0      # seconds a turn may take before moving on
+    TURN_TIMEOUT = 6.0      # seconds before failing a turn, never skipping it
     LOOP_SECONDS = 0.02     # 50 updates a second
 
     def __init__(self, module, drive):
@@ -67,6 +64,7 @@ class MecanumAutonomous:
         # move() sets the wheels with no driver assist in the way.
         self.move = getattr(drive, "move", drive.drive)
         self.target = 0.0
+        self.progress = {"steps": [list(step) for step in PLAN], "step": None}
 
     def ready(self):
         return self.sensors is not None and self.sensors.heading() is not None
@@ -108,12 +106,18 @@ class MecanumAutonomous:
                 return False
             heading = self.sensors.heading()
             if heading is None:
-                return False
+                raise RuntimeError("IMU heading lost; autonomous stopped")
+            self.progress = {**self.progress, "target": self.target,
+                             "heading": heading, "error": wrap180(self.target - heading)}
             if settle.update(self.target, heading, time.monotonic()):
                 break
             turn = self.turn_power(in_place=True)
+            if turn is None:
+                raise RuntimeError("IMU heading lost; autonomous stopped")
             self.move(0, 0, turn, speed=1.0)
             time.sleep(self.LOOP_SECONDS)
+        else:
+            raise RuntimeError(f"Turn to {self.target:g}° did not settle within {self.TURN_TIMEOUT:g}s")
         self.drive.stop()
         return True
 
@@ -135,25 +139,33 @@ class MecanumAutonomous:
     def run(self, stop):
         """Called once when the operator starts autonomous."""
 
-        if not self.ready():
-            print("Autonomous: the IMU is not ready, so the robot will not move.")
-            return
-        start = self.sensors.heading()
-        self.target = start
-        for step in PLAN:
-            kind = step[0]
-            if kind == "drive":
-                _, forward, strafe, seconds = step
-                done = self.drive_for(forward, strafe, seconds, stop)
-            elif kind == "turn":
-                done = self.turn_to(start + step[1], stop)
-            elif kind == "hold":
-                done = self.hold(step[1], stop)
-            else:
-                raise ValueError(f"Unknown autonomous step: {step!r}")
-            if not done:
-                break
-        self.drive.stop()
+        self.progress = {"steps": [list(step) for step in PLAN], "step": None}
+        try:
+            if not self.ready():
+                raise RuntimeError("IMU is not ready; calibrate it before running autonomous")
+            start = self.sensors.heading()
+            self.target = start
+            for index, step in enumerate(PLAN):
+                if stop.is_set():
+                    return
+                self.progress = {**self.progress, "step": index, "start_heading": start}
+                kind = step[0]
+                if kind == "drive":
+                    _, forward, strafe, seconds = step
+                    done = self.drive_for(forward, strafe, seconds, stop)
+                elif kind == "turn":
+                    done = self.turn_to(start + step[1], stop)
+                elif kind == "hold":
+                    done = self.hold(step[1], stop)
+                else:
+                    raise ValueError(f"Unknown autonomous step: {step!r}")
+                if not done:
+                    if not stop.is_set():
+                        raise RuntimeError("IMU heading lost; autonomous stopped")
+                    return
+                self.progress = {**self.progress, "completed": index + 1}
+        finally:
+            self.drive.stop()
 
 
 def create_autonomous(module, drive):

@@ -147,10 +147,26 @@ The Driver Station's IMU buttons:
 Tuning lives in `HEADING` at the top of `robot.py`; see
 [heading control](../../docs/CODING.md#heading-control-motion_moduleheading).
 
-`autonomous.py` drives an IMU-guided square: forward while holding the heading,
-then exactly 90° left, four times, ending where it started. Angles count from
-the way the robot faces when RUN AUTO is pressed; it never zeroes the IMU.
-Without a working IMU it does not move. Edit `PLAN` to make your own.
+`autonomous.py` turns in place to 90°, 180°, 270°, then 360° (back to the
+starting direction). Each turn uses the confirmed teleop Mecanum mixer and
+PD heading correction, settling within 2° before continuing. A turn that
+cannot settle within 6 seconds fails and stops the routine. It never drives
+forward or strafes. Angles count from the heading when Start is pressed.
+
+Choose Autonomous, confirm the area is clear, Enable, then Start Autonomous.
+The driver-input panel becomes the command list with live target, heading,
+and error. After completion, Enable and Start again to repeat. Edit `PLAN`
+to change the routine. Deploy this folder first; updating MotionModule keeps
+owner-edited robot folders, so an old folder may have no autonomous.py.
+
+Calibrate gyroscope beside the IMU display (also in Debug → Test outputs)
+stops outputs, measures gyro bias, and sets the current heading, pitch and
+roll to zero. Keep the robot stationary. Rate should read near zero at rest;
+it is a measurement and will still show sensor noise. This calibration does
+not tune the heading controller. Adjust `HEADING` in robot.py from observed
+turns: lower kp or raise kd for overshoot; raise minimum turn power if stalled.
+The default PD gains are simulation-tested, not physically tuned for your floor.
+
 
 No extra sensors are declared. An Arduino **GIGA R1 WiFi** can provide optional
 USB GPIO inputs for future additions using the existing auto-detection and

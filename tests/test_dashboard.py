@@ -193,6 +193,24 @@ class DashboardTests(unittest.TestCase):
         self.client = self.app.test_client()
         self.headers = {"X-MotionModule-Token": self.app.config["DASHBOARD_TOKEN"]}
 
+    def test_imu_calibration_requires_session_and_stops_outputs(self):
+        imu = Mock()
+        self.module._local_imu = imu
+        self.assertEqual(self.client.post('/api/imu/calibrate').status_code, 403)
+        imu.calibrate_zero.assert_not_called()
+        self.module.outputs[1] = 0.4
+        response = self.client.post('/api/imu/calibrate', headers=self.headers)
+        self.assertEqual(response.status_code, 200)
+        imu.calibrate_zero.assert_called_once()
+        self.assertEqual(set(self.module.outputs.values()), {0})
+        imu.calibrate_zero.side_effect = ValueError('Wait for the IMU')
+        self.assertEqual(self.client.post('/api/imu/calibrate', headers=self.headers).status_code, 409)
+
+    def test_imu_calibration_without_an_imu_is_explained(self):
+        response = self.client.post('/api/imu/calibrate', headers=self.headers)
+        self.assertEqual(response.status_code, 409)
+        self.assertIn('no supported Pi IMU', response.get_json()['error'])
+
     def test_all_dashboard_pages_are_served_by_versioned_runtime(self):
         for path in ("/", "/diagnostics", "/code"):
             response = self.client.get(path)
@@ -258,7 +276,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn(b'id="bindingList"', drive)
         self.assertNotIn(b'id="customControls"', drive)
         self.assertNotIn(b'id="cameraStage"', drive)   # telemetry belongs to the full station
-        self.assertNotIn(b'id="headingDial"', drive)
+        self.assertIn(b'id="headingDial"', drive)  # Test outputs shares the IMU display
         self.assertIn(b"gamepadconnected", drive)
         self.assertIn(b'<a href="/driver-station">Open Driver Station', drive)
         self.assertNotIn(b'data-page="drive"', drive)
