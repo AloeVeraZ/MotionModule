@@ -1,22 +1,21 @@
 """Experimental Arduino GIGA R1 WiFi USB GPIO expansion.
 
-The GIGA only moves bytes. It reads the pins and I2C registers this side asks
-for and sends the numbers up its USB cable; the Pi decides what is wired
-where, sets the sensors up, and works out what the readings mean. A robot says
+The GIGA reads declared analog and digital inputs and sends their values
+over USB. Robot code supplies each input's name, scale and units. A robot says
 what is connected, normally in ``sensors.py``::
 
     pins = []  # Declare only additional inputs actually wired to the board.
     giga = module.giga(pins=pins)
     # giga.value(name) reads a declared input, or None when not streaming.
 
-The reference Mecanum robot uses a Pi-connected MPU9255 and does not start
+The reference Mecanum robot uses a Pi-connected MPU6500 and does not start
 this extension. The bridge discovers a supported board, not its attached
 sensors. Its bundled firmware targets GIGA R1 WiFi, not Uno or Mega.
 
 MotionModule finds the board by its USB ID, sends those declarations after
 every connection, and keeps the newest readings from a background thread, so
-robot code reads them instantly and never touches the serial port. The sensor
-drivers themselves live in :mod:`motion_module.imu`.
+robot code reads them instantly and never touches the serial port.
+The MPU6500 reader is independent of this optional GPIO bridge.
 """
 
 from __future__ import annotations
@@ -31,8 +30,7 @@ import zlib
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
-from .imu import IMU_CHIPS, LSM6_CHIPS, GigaIMU, Read, Write, driver_for, wrap180
-from .telemetry import IMUReading, SensorReading, USBController
+from .telemetry import SensorReading, USBController
 from .usb import sensor_controllers
 
 
@@ -44,28 +42,19 @@ GIGA_ANALOG_PINS = frozenset(f"A{number}" for number in range(8))
 GIGA_FIRMWARE_VERSION = "3.0.0"
 PROTOCOL_V1 = "motionmodule-sensor-v1"
 PROTOCOL = "motionmodule-sensor-v3"
-MAX_GIGA_IMUS = 2
 MAX_GIGA_READINGS = 20
-MAX_GIGA_STREAMS = 6
 DEFAULT_INTERVAL_MS = 20
 FLASH_COMMAND = "motionmodule giga flash"
 SILENT_SECONDS = 3.0
 
 __all__ = [
-    "FLASH_COMMAND", "GIGA_BOARD_ID", "GIGA_FIRMWARE_VERSION", "IMU_CHIPS", "LSM6_CHIPS",
-    "PROTOCOL", "PROTOCOL_V1", "GigaIMU", "GigaPin", "GigaR1Bridge", "LiveIMU", "active_bridges",
+    "FLASH_COMMAND", "GIGA_BOARD_ID", "GIGA_FIRMWARE_VERSION",
+    "PROTOCOL", "PROTOCOL_V1", "GigaPin", "GigaR1Bridge", "active_bridges",
 ]
 
 # Two bridges reading one board would split its stream between them.
 _ACTIVE_BRIDGES: "weakref.WeakSet[GigaR1Bridge]" = weakref.WeakSet()
 _ACTIVE_LOCK = threading.Lock()
-
-
-def _finite(value) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    number = float(value)
-    return number if math.isfinite(number) else None
 
 
 def _version(text: str) -> tuple[int, ...]:
@@ -146,211 +135,10 @@ class GigaPin:
         )
 
 
-class LiveIMU:
-    """The newest readings from one IMU, kept current by its bridge.
-
-    Angles are degrees. Yaw counts up as the robot turns counter-clockwise
-    seen from above, which is also the direction a positive ``rotate`` drives
-    the robot, so ``target - heading()`` is the way to turn.
-    """
-
-    def __init__(self, bridge: "GigaR1Bridge", driver) -> None:
-        self._bridge = bridge
-        self.driver = driver
-        self.declaration = driver.declaration
-        self.name = driver.declaration.name
-        self._offset = 0.0
-        self._pending_zero: float | None = None
-
-    # -- state, with the bridge's lock held --------------------------------
-
-    def _usable(self, now: float) -> bool:
-        driver = self.driver
-        return (
-            driver.state == "ok"
-            and driver.yaw is not None
-            and self._bridge._streaming(now)
-            and now - driver.updated <= self._bridge.stale_after
-        )
-
-    def _present(self, now: float) -> bool:
-        driver = self.driver
-        if driver.state not in {"starting", "calibrating", "ok"} or not self._bridge._streaming(now):
-            return False
-        # A sensor still being set up has no readings of its own yet.
-        return driver.state == "starting" or now - driver.updated <= self._bridge.stale_after
-
-    def _board_restarted(self) -> None:
-        # The board counts from zero again, so an old zero means nothing.
-        self._offset = 0.0
-
-    def _apply_pending_zero(self) -> None:
-        if self._pending_zero is not None and self.driver.state == "ok" and self.driver.yaw is not None:
-            self._offset = self.driver.yaw - self._pending_zero
-            self._pending_zero = None
-
-    # -- read by robot code ------------------------------------------------
-
-    @property
-    def state(self) -> str:
-        """ok, starting, calibrating, missing, wrong-chip, failed, waiting, or simulated."""
-
-        with self._bridge._lock:
-            if self._bridge.simulated:
-                return "simulated"
-            if self._bridge._unusable_firmware:
-                return "update-firmware"
-            if self._present(self._bridge._clock()) or self.driver.state in {"missing", "wrong-chip", "failed"}:
-                return self.driver.state
-            return "waiting"
-
-    @property
-    def connected(self) -> bool:
-        """True while the IMU is streaming usable angles."""
-
-        with self._bridge._lock:
-            return self._usable(self._bridge._clock())
-
-    @property
-    def calibrated(self) -> bool:
-        with self._bridge._lock:
-            return self._usable(self._bridge._clock()) and self.driver.calibrated
-
-    @property
-    def chip(self) -> str:
-        """The chip that answered, such as MPU9255 or ISM330DHCX."""
-
-        with self._bridge._lock:
-            return self.driver.chip
-
-    def heading(self) -> float | None:
-        """Degrees from -180 to 180; counter-clockwise (a left turn) is positive.
-
-        0 is where :meth:`zero` was last called, or where the IMU started.
-        None while the IMU is missing, starting, calibrating, or not streaming.
-        """
-
-        total = self.total_rotation()
-        return None if total is None else wrap180(total)
-
-    def total_rotation(self) -> float | None:
-        """Degrees turned since zero, counting whole turns: two left turns read 720."""
-
-        with self._bridge._lock:
-            if not self._usable(self._bridge._clock()):
-                return None
-            return self.driver.yaw - self._offset
-
-    def rate(self) -> float | None:
-        """Degrees per second, counter-clockwise positive."""
-
-        with self._bridge._lock:
-            return self.driver.rate if self._usable(self._bridge._clock()) else None
-
-    def pitch(self) -> float | None:
-        """Degrees; positive while the front of the robot is raised."""
-
-        with self._bridge._lock:
-            return self.driver.pitch if self._usable(self._bridge._clock()) else None
-
-    def roll(self) -> float | None:
-        """Degrees; positive while the right side of the robot is lower."""
-
-        with self._bridge._lock:
-            return self.driver.roll if self._usable(self._bridge._clock()) else None
-
-    def zero(self, heading: float = 0.0) -> None:
-        """Make the direction the robot faces now read ``heading`` degrees.
-
-        Called before the IMU is streaming, it takes effect on the first reading.
-        """
-
-        target = _finite(heading)
-        if target is None:
-            raise ValueError("zero() needs a finite heading in degrees")
-        with self._bridge._lock:
-            if self._usable(self._bridge._clock()):
-                self._offset = self.driver.yaw - target
-                self._pending_zero = None
-            else:
-                self._pending_zero = target
-
-    def describe(self) -> str:
-        """One sentence on what this IMU is doing, for people."""
-
-        with self._bridge._lock:
-            return self._describe(self._bridge._clock())
-
-    def _describe(self, now: float) -> str:
-        driver = self.driver
-        bridge = self._bridge
-        where = f"{driver.chip} at 0x{self.declaration.address:02X}"
-        if bridge.simulated:
-            return "Simulated robot: the GIGA is not opened."
-        if bridge._unusable_firmware:
-            return (
-                "The GIGA runs firmware that cannot read IMUs. "
-                f"Run {FLASH_COMMAND} on the Pi."
-            )
-        state = driver.state
-        if state == "missing":
-            text = f"Nothing answers at 0x{self.declaration.address:02X}. Check the configured sensor connection and address."
-            if driver.seen:
-                text += " Answering instead: " + ", ".join(f"0x{address:02X}" for address in driver.seen) + "."
-            return text
-        if state == "wrong-chip":
-            return f"0x{self.declaration.address:02X} answered, but {driver.message}."
-        if state == "failed":
-            return f"{where} {driver.message or 'could not be set up'}. Retrying every 2 seconds."
-        if not self._present(now):
-            return bridge._status_text(now)
-        if state == "starting":
-            return f"{where} is starting."
-        described = driver.describe()
-        if state == "calibrating":
-            return f"{where}: {described or 'calibrating'}. Keep the robot still."
-        return f"{where}: {described or 'streaming'}."
-
-    def reading(self) -> IMUReading:
-        """This IMU for the Driver Station's gyro panel."""
-
-        with self._bridge._lock:
-            now = self._bridge._clock()
-            usable = self._usable(now)
-            driver = self.driver
-            return IMUReading(
-                name=self.name,
-                connected=self._present(now),
-                calibrated=usable and driver.calibrated,
-                yaw=wrap180(driver.yaw - self._offset) if usable else None,
-                pitch=driver.pitch if usable else None,
-                roll=driver.roll if usable else None,
-                rate=driver.rate if usable else None,
-                detail=self._describe(now),
-            )
-
-    def _sensor_reading(self, now: float) -> SensorReading:
-        usable = self._usable(now)
-        present = self._present(now)
-        return SensorReading(
-            f"{self.name} heading",
-            wrap180(self.driver.yaw - self._offset) if usable else None,
-            kind="analog",
-            unit="°",
-            channel=f"I2C 0x{self.declaration.address:02X}",
-            connected=present,
-            status="ok" if usable and self.driver.calibrated else "warning" if present else "offline",
-            minimum=-180,
-            maximum=180,
-            detail=self._describe(now),
-        )
-
-
 class GigaR1Bridge:
     """Find one GIGA R1, tell it what to read, and keep its newest readings.
 
-    The board is identified from Arduino's USB VID/PID. The pin list and the
-    I2C reads this robot's sensor drivers need are sent after every
+    The board is identified from Arduino's USB VID/PID. The input pin list is sent after every
     connection, so one firmware serves any robot. A background thread does all
     of the USB work; robot code only reads values it already has.
     ``simulated=True`` never opens the board.
@@ -360,7 +148,6 @@ class GigaR1Bridge:
         self,
         pins: Iterable[GigaPin] = (),
         *,
-        imus: Iterable[GigaIMU] = (),
         serial: str = "",
         baudrate: int = 115200,
         stale_after: float = 1.0,
@@ -372,24 +159,17 @@ class GigaR1Bridge:
         autostart: bool = True,
     ) -> None:
         self.pins = tuple(pins)
-        self.imus = tuple(imus)
         if not all(isinstance(pin, GigaPin) for pin in self.pins):
             raise ValueError("GIGA pins must be GigaPin(...) declarations")
-        if not all(isinstance(imu, GigaIMU) for imu in self.imus):
-            raise ValueError("GIGA IMUs must be GigaIMU(...) declarations")
-        if not self.pins and not self.imus:
-            raise ValueError("Configure at least one GIGA sensor pin or IMU")
-        if len(self.imus) > MAX_GIGA_IMUS:
-            raise ValueError("The GIGA bridge reads up to two IMUs")
-        if len(self.pins) + len(self.imus) > MAX_GIGA_READINGS:
-            raise ValueError("A Driver Station USB controller supports up to 20 sensor pins and IMUs")
+        if not self.pins:
+            raise ValueError("Configure at least one GIGA sensor pin")
+        if len(self.pins) > MAX_GIGA_READINGS:
+            raise ValueError("A Driver Station USB controller supports up to 20 sensor pins")
         if len({pin.pin for pin in self.pins}) != len(self.pins):
             raise ValueError("Each GIGA pin can be configured only once")
-        if len({imu.address for imu in self.imus}) != len(self.imus):
-            raise ValueError("Two GIGA IMUs cannot share an I2C address")
-        names = [pin.name for pin in self.pins] + [imu.name for imu in self.imus]
+        names = [pin.name for pin in self.pins]
         if len({name.casefold() for name in names}) != len(names):
-            raise ValueError("Every GIGA pin and IMU needs its own name")
+            raise ValueError("Every GIGA pin needs its own name")
         self.serial = serial.strip()
         self.baudrate = int(baudrate)
         self.stale_after = max(0.1, float(stale_after))
@@ -400,21 +180,9 @@ class GigaR1Bridge:
         self._serial_factory = serial_factory
         self._clock = clock
 
-        self._drivers = [driver_for(imu) for imu in self.imus]
-        self._live = {imu.name: LiveIMU(self, driver) for imu, driver in zip(self.imus, self._drivers)}
-        streams = [
-            (driver.address, register, length)
-            for driver in self._drivers
-            for register, length in driver.streams
-        ]
-        if len(streams) > MAX_GIGA_STREAMS:
-            raise ValueError("The GIGA firmware repeats up to six I2C reads")
-
         pin_text = ",".join(f"{pin.pin}:{pin.bridge_mode}" for pin in self.pins) or "-"
-        stream_text = ",".join(
-            f"{address:02X}:{register:02X}:{length}" for address, register, length in streams
-        ) or "-"
-        body = f"{self.interval_ms} {pin_text} {stream_text}"
+        # Firmware retains its generic I2C protocol; this bridge declares inputs only.
+        body = f"{self.interval_ms} {pin_text} -"
         self.config_id = zlib.crc32(body.encode("ascii")) & 0x7FFFFFFF
         self._config_line = f"MM3 CONFIG {self.config_id} {body}\n".encode("ascii")
         self._legacy_line = f"MM1 CONFIG {pin_text}\n".encode("ascii") if self.pins else b""
@@ -430,9 +198,6 @@ class GigaR1Bridge:
         self._last_discovery = 0.0
         self._last_bytes = 0.0
         self._config_sent_at = 0.0
-        self._commands: list[bytes] = []
-        self._requests: dict[int, object] = {}
-        self._next_request = 1
         self._values: dict[str, object] = {}
         self._last_packet = 0.0
         self._configured = False
@@ -486,8 +251,8 @@ class GigaR1Bridge:
         self.close()
         return running
 
-    def matches(self, pins: Iterable[GigaPin] = (), imus: Iterable[GigaIMU] = (), serial: str = "") -> bool:
-        return (tuple(pins), tuple(imus), serial.strip()) == (self.pins, self.imus, self.serial)
+    def matches(self, pins: Iterable[GigaPin] = (), serial: str = "") -> bool:
+        return (tuple(pins), serial.strip()) == (self.pins, self.serial)
 
     def _run(self) -> None:
         while not self._stop.is_set():
@@ -523,41 +288,7 @@ class GigaR1Bridge:
             self._send_pending(now)
             if self._port is not None:
                 self._read(now)
-            if self._port is not None:
-                self._step_drivers(now)
             return self._port is not None
-
-    @property
-    def _unusable_firmware(self) -> bool:
-        """Firmware that cannot read this robot's sensors, whichever kind."""
-
-        return self._legacy_sketch or bool(self._unusable_protocol)
-
-    def _step_drivers(self, now: float) -> None:
-        """Let each sensor driver send its next set-up step."""
-
-        with self._lock:
-            if not self._configured or self._unusable_firmware:
-                return
-            for driver in self._drivers:
-                driver.step(self, now)
-
-    def request(self, driver, request) -> None:
-        """Send one I2C read or write for a driver. Called by that driver."""
-
-        if isinstance(request, Read):
-            body = f"R {request.register:02X} {request.length}"
-        elif isinstance(request, Write):
-            body = f"W {request.register:02X} {request.data.hex()}"
-        else:
-            return
-        with self._lock:
-            seq = self._next_request
-            self._next_request = seq % 1000000 + 1
-            self._requests[seq] = driver
-            for old in sorted(self._requests)[:-16]:  # answers that never came
-                self._requests.pop(old, None)
-        self._write(f"MM3 I2C {seq} {driver.address:02X} {body}\n".encode("ascii"))
 
     def _discover(self, now: float) -> dict | None:
         if self._last_discovery and now - self._last_discovery < 1.0:
@@ -612,10 +343,7 @@ class GigaR1Bridge:
             self._configured = False
             self._legacy_sketch = False
             self._unusable_protocol = ""
-            self._requests.clear()
             self._error = "Connected. Waiting for the MotionModule firmware to answer."
-            for driver in self._drivers:
-                driver.stop()
         self._write(self._config_line)
         self._config_sent_at = now
 
@@ -629,11 +357,8 @@ class GigaR1Bridge:
 
     def _send_pending(self, now: float) -> None:
         with self._lock:
-            commands, self._commands = self._commands, []
             configured = self._configured
             legacy = self._legacy_sketch
-        for command in commands:
-            self._write(command)
         if self._port is not None and not configured and now - self._config_sent_at >= 1.0:
             self._write(self._legacy_line if legacy else self._config_line)
             self._config_sent_at = now
@@ -671,9 +396,6 @@ class GigaR1Bridge:
             self._values = {}
             self._last_packet = 0.0
             self._configured = False
-            self._requests.clear()
-            for driver in self._drivers:
-                driver.stop()
         if port is not None:
             try:
                 port.close()
@@ -721,23 +443,11 @@ class GigaR1Bridge:
             values = payload.get("values")
             if not isinstance(values, dict):
                 return
-            first = not self._configured
             self._configured = True
             self._board_error = ""
             self._values = {str(key).upper(): value for key, value in values.items()}
             self._last_packet = now
             self._error = "Streaming"
-            if first:  # the board is ours: start setting the sensors up
-                for driver in self._drivers:
-                    driver.begin(now)
-                return
-            board_ms = payload.get("ms")
-            board_ms = int(board_ms) if isinstance(board_ms, int) and not isinstance(board_ms, bool) else 0
-            streams = self._decode_streams(payload.get("i2c"))
-            for driver in self._drivers:
-                driver.on_readings(streams, board_ms, now)
-            for live in self._live.values():
-                live._apply_pending_zero()
 
     def _handle_event(self, event, payload: dict, now: float) -> None:
         if event == "hello":
@@ -745,46 +455,11 @@ class GigaR1Bridge:
             if self._configured:
                 self._configured = False
                 self._config_sent_at = 0.0
-                for live in self._live.values():
-                    live._board_restarted()
-                for driver in self._drivers:
-                    driver.stop()
             return
         if event == "error":
             message = payload.get("message")
             self._board_error = str(message)[:120] if message else "unknown error"
             return
-        if event == "i2c":
-            driver = self._requests.pop(payload.get("seq"), None)
-            if driver is None:
-                return
-            data = None
-            if payload.get("ok"):
-                text = payload.get("data")
-                try:
-                    data = bytes.fromhex(text) if isinstance(text, str) else b""
-                except ValueError:
-                    data = None
-            driver.on_answer(data, now)
-            return
-        if event == "scan":
-            found = payload.get("found")
-            addresses = tuple(
-                address for address in (found if isinstance(found, list) else ())
-                if isinstance(address, int) and not isinstance(address, bool) and 0 <= address < 128
-            )
-            for driver in self._drivers:
-                driver.seen = addresses
-
-    @staticmethod
-    def _decode_streams(raw) -> dict[str, bytes | None]:
-        streams: dict[str, bytes | None] = {}
-        for key, value in (raw if isinstance(raw, dict) else {}).items():
-            try:
-                streams[str(key).casefold()] = bytes.fromhex(value) if isinstance(value, str) else None
-            except ValueError:
-                streams[str(key).casefold()] = None
-        return streams
 
     def _handle_original(self, payload: dict, now: float) -> None:
         with self._lock:
@@ -827,7 +502,7 @@ class GigaR1Bridge:
         if self._streaming(now):
             if self._legacy_sketch:
                 text = (
-                    "Streaming pins from the original bridge sketch. It cannot read IMUs; "
+                    "Streaming pins from the original bridge sketch; "
                     f"run {FLASH_COMMAND} to update it."
                 )
             elif self._firmware and _version(self._firmware) < _version(GIGA_FIRMWARE_VERSION):
@@ -882,34 +557,6 @@ class GigaR1Bridge:
             reading = pin.reading(self._values[pin.pin], connected=True)
         return reading.value if reading.connected else None
 
-    def imu(self, name: str | None = None) -> LiveIMU:
-        """One declared IMU. The name may be left out when there is only one."""
-
-        if name is None:
-            if len(self.imus) != 1:
-                raise ValueError("Name the IMU: this GIGA declares " + (
-                    ", ".join(repr(imu.name) for imu in self.imus) or "no IMUs"
-                ))
-            return self._live[self.imus[0].name]
-        try:
-            return self._live[str(name).strip()]
-        except KeyError:
-            declared = ", ".join(repr(imu.name) for imu in self.imus) or "none"
-            raise ValueError(f"No GIGA IMU is named {name!r}. Declared IMUs: {declared}") from None
-
-    def calibrate(self) -> None:
-        """Measure what a 6-axis gyro reads at rest again. Keep the robot still."""
-
-        with self._lock:
-            for driver in self._drivers:
-                driver.recalibrate()
-
-    def scan(self) -> None:
-        """Ask which I2C addresses answer. The result reaches a missing IMU's detail."""
-
-        with self._lock:
-            self._commands.append(f"MM3 SCAN {self._next_request}\n".encode("ascii"))
-
     def snapshot(self) -> USBController:
         if self._autostart:
             self.start()  # dashboard.py files written before start() only call snapshot()
@@ -925,7 +572,6 @@ class GigaR1Bridge:
                 )
                 for pin in self.pins
             ]
-            readings.extend(self._live[imu.name]._sensor_reading(now) for imu in self.imus)
             device = None if self.simulated else self._device
             if device is None:
                 bridge = "simulated" if self.simulated else "offline"

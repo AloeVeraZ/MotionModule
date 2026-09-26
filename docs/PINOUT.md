@@ -266,10 +266,11 @@ the reference label. For example, using a UART GPIO for a motor requires
 disabling its serial-console/UART use first. Do not treat an unused label as a
 guarantee that another Pi service is not using that pin.
 
-## Optional MPU9255 nine-axis IMU
+## Optional MPU6500 six-axis IMU
 
-The [selected JESSINIE MPU9255 board](https://www.amazon.com/dp/B0GTVCCY6B)
-uses the same independent Pi I2C connection as the previous BNO055.
+The [selected JESSINIE board](https://www.amazon.com/dp/B0GTVCCY6B) was sold
+as MPU9255, but the installed board reports MPU6500 identity `0x70`.
+MotionModule supports this MPU6500 over the independent Pi I2C bus.
 Match printed signal labels, not header positions. Every motor and PCA9685
 wire stays in place.
 
@@ -285,17 +286,13 @@ wire stays in place.
 | EDA / ECL / FSYNC and other auxiliary pins | Leave disconnected; not used by MotionModule |
 
 SDA/SCL need pull-ups to 3.3 V. Verify the board's I2C mode and pull-ups;
-never use 5 V. No additional Pi GPIO is used. The previous BNO055's BOOT,
-REST and PS0/PS1 instructions do not apply to this board.
+never use 5 V. No additional Pi GPIO is used.
 
-The driver checks WHO_AM_I register 0x75 for 0x73, initializes the gyro and
+The driver checks WHO_AM_I register 0x75 for MPU6500 identity 0x70,
+initializes the gyro and
 accelerometer, and calibrates while still. It supplies relative heading,
 pitch, roll and turn rate; it does not use the magnetometer or DMP. Mount
 +Y forward and +Z upward. Relative heading can drift; zero before a run.
-The reference `module.local_imu()` path uses only MPU9255. Old BNO055
-declarations migrate to MPU9255 at 0x68 at runtime; update the active robot
-folder's `sensors.py` to name `mpu9255` explicitly.
-
 ### First setup and a missing sensor
 
 No firmware flashing is needed for this driver. If the supplied header is
@@ -304,15 +301,13 @@ reliable electrical connection. Match the printed labels in the table above.
 Check that NCS is held high for I2C and that SDA/SCL have pull-ups to 3.3 V;
 the product photo does not establish which resistors the delivered board has.
 
-An error naming `0x28` means the running declaration still selects BNO055.
-Install the updated runtime and restart the robot service. In the active robot
-folder, the intended declaration is:
+The sample uses `IMUConfig("Main IMU", address=0x68)` from
+`motion_module.imu`. Replace old `GigaIMU(...)` declarations in customized
+robot folders with that configuration when upgrading. Restart the robot
+service after installing the update. The driver accepts only MPU6500 identity
+`0x70`; other identities are rejected before configuration writes.
 
-```python
-IMU = GigaIMU("mpu9255", "Main IMU", address=0x68)
-```
-
-Run **Debug → Checks & logs**. Expect MPU9255 identity `0x73` at `0x68`
+Run **Debug → Checks & logs**. Expect MPU6500 identity `0x70` at `0x68`
 (`0x69` means AD0 is high). A responding address alone does not identify the
 chip. If neither address responds, check power, solder joints, signal labels,
 NCS and pull-ups before blaming calibration. Keep the robot still during
@@ -328,7 +323,7 @@ dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
 Debug → Wiring shows the optional connections even before hardware is present.
-Checks & logs verifies only the MPU9255 chip ID on the independent bus, below the
+Checks & logs verifies the MPU6500 chip ID on the independent bus, below the
 PCA9685 checks. Detection is not proof of calibration or usable heading.
 [LocalIMU setup](CODING.md) explains how robot code initializes and reads it.
 

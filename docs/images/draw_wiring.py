@@ -259,12 +259,12 @@ for i,(p,target) in enumerate(servo_pts.items()):
     line([(sx,sy),(sx+18,sy+15),(lane,sy+15),(lane,target[1]),target],color,5,True)
     hole(*target);circle(*target,4,color)
 
-# MPU9255 on the independent GPIO17/GPIO18 I2C bus.
+# MPU6500 on the independent GPIO17/GPIO18 I2C bus.
 # The owner's selected extension uses spare pins; motor/servo wiring is unchanged.
 rect((360,2730,955,3240),'#284f84','#5180b7',16)
-text(650,2750,'MPU9255 IMU • 0x68',33,'white',True,'ma')
+text(650,2750,'MPU6500 IMU • 0x68',33,'white',True,'ma')
 chip(407,2880,110,115)
-text(480,3060,'MPU9255',24,'white')
+text(480,3060,'MPU6500',24,'white')
 imu_pads=['VCC','GND','SCL','SDA','AD0','CS','AUX','INT']
 imu_wires=[(17,0,PALETTE['imu-supply']),(6,1,PALETTE['imu-ground']),
            (12,2,PALETTE['imu-signal']),(11,3,PALETTE['imu-signal']),

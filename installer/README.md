@@ -1,5 +1,36 @@
 # Installer behavior
 
+## Upgrading to 0.12: MPU6500 only
+
+The built-in Pi IMU is now the installed MPU6500 (WHO_AM_I `0x70`). The
+other IMU drivers, chip selector, compatibility aliases and Arduino IMU API
+have been removed. Motors and PCA9685 wiring are unchanged; IMU GND remains
+on physical pin 6 and AD0 on physical pin 20.
+
+Untouched Mecanum samples update automatically. For a customized robot folder,
+replace the old `GigaIMU` import and declaration in its `sensors.py` with:
+
+```python
+from motion_module.imu import IMUConfig
+IMU = IMUConfig("Main IMU", address=0x68)
+```
+
+The existing `module.local_imu(IMU)` call works with this configuration;
+`module.local_imu()` also uses these defaults. Additional Arduino inputs use
+`module.giga(pins=...)`; it no longer accepts `imus=`.
+
+After installing and restarting, run Debug's checks, keep the robot still
+until the Driver Station reports Ready, and zero heading. An identity check
+alone does not verify calibration, turn direction or live heading. The
+software tests simulate those behaviors; confirm them on the physical robot
+before using IMU-guided driving.
+
+For a source archive, extract it and run `bash install.sh` from the extracted
+folder on the Pi. This installs the files in that folder. A wheel alone does
+not include the installer, robot samples or Arduino firmware bundle.
+
+## Running the installer
+
 Run the repository entry point:
 
 ```bash

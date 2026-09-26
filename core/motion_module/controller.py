@@ -6,7 +6,6 @@ import logging
 import math
 import threading
 import time
-from dataclasses import replace
 
 from .config import ModuleConfig, load_config
 from .errors import ConfigurationError, MotionModuleError
@@ -107,24 +106,23 @@ class MotionModule:
 
         return bool(getattr(self.gpio, "is_hardware", False))
 
-    def local_imu(self, declaration):
-        """Read the reference MPU9255 on the independent i2c-gpio bus.
+    def local_imu(self, declaration=None):
+        """Read the reference MPU6500 on the independent i2c-gpio bus.
 
         Returns None in simulation or if the bus overlay is missing. The
         module owns the reader and closes it during shutdown.
-        Old BNO055 sample declarations migrate to MPU9255 at runtime, because
-        the installer deliberately preserves customized robot folders.
         """
+        from .imu import IMUConfig
         from .pi_imu import LocalIMU, find_i2c_gpio_bus
+
+        if declaration is None:
+            declaration = IMUConfig()
+        if not isinstance(declaration, IMUConfig):
+            raise TypeError("Use IMUConfig for the Pi-connected MPU6500")
 
         with self._lock:
             if self._closed:
                 raise RuntimeError("MotionModule is closed")
-            legacy = declaration.chip == "bno055"
-            if legacy:
-                declaration = replace(declaration, chip="mpu9255", address=0x68, compass=False)
-            if declaration.chip != "mpu9255":
-                raise ValueError("The reference Pi IMU is MPU9255; use GigaIMU('mpu9255')")
             if self._local_imu is not None:
                 if self._local_imu.declaration != declaration:
                     raise ValueError("The Pi IMU is already configured differently")
@@ -134,18 +132,13 @@ class MotionModule:
             bus = find_i2c_gpio_bus()
             if bus is None:
                 return None
-            if legacy:
-                logging.getLogger(__name__).warning(
-                    "Migrating the reference Pi IMU from BNO055 to MPU9255. "
-                    "Update sensors.py to GigaIMU('mpu9255', address=0x68)."
-                )
             self._local_imu = LocalIMU(declaration, bus=bus, auto_address=True)
             return self._local_imu
 
-    def giga(self, pins=(), imus=(), *, serial: str = ""):
+    def giga(self, pins=(), *, serial: str = ""):
         """Optional USB GPIO expansion through an Arduino GIGA R1 WiFi.
 
-        Declare every pin and IMU wired to the GIGA in one call, normally in
+        Declare every pin wired to the GIGA in one call, normally in
         sensors.py; calling again with the same declarations returns the same
         bridge. In simulation the board is never opened, so a laptop demo or a
         test cannot take the port from a running robot.
@@ -158,12 +151,12 @@ class MotionModule:
                 raise RuntimeError("MotionModule is closed")
             bridge = self._giga
             if bridge is None:
-                bridge = self._giga = GigaR1Bridge(pins, imus=imus, serial=serial, simulated=not self.hardware)
+                bridge = self._giga = GigaR1Bridge(pins, serial=serial, simulated=not self.hardware)
                 return bridge.start()
-            if bridge.matches(pins, imus, serial):
+            if bridge.matches(pins, serial):
                 return bridge
         raise ValueError(
-            "The GIGA is already set up with other sensors. Declare all of its pins and IMUs "
+            "The GIGA is already set up with other sensors. Declare all of its pins "
             "once, in sensors.py, and share that object."
         )
 

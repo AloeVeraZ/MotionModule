@@ -1,20 +1,19 @@
 """The Pi side of the Arduino GIGA sensor board.
 
-The GIGA only moves bytes, so these tests run the real drivers and the real
-heading maths against a simulated board and simulated chips (fake_giga.py).
+These tests exercise GPIO input declarations and USB recovery against a
+simulated board (fake_giga.py). The IMU is tested on its own Pi I2C path.
 """
 
 import time
 import unittest
 
-from fake_giga import Clock, FakeGiga, SimBno055, SimLsm6, World, run
+from fake_giga import Clock, FakeGiga, World, run
 from motion_module.config import default_config
 from motion_module.controller import MotionModule
 from motion_module.gpio import MockGPIO
 from motion_module.sensor_bridge import (
     GIGA_FIRMWARE_VERSION,
     PROTOCOL_V1,
-    GigaIMU,
     GigaPin,
     GigaR1Bridge,
     active_bridges,
@@ -25,20 +24,16 @@ GIGA = {
     "board_id": "arduino_giga_r1_wifi", "name": "Arduino GIGA R1 WiFi",
     "connected": True, "serial": "ABC", "port": "/dev/ttyACM0", "mode": "sketch",
 }
-NINE_AXIS = GigaIMU("bno055", "Main IMU")
-SIX_AXIS = GigaIMU("ism330dhcx", "Backup IMU")
-
-
 class BridgeTestCase(unittest.TestCase):
     """A bridge wired to a simulated GIGA, with a clock the test moves."""
 
-    def build(self, pins=(), imus=(), board=None, **options):
+    def build(self, pins=(), board=None, **options):
         self.clock = Clock()
         self.world = World()
         self.board = board if board is not None else FakeGiga(self.world)
         options.setdefault("discovery", lambda: [dict(GIGA)])
         bridge = GigaR1Bridge(
-            pins, imus=imus, autostart=False, clock=self.clock,
+            pins, autostart=False, clock=self.clock,
             serial_factory=lambda *_args, **_keywords: self.board, **options,
         )
         self.addCleanup(bridge.close)
@@ -56,37 +51,23 @@ class DeclarationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "A0-A7"):
             GigaPin("A8", "Not an ADC pin", kind="analog")
 
-    def test_imus_default_to_their_boards_addresses(self):
-        self.assertEqual(GigaIMU("BNO055", "Main").address, 0x28)
-        self.assertEqual(GigaIMU("ISM330DHCX", "Six").address, 0x6A)
-        self.assertEqual(GigaIMU("lsm6dsox", "Six", address=0x6B).address, 0x6B)
-        self.assertEqual(GigaIMU("bno055", "Nine", compass=True).driver, "BNO055")
-
-    def test_imu_declarations_catch_wiring_mistakes(self):
-        with self.assertRaisesRegex(ValueError, "0x28"):
-            GigaIMU("bno055", "Main", address=0x6A)
-        with self.assertRaisesRegex(ValueError, "compass"):
-            GigaIMU("ism330dhcx", "Six", compass=True)
-        with self.assertRaisesRegex(ValueError, "bno055"):
-            GigaIMU("mpu6050", "Old")
-        with self.assertRaisesRegex(ValueError, "share an I2C address"):
-            GigaR1Bridge(imus=[GigaIMU("bno055", "A"), GigaIMU("bno055", "B")], autostart=False)
+    def test_duplicate_and_empty_pin_declarations_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "only once"):
+            GigaR1Bridge([GigaPin("D2", "A"), GigaPin("D2", "B")])
         with self.assertRaisesRegex(ValueError, "own name"):
-            GigaR1Bridge([GigaPin("D2", "Same")], imus=[GigaIMU("bno055", "same")], autostart=False)
+            GigaR1Bridge([GigaPin("D2", "Same"), GigaPin("D3", "same")])
         with self.assertRaisesRegex(ValueError, "at least one"):
             GigaR1Bridge(autostart=False)
 
 
 class ProtocolTests(BridgeTestCase):
-    def test_the_board_is_told_which_pins_and_registers_to_read(self):
-        bridge = self.build([GigaPin("A0", "Pot", kind="analog"), GigaPin("D22", "Beam", pull="up")],
-                            imus=[NINE_AXIS, SIX_AXIS])
+    def test_the_board_is_told_only_which_input_pins_to_read(self):
+        bridge = self.build([GigaPin("A0", "Pot", kind="analog"), GigaPin("D22", "Beam", pull="up")])
         bridge.poll()
-        self.assertEqual(
-            self.board.commands[0],
-            f"MM3 CONFIG {bridge.config_id} 20 A0:A,D22:U 28:14:12,28:2E:8,6A:22:12",
-        )
-        self.assertEqual(self.board.streams, [(0x28, 0x14, 12), (0x28, 0x2E, 8), (0x6A, 0x22, 12)])
+        self.assertEqual(self.board.commands[0], f"MM3 CONFIG {bridge.config_id} 20 A0:A,D22:U -")
+        self.assertEqual(self.board.streams, [])
+        self.run_for(1)
+        self.assertFalse(any(command.startswith("MM3 I2C") for command in self.board.commands))
 
     def test_pins_arrive_as_on_off_and_numbers(self):
         bridge = self.build([GigaPin("A0", "Pot", kind="analog", minimum=0, maximum=4095),
@@ -191,15 +172,14 @@ class ProtocolTests(BridgeTestCase):
         self.assertIn("pin list not understood", bridge.status)
 
     def test_a_restarted_board_is_configured_again(self):
-        bridge = self.build([GigaPin("D2", "Limit")], imus=[SIX_AXIS])
-        self.board.attach(0x6A, SimLsm6(self.world))
-        self.run_for(2.5)
-        self.assertEqual(bridge.imu().state, "ok")
+        bridge = self.build([GigaPin("D2", "Limit")])
+        self.board.pins["D2"] = 1
+        self.run_for(0.2)
+        self.assertTrue(bridge.value("Limit"))
         self.board.restart()
         self.run_for(1.2)
         self.assertEqual(self.board.config_id, bridge.config_id)
-        self.run_for(2.0)
-        self.assertEqual(bridge.imu().state, "ok")
+        self.assertTrue(bridge.value("Limit"))
 
     def test_background_thread_reads_without_being_polled(self):
         board = FakeGiga()
@@ -228,178 +208,6 @@ class ProtocolTests(BridgeTestCase):
             second.start()
 
 
-class NineAxisTests(BridgeTestCase):
-    """The BNO055, which fuses its own readings."""
-
-    def setUp(self):
-        self.build(imus=[NINE_AXIS])
-        self.chip = self.board.attach(0x28, SimBno055(self.world))
-        self.imu = self.bridge.imu()
-
-    def test_the_pi_sets_the_sensor_up_and_reads_its_heading(self):
-        self.run_for(3.0)  # reset, external clock startup, then calibration
-        self.assertEqual(self.imu.state, "ok")
-        self.assertEqual(self.imu.chip, "BNO055")
-        self.assertEqual(self.chip.resets, 1)         # the Pi restarts it cleanly
-        self.assertTrue(self.chip.crystal)            # and uses the board's crystal
-        self.assertEqual(self.chip.units, 0)          # degrees and degrees per second
-        self.assertEqual(self.chip.mode, 0x08)        # gyro and accelerometer, no compass
-        self.assertTrue(self.imu.calibrated)
-
-        self.world.rate = 90                          # turning left
-        self.run_for(1.0)
-        self.assertAlmostEqual(self.imu.rate(), 90.0, delta=1.0)
-        self.world.rate = 0
-        self.run_for(0.1)
-        self.assertAlmostEqual(self.imu.heading(), 90.0, delta=1.0)
-
-    def test_heading_wraps_and_zeroes(self):
-        self.run_for(2.0)
-        self.world.rate = 190          # a long left turn, past half a circle
-        self.run_for(1.0)
-        self.world.rate = 0
-        self.run_for(0.1)
-        self.assertAlmostEqual(self.imu.heading(), -170.0, delta=2.0)
-        self.assertAlmostEqual(self.imu.total_rotation(), 190.0, delta=2.0)
-        self.imu.zero()
-        self.assertAlmostEqual(self.imu.heading(), 0.0, delta=0.1)
-        self.world.rate = 90
-        self.run_for(1.0)
-        self.world.rate = 0
-        self.run_for(0.1)
-        self.assertAlmostEqual(self.imu.heading(), 90.0, delta=2.0)
-        self.imu.zero(45)
-        self.assertAlmostEqual(self.imu.heading(), 45.0, delta=0.1)
-
-    def test_zero_before_the_sensor_streams_applies_to_the_first_reading(self):
-        self.imu.zero(10)
-        self.world.yaw = 300.0
-        self.run_for(2.0)
-        self.assertAlmostEqual(self.imu.heading(), 10.0, delta=1.0)
-
-    def test_tilt_reads_front_up_and_right_side_down_as_positive(self):
-        self.world.pitch, self.world.roll = 10.0, -6.0
-        self.run_for(2.0)
-        self.assertAlmostEqual(self.imu.pitch(), 10.0, delta=0.5)
-        self.assertAlmostEqual(self.imu.roll(), -6.0, delta=0.5)
-
-    def test_a_compass_imu_uses_the_ninedof_mode(self):
-        self.build(imus=[GigaIMU("bno055", "Compass IMU", compass=True)])
-        chip = self.board.attach(0x28, SimBno055(self.world))
-        self.run_for(2.0)
-        self.assertEqual(chip.mode, 0x0C)
-
-    def test_driver_station_reading_matches_robot_code(self):
-        self.run_for(3.0)
-        panel = self.imu.reading()
-        self.assertTrue(panel.connected)
-        self.assertTrue(panel.calibrated)
-        self.assertAlmostEqual(panel.yaw, self.imu.heading())
-        self.assertIn("gyro 3/3", panel.detail)
-
-
-class SixAxisTests(BridgeTestCase):
-    """An ST 6-axis IMU, which the Pi fuses itself."""
-
-    def setUp(self):
-        self.build(imus=[SIX_AXIS])
-        self.chip = self.board.attach(0x6A, SimLsm6(self.world, bias=(0.8, -0.6, 1.3), noise=0.3))
-        self.imu = self.bridge.imu()
-
-    def test_the_pi_measures_the_gyro_at_rest_then_holds_a_heading(self):
-        self.run_for(0.4)
-        self.assertEqual(self.imu.state, "calibrating")
-        self.assertIsNone(self.imu.heading())
-        self.run_for(1.5)
-        self.assertEqual(self.imu.state, "ok")
-        self.assertEqual(self.imu.chip, "ISM330DHCX")
-        self.assertEqual(self.chip.resets, 1)
-        self.assertEqual(self.chip.registers[0x11], 0x6C)          # gyro 416 Hz, 2000 dps
-        self.assertEqual(self.chip.registers[0x18] & 0x02, 0x02)   # I3C off / DEVICE_CONF
-        # Sitting still with a biased gyro must not drift.
-        self.run_for(8.0)
-        self.assertAlmostEqual(self.imu.heading(), 0.0, delta=1.0)
-
-    def test_it_follows_a_left_turn(self):
-        self.run_for(2.0)
-        self.world.rate = 60
-        self.run_for(1.5)
-        self.world.rate = 0
-        self.run_for(0.1)
-        self.assertAlmostEqual(self.imu.heading(), 90.0, delta=2.0)
-        self.assertAlmostEqual(self.imu.rate(), 0.0, delta=1.0)
-
-    def test_tilting_is_not_turning(self):
-        self.run_for(2.0)
-        self.world.pitch = 12.0     # driven onto a ramp
-        self.run_for(4.0)
-        self.assertAlmostEqual(self.imu.pitch(), 12.0, delta=1.5)
-        self.assertAlmostEqual(self.imu.heading(), 0.0, delta=2.0)
-
-    def test_calibration_waits_for_the_robot_to_stop(self):
-        self.world.rate = 40
-        self.run_for(2.5)
-        self.assertEqual(self.imu.state, "calibrating")
-        self.assertIn("moving", self.imu.describe())
-        self.world.rate = 0
-        self.run_for(2.5)
-        self.assertEqual(self.imu.state, "ok")
-
-    def test_calibrate_measures_the_gyro_again_and_keeps_the_heading(self):
-        self.run_for(2.0)
-        self.world.rate = 60        # a half-second quarter turn
-        self.run_for(0.5)
-        self.world.rate = 0
-        self.bridge.calibrate()
-        self.run_for(0.2)
-        self.assertEqual(self.imu.state, "calibrating")
-        self.run_for(1.5)
-        self.assertEqual(self.imu.state, "ok")
-        self.assertAlmostEqual(self.imu.heading(), 30.0, delta=2.0)
-
-
-class SensorProblemTests(BridgeTestCase):
-    def test_a_missing_sensor_says_what_to_check_and_what_answered(self):
-        bridge = self.build(imus=[NINE_AXIS])
-        self.board.attach(0x6A, SimLsm6(self.world))
-        self.run_for(2.5)
-        imu = bridge.imu()
-        self.assertEqual(imu.state, "missing")
-        self.assertIsNone(imu.heading())
-        self.assertIn("configured sensor connection and address", imu.describe())
-        bridge.scan()
-        self.run_for(0.1)
-        self.assertIn("0x6A", imu.describe())
-
-    def test_a_sensor_plugged_in_later_is_picked_up(self):
-        bridge = self.build(imus=[SIX_AXIS])
-        self.run_for(1.0)
-        self.assertEqual(bridge.imu().state, "missing")
-        self.board.attach(0x6A, SimLsm6(self.world))
-        self.run_for(4.0)
-        self.assertEqual(bridge.imu().state, "ok")
-
-    def test_the_wrong_chip_at_an_address_is_named(self):
-        bridge = self.build(imus=[NINE_AXIS])
-        self.board.attach(0x28, SimBno055(self.world, chip_id=0x4A))
-        self.run_for(2.5)
-        self.assertEqual(bridge.imu().state, "wrong-chip")
-        self.assertIn("0x4A", bridge.imu().describe())
-
-    def test_a_sensor_that_goes_quiet_is_retried(self):
-        bridge = self.build(imus=[SIX_AXIS])
-        chip = self.board.attach(0x6A, SimLsm6(self.world))
-        self.run_for(2.0)
-        self.assertEqual(bridge.imu().state, "ok")
-        chip.present = False
-        self.run_for(1.0)
-        self.assertIn(bridge.imu().state, {"failed", "missing", "starting"})
-        self.assertIsNone(bridge.imu().heading())
-        chip.present = True
-        self.run_for(4.0)
-        self.assertEqual(bridge.imu().state, "ok")
-
-
 class OldFirmwareTests(BridgeTestCase):
     def test_the_original_sketch_still_reads_pins_and_asks_for_an_update(self):
         class OldSketch(FakeGiga):
@@ -422,11 +230,10 @@ class OldFirmwareTests(BridgeTestCase):
 
         board = OldSketch()
         board.pins["A0"] = 99
-        bridge = self.build([GigaPin("A0", "Pot", kind="analog")], imus=[NINE_AXIS], board=board)
+        bridge = self.build([GigaPin("A0", "Pot", kind="analog")], board=board)
         self.run_for(2.0, step_ms=100)
         self.assertIn("MM1 CONFIG A0:A", board.commands)
         self.assertEqual(bridge.value("Pot"), 99.0)
-        self.assertEqual(bridge.imu().state, "update-firmware")
         self.assertIn("motionmodule giga flash", bridge.status)
 
     def test_firmware_from_another_motionmodule_asks_to_be_flashed(self):
@@ -449,12 +256,10 @@ class ModuleGigaTests(unittest.TestCase):
     def test_simulated_robots_never_open_the_board(self):
         with MotionModule(default_config(), gpio=MockGPIO()) as module:
             self.assertFalse(module.hardware)
-            giga = module.giga(pins=[GigaPin("D2", "Limit")], imus=[NINE_AXIS])
+            giga = module.giga(pins=[GigaPin("D2", "Limit")])
             self.assertTrue(giga.simulated)
             self.assertFalse(giga.poll())
             self.assertNotIn(giga, active_bridges())
-            self.assertIsNone(giga.imu().heading())
-            self.assertEqual(giga.imu().state, "simulated")
             self.assertEqual(giga.snapshot().bridge, "simulated")
 
     def test_the_giga_is_set_up_once(self):

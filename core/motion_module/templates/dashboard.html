@@ -1287,10 +1287,10 @@
         </div></article>
 
         <article class="card spaced" id="localImuGuide">
-          <div class="panel-head"><h2>MPU9255 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
+          <div class="panel-head"><h2>MPU6500 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
           <div class="panel-body stack">
-            <p>The JESSINIE MPU9255 uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU9255</strong><span>SDA · SCL · address 0x68</span></div></div>
+            <p>The JESSINIE MPU6500 uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
+            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU6500</strong><span>SDA · SCL · address 0x68</span></div></div>
             <div class="table-scroll"><table class="name-table"><thead><tr><th>Board signal</th><th>Connection / purpose</th></tr></thead><tbody>
               <tr><td>VCC</td><td>Pi pin 17 · 3.3 V supply</td></tr>
               <tr><td>GND</td><td>Pi pin 6 · signal ground</td></tr>
@@ -1301,16 +1301,16 @@
               <tr><td>INT</td><td>Leave disconnected; MotionModule polls over I²C.</td></tr>
               <tr><td>Auxiliary pins</td><td>EDA / ECL / FSYNC are unused; leave disconnected.</td></tr>
             </tbody></table></div>
-            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. The previous BNO055's BOOT, REST and PS0/PS1 instructions do not apply. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
+            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU6500 board</a></p>
             <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. The magnetometer and DMP are unused; heading may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks only MPU9255 identity 0x73 at 0x68 or 0x69. Detection does not initialize the sensor or prove calibrated heading. An error at 0x28 means the running software still selects the previous IMU; update MotionModule and the active project's sensors.py.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks only MPU6500 identity 0x70 at 0x68 or 0x69. The installed board supplies gyro/accelerometer heading without a magnetometer. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
-            <pre>from motion_module.imu import GigaIMU
+            <pre>from motion_module.imu import IMUConfig
 
-# GigaIMU is a shared chip declaration; this reader uses the Pi.
-imu = module.local_imu(GigaIMU("mpu9255", "Main IMU", address=0x68))
+# The MPU6500 uses the independent Pi I2C bus.
+imu = module.local_imu(IMUConfig("Main IMU", address=0x68))
 heading = imu.heading() if imu is not None else None
 # No heading in simulation or without the independent bus.</pre>
           </div>
@@ -1361,7 +1361,7 @@ heading = imu.heading() if imu is not None else None
           <div class="panel-body">
             <p class="small muted">The reference build, from the Pi to the motor drivers, servo board and IMU, with the power connections included. Wire colors match Follow the signal above. Labels show physical Pi header pins.</p>
             <a href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener" aria-label="Open complete wiring diagram at full size">
-              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and MPU9255 IMU, plus battery and regulated power rails.">
+              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and MPU6500 IMU, plus battery and regulated power rails.">
             </a>
           </div>
         </article>
@@ -2806,7 +2806,7 @@ function pinElement(pin, isEven, motors = []) {
     item.dataset.output = pin.physical === motor.ground_physical ? 'GND' : motor.output;
   } else if ([8, 10, 27, 28].includes(pin.physical)) {
     item.classList.add('header-reserved');
-  } else if (pin.category === 'reserved' && pin.role.startsWith('Optional MPU9255 IMU ')) {
+  } else if (pin.category === 'reserved' && pin.role.startsWith('Optional MPU6500 IMU ')) {
     item.classList.add('header-imu');
     if (pin.function === 'GND') item.classList.add('module-ground');
   } else if (pin.category === 'ground' && pin.role.startsWith('Servo controller')) {

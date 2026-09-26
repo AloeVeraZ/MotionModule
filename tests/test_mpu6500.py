@@ -1,17 +1,17 @@
-"""Exercise the real MPU9255 driver through a register-level fake I2C bus."""
+"""Exercise the real MPU6500 driver through a register-level fake I2C bus."""
 
 import unittest
 
 from fake_giga import World
 from test_pi_imu import FakeBus, LocalImuTestCase
-from motion_module.imu import GigaIMU, Mpu9255Driver
+from motion_module.imu import IMUConfig, Mpu6500Driver
 
 
-class SimMpu9255:
+class SimMpu6500:
     def __init__(self, world):
         self.world = world
         self.present = True
-        self.chip_id = 0x73
+        self.chip_id = 0x70
         self.registers = bytearray(128)
         self.registers[0x6B] = 0x40
         self.reset_until = 0
@@ -47,11 +47,11 @@ class SimMpu9255:
         return True
 
 
-class Mpu9255Tests(LocalImuTestCase):
+class Mpu6500Tests(LocalImuTestCase):
     def setUp(self):
         self.world = World()
-        self.chip = SimMpu9255(self.world)
-        self.build(GigaIMU('mpu9255'), self.chip, self.world)
+        self.chip = SimMpu6500(self.world)
+        self.build(IMUConfig(), self.chip, self.world)
 
     def test_calibrates_bias_and_tracks_left_and_right_turns(self):
         self.run_for(3)
@@ -63,15 +63,63 @@ class Mpu9255Tests(LocalImuTestCase):
             self.world.rate = rate
             self.run_for(1)
             self.assertAlmostEqual(self.imu.heading(), rate, delta=1)
-            self.assertAlmostEqual(self.imu.rate(), rate, delta=0.1)
+
+    def test_mpu6500_is_detected_calibrated_and_named_at_either_address(self):
+        for selected in (0x68, 0x69):
+            with self.subTest(address=selected):
+                self.imu.close()
+                self.world = World()
+                self.chip = SimMpu6500(self.world)
+                self.chip.chip_id = 0x70
+
+                class AddressedBus(FakeBus):
+                    def read_i2c_block_data(bus, address, register, length):
+                        if address != selected:
+                            raise OSError('no answer')
+                        return super().read_i2c_block_data(address, register, length)
+
+                    def write_i2c_block_data(bus, address, register, data):
+                        if address != selected:
+                            raise AssertionError('write sent to an unidentified address')
+                        return super().write_i2c_block_data(address, register, data)
+
+                self.build(IMUConfig(), self.chip, self.world, auto_address=True,
+                           bus_factory=lambda _: AddressedBus(self.chip, self.clock))
+                self.run_for(3)
+                self.assertTrue(self.imu.calibrated)
+                self.assertEqual(self.imu.chip, 'MPU6500')
+                self.assertIn(f'MPU6500 at 0x{selected:02X}', self.imu.reading().detail)
+                for rate in (90, -90):
+                    self.imu.zero()
+                    self.world.rate = rate
+                    self.run_for(1)
+                    self.assertAlmostEqual(self.imu.heading(), rate, delta=1)
+                    self.assertAlmostEqual(self.imu.rate(), rate, delta=0.1)
 
     def test_signed_big_endian_vectors_skip_temperature(self):
         data = bytes.fromhex('2000 e000 1000 7fff 0668 f998 0000')
-        gyro, accel = Mpu9255Driver(GigaIMU('mpu9255'))._vectors(data)
+        gyro, accel = Mpu6500Driver(IMUConfig())._vectors(data)
         self.assertEqual(accel, (8192, -8192, 4096))
         self.assertAlmostEqual(gyro[0], 100)
         self.assertAlmostEqual(gyro[1], -100)
         self.assertEqual(gyro[2], 0)
+
+    def test_other_identities_are_rejected_before_any_write(self):
+        for identity in (0x73, 0x71, 0xA0, 0x6B, 0x00, 0xFF):
+            with self.subTest(identity=identity):
+                self.chip.chip_id = identity
+                self.imu._driver.begin(self.clock.now)
+                self.run_for(0.3)
+                self.assertEqual(self.imu.state, 'wrong-chip')
+                self.assertFalse(self.chip.writes)
+                self.assertIsNone(self.imu.heading())
+
+    def test_full_turns_keep_total_rotation_and_wrap_heading(self):
+        self.run_for(3)
+        self.world.rate = 90
+        self.run_for(8)
+        self.assertAlmostEqual(self.imu.total_rotation(), 720, delta=2)
+        self.assertAlmostEqual(self.imu.heading(), 0, delta=2)
 
     def test_tilt_does_not_become_a_turn(self):
         self.run_for(3)
@@ -95,11 +143,11 @@ class Mpu9255Tests(LocalImuTestCase):
         self.run_for(1)
         self.assertEqual(self.imu.state, 'missing')
         self.chip.present = True
-        self.chip.chip_id = 0x71  # a 9250 is not a verified 9255
+        self.chip.chip_id = 0x71  # another chip must not receive MPU6500 setup writes
         self.run_for(3)
         self.assertEqual(self.imu.state, 'wrong-chip')
         self.assertFalse(self.chip.writes)
-        self.chip.chip_id = 0x73
+        self.chip.chip_id = 0x70
         self.chip.refuse = 0x1B
         for _ in range(200):
             self.run_for(0.02)
@@ -174,7 +222,7 @@ class Mpu9255Tests(LocalImuTestCase):
                     raise AssertionError('must not write to the wrong chip')
 
         self.imu.close()
-        self.build(GigaIMU('mpu9255'), self.chip, self.world, auto_address=True,
+        self.build(IMUConfig(), self.chip, self.world, auto_address=True,
                    bus_factory=lambda _: AddressedBus(self.chip, self.clock))
         self.run_for(3)
         self.assertTrue(self.imu.calibrated)
@@ -182,7 +230,7 @@ class Mpu9255Tests(LocalImuTestCase):
 
     def test_explicit_address_is_preferred_when_both_addresses_answer(self):
         self.imu.close()
-        self.build(GigaIMU('mpu9255', address=0x69), self.chip, self.world, auto_address=True)
+        self.build(IMUConfig(address=0x69), self.chip, self.world, auto_address=True)
         self.run_for(3)
         self.assertTrue(self.imu.calibrated)
         self.assertIn('0x69', self.imu.describe())
@@ -200,7 +248,7 @@ class Mpu9255Tests(LocalImuTestCase):
                 return super().write_i2c_block_data(address, register, data)
 
         self.imu.close()
-        self.build(GigaIMU('mpu9255'), self.chip, self.world, auto_address=True,
+        self.build(IMUConfig(), self.chip, self.world, auto_address=True,
                    bus_factory=lambda _: AlternateBus(self.chip, self.clock))
         self.chip.present = False
         self.run_for(3)
@@ -221,10 +269,10 @@ class Mpu9255Tests(LocalImuTestCase):
         self.assertEqual(self.imu.state, 'waiting')
 
     def test_invalid_declarations_fail_early(self):
-        self.assertEqual(GigaIMU('MPU-9255').address, 0x68)
-        for kwargs in ({'address': 0x28}, {'compass': True}):
+        self.assertEqual(IMUConfig().address, 0x68)
+        for kwargs in ({'address': 0x28}, {'address': True}, {'name': ''}):
             with self.assertRaises(ValueError):
-                GigaIMU('mpu9255', **kwargs)
+                IMUConfig(**kwargs)
 
 
 if __name__ == '__main__':

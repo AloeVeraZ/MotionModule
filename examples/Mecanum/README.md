@@ -7,7 +7,7 @@ Six small Python files make the complete sample. Only one is required.
 | `robot.py` | Turns drive commands into wheel power | Yes |
 | `test.py` | Debug Drive Test motor/servo mapping | No — without it, the same built-in Mecanum test runs |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
-| `sensors.py` | MPU9255 read directly by the Pi | Included; missing hardware is shown offline |
+| `sensors.py` | MPU6500 read directly by the Pi | Included; missing hardware is shown offline |
 | `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
 | `dashboard.py` | Driver Station cameras, sensors, keys, and sticks | No — delete it without affecting driving |
 
@@ -115,13 +115,13 @@ the outputs immediately either way. `duration_seconds` cuts off a routine that
 never returns. While it runs, manual driving is refused, so the driver and the
 routine cannot fight over the motors.
 
-## Sensors: the Pi-connected MPU9255
+## Sensors: the Pi-connected MPU6500
 
-`sensors.py` reads one MPU9255 directly from the Pi, shared by `robot.py`,
-`autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-mpu9255-nine-axis-imu):
+`sensors.py` reads one MPU6500 directly from the Pi, shared by `robot.py`,
+`autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-mpu6500-six-axis-imu):
 VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12.
 The Pi installer enables the `i2c-gpio` overlay for its next reboot. The module
-discovers the bus and MPU9255 address, then closes its reader on shutdown.
+discovers the bus and MPU6500 address, then closes its reader on shutdown.
 Motors and servos keep their Pi wiring.
 
 **Zero heading** sets the current direction to zero. Heading increases turning
@@ -142,7 +142,7 @@ required for the Mecanum robot. See [the opt-in API](../../docs/CODING.md#option
 **Debug → Drive Test** uses `test.py`, not this telemetry hook or `robot.py`.
 Press **Open Driver Station** for the independent operator
 console, which does. The sample declares a front camera and shows the Pi
-MPU9255 on the heading dial. Its additional USB sensor list is empty.
+MPU6500 on the heading dial. Its additional USB sensor list is empty.
 USB cameras are discovered automatically; an external stream URL is optional.
 
 `driver_bindings()` in the same file decides which keys the Driver Station

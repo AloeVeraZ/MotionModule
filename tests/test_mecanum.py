@@ -159,10 +159,11 @@ class MecanumSensorTests(unittest.TestCase):
             self.assertNotIn("calibrate_gyro", names)
             self.assertEqual(drive.control("zero_heading", 1), {"heading": None})
 
-    def test_sensors_file_declares_only_the_reference_mpu9255(self):
+    def test_sensors_file_declares_only_the_reference_mpu6500(self):
         import sensors
 
-        self.assertEqual(sensors.IMU.chip, "mpu9255")
+        from motion_module.imu import IMUConfig
+        self.assertIsInstance(sensors.IMU, IMUConfig)
         self.assertEqual(sensors.IMU.address, 0x68)
         self.assertFalse(hasattr(sensors, "PINS"))
         self.assertFalse(hasattr(sensors, "IMUS"))

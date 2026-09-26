@@ -8,7 +8,7 @@ browser → nginx :80 → versioned dashboard :8080
                            ├── browser project deployment
 active robot folder ───────┤
                            ├── GPIO PWM → four dual H-bridges → eight motors
-                           ├── independent Pi I2C → MPU9255 IMU
+                           ├── independent Pi I2C → MPU6500 IMU
                            ├── I2C → PCA9685 board(s) → servos
                            ├── USB serial → optional GIGA GPIO inputs (experimental)
                            ├── dfu-util → GIGA bootloader (firmware installs)
@@ -112,7 +112,7 @@ USB discovery alone cannot identify which physical sensor is wired to a pin.
 
 ## Reference Pi IMU
 
-The Mecanum sample declares one MPU9255 at its default address 0x68.
+The Mecanum sample declares one MPU6500 at its default address 0x68.
 `module.local_imu()` finds the independent `i2c-gpio` adapter, detects the
 chip at 0x68 or 0x69, creates a `LocalIMU` and closes it on
 module shutdown. Simulation and a missing overlay return no reader; the
@@ -127,7 +127,6 @@ firmware/giga_sensor_bridge/giga_sensor_bridge.ino   the firmware, generic
 firmware/giga_sensor_bridge.bin                      prebuilt, flashed by the Pi
 firmware/giga_sensor_bridge.json                     version and checksums
 firmware/build.py                                    rebuilds the binary (arduino-cli)
-core/motion_module/imu.py                            the sensor drivers, on the Pi
 ```
 
 The firmware only moves bytes: it reads the pins and I2C registers it is told
@@ -144,17 +143,12 @@ needing a flash rather than guessed at.
 
 This experimental extension targets GIGA R1 WiFi, not Uno or Mega. Hardware
 operation needs verification; it is not required by the reference robot.
-The transport also retains its existing IMU protocol for compatibility.
-Nothing about a particular sensor lives on the GIGA. `motion_module.imu`
-holds the drivers: each writes its chip's set-up registers through one-off
-`MM3 I2C` commands (written as a generator of reads, writes and waits, so the
-reader thread never blocks), declares the registers to repeat, and decodes
-them. A BNO055 is put in fusion mode and its heading is unwrapped on the Pi;
-an MPU9255 or LSM6-family IMU is fused on the Pi, with the gyro bias measured
-while still and re-measured whenever the robot rests, and yaw integrated about
-the measured up direction so tilt never reads as turning. Readings carry the
-GIGA's own millisecond clock, so integration does not depend on USB timing.
-Yaw counts up counter-clockwise, as `rotate` does.
+The Python bridge configures GPIO inputs only. Generic I2C commands remain
+in the Arduino firmware for custom extensions, but no bundled sensor-specific
+IMU drivers run over USB. The built-in MPU6500 is read only by `LocalIMU` on
+the Pi's independent I2C bus. Its driver measures gyro bias while still,
+tracks tilt with the accelerometer, and integrates relative yaw about the
+measured up direction. Positive yaw is counter-clockwise, matching `rotate`.
 
 `motionmodule giga flash` and Debug's Install firmware button run
 `motion_module.giga_firmware`: the reader releases the port, a 1200-baud touch
@@ -162,7 +156,7 @@ restarts the board into its bootloader, `dfu-util` writes the bundled binary at
 0x08040000, and the board's version is checked once it restarts. The installer
 provides `dfu-util`, the `dialout` and `plugdev` groups, and a udev rule for the
 GIGA's USB IDs. `tests/firmware/harness.cpp` runs the real firmware against
-simulated I2C chips, and `tests/fake_giga.py` runs the real drivers against a
+simulated I2C chips, and `tests/fake_giga.py` tests GPIO input transport against a
 simulated board, so both sides are tested without hardware.
 
 The reference GPIO H-bridges and PWM servo signal have no return channel.

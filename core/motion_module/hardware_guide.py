@@ -69,10 +69,10 @@ def parts_groups() -> list[dict]:
             "note": "Recommendations, not requirements. The controller runs without any of this; these are the parts known to work well on it.",
         },
         {
-            "id": "pi-i2c-sensors", "title": "Pi-connected MPU9255 IMU",
+            "id": "pi-i2c-sensors", "title": "Pi-connected MPU6500 IMU",
             "requirement": "recommended",
             "items": [
-                _part("1", "MPU9255 9-axis IMU breakout", "JESSINIE MPU9255 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/dp/B0GTVCCY6B"),
+                _part("1", "MPU6500 6-axis IMU breakout", "JESSINIE MPU6500 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/dp/B0GTVCCY6B"),
             ],
             "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
         },
@@ -82,7 +82,7 @@ def parts_groups() -> list[dict]:
             "items": [
                 _part("Optional", "Arduino GIGA R1 WiFi", "ABX00063, USB-C data cable to the Pi", "Extra GPIO inputs for future sensors; firmware and USB auto-detection are included", "optional", "https://store-usa.arduino.cc/products/giga-r1-wifi"),
             ],
-            "note": "Experimental extra, not part of the Mecanum setup; verify it with your own hardware. No additional sensors are declared. The Python GigaPin API reads digital and analog inputs; GPIO takes 3.3 V maximum. Firmware targets GIGA R1 WiFi, not Uno or Mega. The reference MPU9255 stays on the Pi.",
+            "note": "Experimental extra, not part of the Mecanum setup; verify it with your own hardware. No additional sensors are declared. The Python GigaPin API reads digital and analog inputs; GPIO takes 3.3 V maximum. Firmware targets GIGA R1 WiFi, not Uno or Mega. The reference MPU6500 stays on the Pi.",
         },
         {
             "id": "wiring", "title": "Wiring",
@@ -173,7 +173,7 @@ def hardware_guide(config) -> dict:
         "reference": "MotionModule reference build · BOM.md + docs/PINOUT.md",
         "summary": "Eight motor channels and sixteen servo outputs in the reference build. The Pi header map shows controller connections; the servo output headers are on the PCA9685 board.",
         "capacity": {"motors": 8, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
-        "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. The reference MPU9255 connects directly to the Pi; Arduino GIGA R1 WiFi USB GPIO expansion is an experimental extra.",
+        "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. The reference MPU6500 connects directly to the Pi; Arduino GIGA R1 WiFi USB GPIO expansion is an experimental extra.",
         "parts_groups": parts_groups(),
         "missing_specs": [
             {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},

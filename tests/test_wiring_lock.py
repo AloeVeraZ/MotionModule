@@ -94,7 +94,7 @@ def section(text: str, heading: str) -> str:
 
 class LockedWiringTests(unittest.TestCase):
     def test_owner_selected_imu_grounds_are_separate(self):
-        # Owner's MPU9255 connection: board GND on 6, AD0 on 20.
+        # Owner's MPU6500 connection: board GND on 6, AD0 on 20.
         config = load_hardware_file(MECANUM_HARDWARE)
         header = {row["physical"]: row for row in header_rows(config, imu_guide=True)}
         self.assertIn("GND signal ground", header[6]["role"])

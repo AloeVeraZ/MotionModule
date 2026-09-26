@@ -1,4 +1,4 @@
-"""The Mecanum robot's MPU9255, wired directly to the Raspberry Pi.
+"""The Mecanum robot's MPU6500, wired directly to the Raspberry Pi.
 
 Use the single wiring plan in Debug > Wiring and docs/PINOUT.md:
 VCC -> physical 17, GND -> 6, AD0 -> 20, SDA -> 11, SCL -> 12.
@@ -9,12 +9,12 @@ Additional sensors are not declared. Optional USB GPIO expansion through an
 Arduino GIGA R1 WiFi is an experimental extension; see docs/CODING.md.
 """
 
-from motion_module.imu import GigaIMU
+from motion_module.imu import IMUConfig
 from motion_module.telemetry import IMUReading
 
 
-# GigaIMU is the shared chip-declaration type; this uses the local Pi reader.
-IMU = GigaIMU("mpu9255", "Main IMU", address=0x68)
+# The built-in IMU is MPU6500 on the independent Pi I2C bus.
+IMU = IMUConfig("Main IMU", address=0x68)
 
 
 class RobotSensors:
@@ -37,7 +37,7 @@ class RobotSensors:
             return self.imu.reading()
         return IMUReading(
             name=IMU.name, connected=False, calibrated=False,
-            detail="Pi MPU9255 unavailable. On the Pi, enable the i2c-gpio overlay and reboot; see Debug > Wiring.",
+            detail="Pi MPU6500 unavailable. On the Pi, enable the i2c-gpio overlay and reboot; see Debug > Wiring.",
         )
 
 

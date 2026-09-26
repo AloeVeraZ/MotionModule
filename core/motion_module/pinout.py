@@ -182,7 +182,7 @@ def header_rows(config, *, imu_guide: bool = False) -> list[dict]:
                                 (12, "SCL / GPIO18"), (17, "3.3 V supply")):
             if physical in configured_pins:
                 continue  # A custom robot map owns this pin; never hide its role.
-            roles[physical] = (f"Optional MPU9255 IMU {label}", "reserved")
+            roles[physical] = (f"Optional MPU6500 IMU {label}", "reserved")
             details[physical] = (
                 f"Optional independent IMU connection: {label}. SDA goes to pin 11, SCL to pin 12, "
                 "3.3 V to pin 17, GND to pin 6 and AD0 to pin 20 (address 0x68). The installer enables the i2c-gpio overlay; reboot to activate it. "

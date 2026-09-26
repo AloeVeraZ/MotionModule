@@ -988,7 +988,7 @@
 <circle cx="1505" cy="805" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>
 <circle cx="1505" cy="805" r="4" fill="#5b497c" stroke="#5b497c" stroke-width="2"/>
 <rect x="360" y="2730" width="595" height="510" rx="16" fill="#284f84" stroke="#5180b7" stroke-width="2"/>
-<text x="650" y="2777.72" font-family="Arial,sans-serif" font-size="33" font-weight="700" fill="white" text-anchor="middle">MPU9255 IMU • 0x68</text>
+<text x="650" y="2777.72" font-family="Arial,sans-serif" font-size="33" font-weight="700" fill="white" text-anchor="middle">MPU6500 IMU • 0x68</text>
 <rect x="407" y="2880" width="110" height="115" rx="3" fill="#24343d" stroke="#101e25" stroke-width="2"/>
 <polyline points="417.0,2872 417.0,2880" fill="none" stroke="#bdc8cc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="417.0,2995 417.0,3003" fill="none" stroke="#bdc8cc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
@@ -1004,7 +1004,7 @@
 <polyline points="492.0,2995 492.0,3003" fill="none" stroke="#bdc8cc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="507.0,2872 507.0,2880" fill="none" stroke="#bdc8cc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="507.0,2995 507.0,3003" fill="none" stroke="#bdc8cc" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
-<text x="480" y="3080.16" font-family="Arial,sans-serif" font-size="24" font-weight="400" fill="white" text-anchor="start">MPU9255</text>
+<text x="480" y="3080.16" font-family="Arial,sans-serif" font-size="24" font-weight="400" fill="white" text-anchor="start">MPU6500</text>
 <text x="740" y="2827.16" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="white" text-anchor="start">VCC</text>
 <circle cx="912" cy="2820" r="10" fill="#e7bd50" stroke="#6d5521" stroke-width="2"/>
 <circle cx="912" cy="2820" r="5" fill="#223128" stroke="#223128" stroke-width="2"/>

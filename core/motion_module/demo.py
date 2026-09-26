@@ -107,7 +107,7 @@ class DemoTerminal:
 
 
 class DemoTelemetry:
-    """Simulated cameras and the reference Pi BNO055 for the Driver Station."""
+    """Simulated cameras and the reference Pi MPU6500 for the Driver Station."""
 
     def __init__(self) -> None:
         self.started = time.monotonic()
@@ -129,7 +129,7 @@ class DemoTelemetry:
                 "pitch": 1.6 * math.sin(t / 3.1),
                 "roll": -2.2 * math.cos(t / 4.3),
                 "rate": 9.0,
-                "detail": "Simulated Pi BNO055 at 0x28: the demo robot turns slowly left.",
+                "detail": "Simulated Pi MPU6500 at 0x68: the demo robot turns slowly left.",
             },
             "pi_inputs": [],
             "usb_controllers": [],

@@ -170,7 +170,7 @@ class FakeTerminal:
 class DashboardTests(unittest.TestCase):
     def test_debug_exposes_imu_guide_and_check_below_servo_boards(self):
         page = self.client.get('/diagnostics').get_data(as_text=True)
-        self.assertIn('MPU9255', page)
+        self.assertIn('MPU6500', page)
         self.assertIn('Must be high for I²C', page)
         self.assertIn('address=0x68', page)
         header = self.client.get('/api/config').get_json()['header']

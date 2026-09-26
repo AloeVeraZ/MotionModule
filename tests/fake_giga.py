@@ -14,11 +14,6 @@ import math
 from motion_module.sensor_bridge import PROTOCOL, PROTOCOL_V1
 
 
-GRAVITY = 9.80665
-COUNTS_PER_G = 1000.0 / 0.122   # the +-4 g range the driver selects
-DPS_PER_COUNT = 0.070
-
-
 class Clock:
     """A clock the tests move themselves, so nothing waits in real time."""
 
@@ -53,12 +48,6 @@ class World:
         return (-math.sin(roll) * math.cos(pitch), math.sin(pitch), math.cos(roll) * math.cos(pitch))
 
 
-def _put(data: bytearray, index: int, value: float) -> None:
-    number = max(-32768, min(32767, int(round(value)))) & 0xFFFF
-    data[index] = number & 0xFF
-    data[index + 1] = number >> 8
-
-
 class SimChip:
     """One simulated I2C device."""
 
@@ -69,116 +58,6 @@ class SimChip:
 
     def write(self, register: int, data: bytes, now_ms: int) -> bool:
         raise NotImplementedError
-
-
-class SimBno055(SimChip):
-    """A BNO055 that fuses its own readings, as the real one does."""
-
-    def __init__(self, world: World, chip_id: int = 0xA0) -> None:
-        self.world = world
-        self.chip_id = chip_id
-        self.mode = 0
-        self.units = 0x80
-        self.crystal = False
-        self.ready_at = 0
-        self.fusion_yaw = 0.0
-        self.fusion_since = 0
-        self.resets = 0
-
-    def _image(self, now_ms: int) -> bytearray:
-        data = bytearray(0x40)
-        data[0x00] = self.chip_id
-        data[0x3D] = self.mode
-        data[0x3B] = self.units
-        if self.mode:
-            heading = (-(self.world.yaw - self.fusion_yaw)) % 360.0
-            _put(data, 0x18, self.world.rate * 16)          # gyro z
-            _put(data, 0x1A, heading * 16)                  # heading, clockwise
-            up = self.world.up
-            for axis in range(3):
-                _put(data, 0x2E + axis * 2, up[axis] * GRAVITY * 100)
-            data[0x34] = 25                                  # temperature
-            data[0x35] = 0x34 if now_ms - self.fusion_since >= 1000 else 0x00
-            data[0x39] = 5                                   # fusion running
-        return data
-
-    def read(self, register: int, length: int, now_ms: int) -> bytes | None:
-        if not self.present or now_ms < self.ready_at:
-            return None
-        image = self._image(now_ms)
-        if register + length > len(image):
-            return None
-        return bytes(image[register:register + length])
-
-    def write(self, register: int, data: bytes, now_ms: int) -> bool:
-        if not self.present or now_ms < self.ready_at:
-            return False
-        value = data[0] if data else 0
-        if register == 0x3D:
-            self.mode = value & 0x0F
-            if self.mode:
-                self.fusion_yaw = self.world.yaw
-                self.fusion_since = now_ms
-        elif register == 0x3F:
-            if value & 0x20:       # system reset: silent for 650 ms
-                self.ready_at = now_ms + 650
-                self.mode = 0
-                self.crystal = False
-                self.resets += 1
-            else:
-                self.crystal = bool(value & 0x80)
-        elif register == 0x3B:
-            self.units = value
-        return True
-
-
-class SimLsm6(SimChip):
-    """An ST 6-axis IMU: a raw gyro and accelerometer, and nothing else."""
-
-    def __init__(self, world: World, chip_id: int = 0x6B, bias=(0.0, 0.0, 0.0), noise: float = 0.0) -> None:
-        self.world = world
-        self.chip_id = chip_id
-        self.bias = bias
-        self.noise = noise
-        self.registers = bytearray(0x80)
-        self.registers[0x12] = 0x04
-        self.resetting_until = 0
-        self.resets = 0
-        self._random = 12345
-
-    def _wobble(self) -> float:
-        self._random = (self._random * 1103515245 + 12345) & 0xFFFFFFFF
-        return self.noise * (((self._random >> 8) & 0xFFFF) / 65535.0 - 0.5)
-
-    def read(self, register: int, length: int, now_ms: int) -> bytes | None:
-        if not self.present:
-            return None
-        data = bytearray(self.registers)
-        data[0x0F] = self.chip_id
-        if now_ms < self.resetting_until:
-            data[0x12] |= 0x01
-        up = self.world.up
-        for axis in range(3):
-            rate = self.world.rate * up[axis] + self.bias[axis] + self._wobble()
-            _put(data, 0x22 + axis * 2, rate / DPS_PER_COUNT)
-            _put(data, 0x28 + axis * 2, up[axis] * COUNTS_PER_G)
-        data[0x1E] = 0x03  # a new sample is ready
-        if register + length > len(data):
-            return None
-        return bytes(data[register:register + length])
-
-    def write(self, register: int, data: bytes, now_ms: int) -> bool:
-        if not self.present:
-            return False
-        value = data[0] if data else 0
-        if register == 0x12 and value & 0x01:
-            self.resetting_until = now_ms + 10
-            self.resets += 1
-            self.registers = bytearray(0x80)
-            self.registers[0x12] = 0x04
-            return True
-        self.registers[register] = value
-        return True
 
 
 class FakeGiga:

@@ -8,13 +8,14 @@ import subprocess
 
 from .config import load_config
 from .errors import MotionModuleError
+from .imu import MPU6500_ADDRESSES, MPU6500_ID
 from .pinout import motor_rows
 from .pi_imu import find_i2c_gpio_bus
 
 
 def local_imu_check(hardware: bool) -> dict:
-    """Identify the reference MPU9255 without resetting or configuring the chip."""
-    check = {"id": "local-imu", "title": "MPU9255 IMU · independent I2C bus", "level": "info"}
+    """Identify the reference MPU6500 without configuring the chip."""
+    check = {"id": "local-imu", "title": "MPU6500 IMU · independent I2C bus", "level": "info"}
     if not hardware:
         return {**check, "detail": "Simulation: physical IMU detection is unavailable."}
     bus_number = find_i2c_gpio_bus()
@@ -31,17 +32,16 @@ def local_imu_check(hardware: bool) -> dict:
         with smbus2.SMBus(bus_number) as bus:
             answers = []
             read_errors = []
-            for address, register, expected, chip in (
-                (0x68, 0x75, 0x73, "MPU9255"), (0x69, 0x75, 0x73, "MPU9255"),
-            ):
+            for address in MPU6500_ADDRESSES:
                 try:
-                    chip_id = bus.read_byte_data(address, register)
+                    chip_id = bus.read_byte_data(address, 0x75)
                 except OSError as error:
                     read_errors.append(f"0x{address:02X}: {error}")
                     continue
-                if chip_id == expected:
+                if chip_id == MPU6500_ID:
+                    chip = "MPU6500"
                     return {**check, "level": "pass", "detail": (
-                        f"{chip} detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0x{expected:02X}). "
+                        f"{chip} detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0x{chip_id:02X}). "
                         "The chip responds; this does not verify calibration or live heading. "
                         "LocalIMU in robot code initializes and reads the sensor."
                     )}
@@ -52,7 +52,7 @@ def local_imu_check(hardware: bool) -> dict:
             "the i2c-dev module and the service user's i2c group permissions."
         )}
     return {**check, "level": "warn", "detail": (
-        f"No MPU9255 identified on I2C bus {bus_number}. "
+        f"No MPU6500 identified on I2C bus {bus_number}. "
         + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x68 or 0x69. ")
         + ("I2C read errors: " + "; ".join(read_errors) + ". " if read_errors else "")
         + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and AD0 pin 20, "

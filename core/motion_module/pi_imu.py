@@ -3,7 +3,7 @@
 The reference wiring is VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11,
 and SCL to 12. Enable the i2c-gpio overlay on GPIO17/18;
 see docs/PINOUT.md and Debug > Wiring for the complete board guide.
-The MPU9255 board must be in I2C mode; INT is left disconnected.
+The MPU6500 board must be in I2C mode; INT is left disconnected.
 
 The chip drivers in imu.py are transport-independent. LocalIMU executes
 those register operations on the Pi; the Mecanum sample uses this path.
@@ -17,7 +17,7 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from .imu import GigaIMU, IMU_CHIPS, Read, driver_for, wrap180
+from .imu import IMUConfig, MPU6500_ADDRESSES, MPU6500_ID, Mpu6500Driver, Read, wrap180
 from .telemetry import IMUReading
 
 POLL_SECONDS = 0.02   # ~50 Hz, the same cadence the GIGA bridge reads at
@@ -65,29 +65,31 @@ def find_i2c_gpio_bus(sysfs_root: str | Path = "/sys/class/i2c-dev") -> int | No
 class LocalIMU:
     """One IMU read directly over the Pi's own I2C bus, on its own thread.
 
-    ``declaration`` is the shared GigaIMU chip declaration. Pass the bus
+    ``declaration`` is the shared IMUConfig chip declaration. Pass the bus
     returned by find_i2c_gpio_bus() for the reference wiring, or use
     module.local_imu() to manage discovery and shutdown.
     """
 
     def __init__(
         self,
-        declaration: GigaIMU,
+        declaration: IMUConfig = IMUConfig(),
         *,
-        bus: int = 1,
+        bus: int,
         auto_start: bool = True,
         bus_factory=None,
         clock=None,
         auto_address: bool = False,
     ):
+        if not isinstance(declaration, IMUConfig):
+            raise TypeError("Use IMUConfig for the Pi-connected MPU6500")
         self.declaration = declaration
         self.name = declaration.name
         self._bus_number = bus
         self._bus_factory = bus_factory
         self._bus = None
         self._clock = clock if clock is not None else time.monotonic
-        self._driver = driver_for(declaration)
-        self._auto_address = auto_address and declaration.chip in ("bno055", "mpu9255")
+        self._driver = Mpu6500Driver(declaration)
+        self._auto_address = auto_address
         self._next_address_probe = 0.0
         self._lock = threading.Lock()
         self._offset = 0.0
@@ -173,9 +175,9 @@ class LocalIMU:
         if not self._auto_address or now < self._next_address_probe:
             return False
         self._next_address_probe = now + RETRY_SECONDS
-        register, expected = (0x00, 0xA0) if self.declaration.chip == "bno055" else (0x75, 0x73)
+        register, expected = Mpu6500Driver.WHO_AM_I, MPU6500_ID
         # Prefer the selected address when two boards answer on the bus.
-        addresses = dict.fromkeys((self._driver.address, *IMU_CHIPS[self.declaration.chip][1:]))
+        addresses = dict.fromkeys((self._driver.address, *MPU6500_ADDRESSES))
         for address in addresses:
             try:
                 chip_id = self._bus.read_i2c_block_data(address, register, 1)[0]
@@ -184,7 +186,7 @@ class LocalIMU:
             if chip_id == expected:
                 if address != self._driver.address:
                     with self._lock:
-                        self._driver = driver_for(replace(self.declaration, address=address))
+                        self._driver = Mpu6500Driver(replace(self.declaration, address=address))
                     return True
                 return False
         return False
@@ -249,7 +251,7 @@ class LocalIMU:
 
     @property
     def chip(self) -> str:
-        """The chip that answered, such as BNO055 or ISM330DHCX."""
+        """The supported chip: MPU6500."""
 
         with self._lock:
             return self._driver.chip
@@ -321,7 +323,6 @@ class LocalIMU:
         if state == "missing":
             setup = (
                 " Check soldered header joints, NCS high for I2C and SDA/SCL pull-ups to 3.3 V."
-                if self.declaration.chip == "mpu9255" else ""
             )
             return (
                 f"Nothing answers at 0x{driver.address:02X} on I2C bus {self._bus_number}. "

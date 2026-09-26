@@ -35,7 +35,6 @@ from motion_module.sensor_bridge import (
     GIGA_FIRMWARE_VERSION,
     PROTOCOL,
     PROTOCOL_V1,
-    GigaIMU,
     GigaPin,
     GigaR1Bridge,
 )
@@ -357,7 +356,7 @@ class FirmwareSimulationTests(unittest.TestCase):
         clock = Clock()
         bridge = GigaR1Bridge(
             [GigaPin("A0", "Arm", kind="analog"), GigaPin("D22", "Beam", pull="up")],
-            imus=[GigaIMU("bno055", "Main IMU")], autostart=False, clock=clock,
+            autostart=False, clock=clock,
             discovery=lambda: [{"board_id": "arduino_giga_r1_wifi", "port": "/dev/ttyACM0"}],
             serial_factory=lambda *_args, **_keywords: board,
         )
@@ -370,7 +369,7 @@ class FirmwareSimulationTests(unittest.TestCase):
                       f"send {config}", "run 100")
         configured = self.events("configured")[0]
         self.assertEqual(configured["config"], bridge.config_id)
-        self.assertEqual((configured["pins"], configured["streams"]), (2, 2))
+        self.assertEqual((configured["pins"], configured["streams"]), (2, 0))
 
         # And the bridge accepts exactly what the firmware sends back.
         for _ms, message in self.readings():
@@ -380,9 +379,9 @@ class FirmwareSimulationTests(unittest.TestCase):
         self.assertIs(bridge.value("Beam"), False)
         self.assertTrue(bridge.streaming)
         self.assertIn("Streaming", bridge.status)
-        # Seeing its own configuration, the bridge starts setting the IMU up.
+        # Input-only declarations never start a Pi-side sensor driver.
         bridge.poll()
-        self.assertTrue(any(command.startswith("MM3 I2C") for command in board.commands))
+        self.assertFalse(any(command.startswith("MM3 I2C") for command in board.commands))
 
 
 if __name__ == "__main__":
