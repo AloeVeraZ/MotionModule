@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 
+from .cooling import cooling_status
 from .config import load_config
 from .errors import MotionModuleError
 from .imu import MPU6500_ADDRESSES, MPU6500_ID
@@ -165,6 +166,21 @@ def _pin_map_conflicts(module) -> list[dict]:
     }]
 
 
+def cooling_check(status: dict | None = None) -> dict:
+    """The Pi 5 fan as the Pi's own fan control reports it. Read-only."""
+
+    status = cooling_status() if status is None else status
+    level = {"ok": "pass", "warn": "warn"}.get(status.get("level"), "info")
+    detail = status.get("summary", "")
+    if level == "warn":
+        detail += (
+            " If the fan stays still while the Pi is hot: switch the Pi off, check the fan's "
+            "small plug is fully in the FAN connector, then reinstall MotionModule so the fan "
+            "setting is in config.txt, and reboot. A fan that still never turns may be faulty."
+        )
+    return {"id": "cooling", "level": level, "title": "Pi 5 fan cooling", "detail": detail}
+
+
 def dashboard_checks(module) -> list[dict]:
     snapshot = module.snapshot()
     checks = [
@@ -199,6 +215,8 @@ def dashboard_checks(module) -> list[dict]:
     ]
     checks.extend(_pin_map_conflicts(module))
     checks.append(pi_power_check(bool(snapshot.get("hardware"))))
+    if snapshot.get("hardware"):
+        checks.append(cooling_check())
     spi_active = any(Path("/dev").glob("spidev*"))
     checks.append(
         {

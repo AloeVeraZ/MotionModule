@@ -30,7 +30,8 @@ import zlib
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
-from .telemetry import SensorReading, USBController
+from .imu import GigaIMU  # noqa: F401  (old sensors.py files import it from here)
+from .telemetry import IMUReading, SensorReading, USBController
 from .usb import sensor_controllers
 
 
@@ -55,6 +56,36 @@ __all__ = [
 # Two bridges reading one board would split its stream between them.
 _ACTIVE_BRIDGES: "weakref.WeakSet[GigaR1Bridge]" = weakref.WeakSet()
 _ACTIVE_LOCK = threading.Lock()
+
+
+RETIRED_IMU_DETAIL = (
+    "Arduino IMUs are no longer read. The built-in IMU is the MPU6500 on the Pi: "
+    "use module.local_imu(IMUConfig(...)) in sensors.py."
+)
+
+
+class RetiredGigaIMU:
+    """What an old project's ``giga.imu(name)`` returns: an IMU that never reads.
+
+    Releases before 0.12 read IMUs through the Arduino. That layer is gone, so
+    a preserved project that still asks for one gets no heading (None) rather
+    than a crash or a made-up value.
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def heading(self):
+        return None
+
+    def zero(self) -> None:
+        return None
+
+    def recalibrate(self) -> None:
+        return None
+
+    def reading(self) -> IMUReading:
+        return IMUReading(name=self.name, connected=False, calibrated=False, detail=RETIRED_IMU_DETAIL)
 
 
 def _version(text: str) -> tuple[int, ...]:
@@ -208,6 +239,8 @@ class GigaR1Bridge:
         self._unusable_protocol = ""
         self._board_error = ""
         self._error = "Waiting for the Arduino GIGA R1 WiFi"
+        # Names from an old project's imus= argument; see RetiredGigaIMU.
+        self.retired_imus: tuple[str, ...] = ()
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -542,6 +575,16 @@ class GigaR1Bridge:
                 return pin
         declared = ", ".join(repr(pin.name) for pin in self.pins) or "none"
         raise ValueError(f"No GIGA pin is named {wanted!r}. Declared pins: {declared}")
+
+    def imu(self, name: str | None = None) -> RetiredGigaIMU:
+        """Old projects' Arduino IMU handle; it never reads (see RetiredGigaIMU)."""
+
+        return RetiredGigaIMU(str(name or (self.retired_imus[:1] or ("IMU",))[0]))
+
+    def calibrate(self) -> None:
+        """Old projects recalibrated Arduino IMUs here; there are none now."""
+
+        return None
 
     def value(self, name: str):
         """The newest reading of one declared pin, by its name or pin label.

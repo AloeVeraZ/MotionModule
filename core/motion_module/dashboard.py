@@ -16,8 +16,9 @@ import socket
 import subprocess
 import threading
 import time
+import traceback
 import zipfile
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
@@ -28,11 +29,13 @@ from .camera import USBCameraManager
 from .config import (
     DEFAULT_HARDWARE_PATH,
     PROJECT_CONFIG_NAME,
+    default_config,
     hardware_source,
     load_config,
     resolve_config_path,
 )
 from .controller import MotionModule
+from .cooling import cooling_status
 from .deploy import (
     MAX_BROWSER_FILE_BYTES,
     activate_project,
@@ -42,6 +45,7 @@ from .autonomous import AutonomousRunner, load_autonomous
 from .diagnostics import dashboard_checks
 from .drive_test import DriveTest
 from .errors import MotionModuleError
+from .gpio import MockGPIO
 from .giga_firmware import bundled_firmware, flash_giga
 from .hardware_guide import hardware_guide
 from .input import available_input_gpios
@@ -60,6 +64,12 @@ DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
 PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics", "drive": "diagnostics"}
 # Older links land on the matching tab inside the page that replaced them.
 ALIAS_TABS = {"hardware": "wiring", "network": "network", "drive": "mecanum"}
+# Requests that move or power something. Recovery mode refuses all of them;
+# stopping, logs, diagnostics, deploying a project and updating stay open.
+ACTUATION_ROUTES = frozenset({
+    "/api/drive", "/api/drive/test", "/api/mecanum/test", "/api/drive/control",
+    "/api/motors/test", "/api/servos/set", "/api/autonomous/start",
+})
 STATIC_DIRECTORY = Path(__file__).with_name("static")
 # Stylesheets, scripts and fonts are requested on every page change. Browsers
 # may keep them for a week; the page links them with a content hash, so an
@@ -156,6 +166,37 @@ def servo_profile_command(config, profile_id: str, value: float, custom_range=No
     return profile, pulse_us
 
 
+class RecoveryDrive:
+    """Stands in for a robot project that failed to load. It never moves anything."""
+
+    def __init__(self, module, reason: str) -> None:
+        self.module = module
+        self.reason = reason
+
+    def drive(self, _forward, _strafe, _rotate, _speed=0.5) -> dict:
+        self.module.stop_all()
+        raise RuntimeError(f"Recovery mode: movement is blocked. {self.reason}")
+
+    def stop(self) -> None:
+        self.module.stop_all()
+
+
+def project_load_error(error: BaseException, project_path: Path | None = None) -> str:
+    """The failure in one line, naming the project file and line it came from."""
+
+    where = ""
+    folder = project_path.parent.resolve() if project_path else None
+    for frame in reversed(traceback.extract_tb(error.__traceback__)):
+        try:
+            source = Path(frame.filename).resolve()
+        except (OSError, ValueError):
+            continue
+        if folder is not None and folder in source.parents:
+            where = f" ({source.name}, line {frame.lineno})"
+            break
+    return f"{type(error).__name__}: {error}{where}"
+
+
 class IdleDrive:
     """Safe drive used only when the dashboard is started without a robot project."""
 
@@ -216,6 +257,7 @@ def system_snapshot() -> dict:
         "uptime_seconds": uptime,
         "load_1m": load,
         "temperature_c": _temperature(),
+        "cooling": cooling_status(),
         "memory": _memory_status(),
         "disk": disk_status,
     }
@@ -289,6 +331,7 @@ def create_app(
     autonomous_error: str = "",
     project_path: str | os.PathLike[str] | None = None,
     camera_auto_install: bool = False,
+    recovery_error: str = "",
 ) -> Flask:
     app = Flask(
         __name__,
@@ -332,6 +375,9 @@ def create_app(
     camera_manager = USBCameraManager(auto_install=camera_auto_install)
     app.config["CAMERA_MANAGER"] = camera_manager
 
+    recovery = {"active": bool(recovery_error), "error": recovery_error}
+    app.config["RECOVERY"] = recovery
+
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
         return bool(provided) and secrets.compare_digest(provided, dashboard_token)
@@ -343,6 +389,28 @@ def create_app(
         if request.path.startswith("/api/") and request.method == "POST" and request.is_json:
             if not isinstance(request.get_json(silent=True), dict):
                 return jsonify({"ok": False, "error": "Request body must be a JSON object"}), 400
+
+    @app.before_request
+    def refuse_actuation_in_recovery():
+        # The robot project failed to load, so nothing may move until a
+        # working project is deployed. Turning servo outputs off stays allowed.
+        if not recovery["active"] or request.method != "POST":
+            return None
+        body = request.get_json(silent=True) if request.is_json else None
+        enabling_servos = (
+            request.path == "/api/servos/output-enable"
+            and not (isinstance(body, dict) and body.get("enabled") is False)
+        )
+        if request.path in ACTUATION_ROUTES or enabling_servos:
+            return jsonify({
+                "ok": False,
+                "recovery": True,
+                "error": (
+                    "Recovery mode: the robot project could not be loaded, so movement is "
+                    f"blocked. {recovery['error']} Deploy a fixed project or install an update."
+                ),
+            }), 423
+        return None
 
     # The routine's own thread must be able to stop the robot without waiting
     # for a request, so it gets the same stop path the STOP button uses.
@@ -419,7 +487,7 @@ def create_app(
                 f"{board}:{channel}": dict(command)
                 for (board, channel), command in servo_commands.items()
             }
-        return jsonify({"ok": True, "robot": robot, "system": system})
+        return jsonify({"ok": True, "robot": robot, "system": system, "recovery": recovery})
 
     @app.get("/api/config")
     def configuration():
@@ -431,6 +499,7 @@ def create_app(
             {
                 "ok": True,
                 "project": project_name,
+                "recovery": recovery,
                 "drive_sequence_floor": sequence_floor,
                 "drive_test": project_test_drive.description(),
                 "module": {
@@ -820,6 +889,16 @@ def create_app(
         return errors
 
     app.config["STOP_OUTPUTS"] = halt_for_autonomous
+
+    if recovery["active"]:
+        # Leave nothing running from the project that failed, and cut the
+        # servo outputs in hardware at OE.
+        with command_lock:
+            stop_outputs()
+        try:
+            module.set_servo_outputs_enabled(False)
+        except Exception:
+            app.logger.exception("Could not disable the servo outputs in recovery mode")
 
     def drive_controls() -> list[dict]:
         """Extra controls the active project asks the Driver Station to show.
@@ -1329,19 +1408,60 @@ def create_app(
     return app
 
 
-def serve(module, stop_event: threading.Event, project_path: Path | None = None) -> None:
+def load_project_hooks(module, project_path: Path | None = None):
+    """The project's drive and dashboard objects, or recovery mode if either fails.
+
+    Returns (drive, dashboard_telemetry, recovery_error). A robot project that
+    fails to load must not take the dashboard with it: that leaves nginx with
+    nothing behind it (502 Bad Gateway) and no page to see why or deploy a fix.
+    On failure every output is stopped and the drive refuses to move. No other
+    drive is substituted.
+    """
+
+    drive = dashboard_telemetry = None
+    try:
+        drive = load_drive(module, project_path)
+        dashboard_telemetry = load_dashboard_telemetry(module, drive, project_path)
+        return drive, dashboard_telemetry, ""
+    except Exception as error:
+        traceback.print_exc()
+        reason = project_load_error(error, project_path)
+    for partial in (dashboard_telemetry, drive):
+        for name in ("stop", "close"):
+            hook = getattr(partial, name, None)
+            if callable(hook):
+                try:
+                    hook()
+                except Exception:
+                    traceback.print_exc()
+    module.stop_all()
+    return RecoveryDrive(module, reason), None, reason
+
+
+def serve(
+    module,
+    stop_event: threading.Event,
+    project_path: Path | None = None,
+    recovery_error: str = "",
+) -> None:
     project_name = project_path.parent.name if project_path else "No project"
     workspace = project_path.parent.parent.parent if project_path else None
-    drive = load_drive(module, project_path)
-    dashboard_telemetry = load_dashboard_telemetry(module, drive, project_path)
-    # autonomous.py is optional, so a broken one loses the autonomous mode
-    # rather than the whole dashboard. The reason shows up on the page.
+    if recovery_error:
+        drive, dashboard_telemetry = RecoveryDrive(module, recovery_error), None
+    else:
+        drive, dashboard_telemetry, recovery_error = load_project_hooks(module, project_path)
     autonomous_routine, autonomous_error = None, ""
-    try:
-        autonomous_routine = load_autonomous_routine(module, drive, project_path)
-    except Exception as error:
-        autonomous_error = f"autonomous.py could not be loaded: {error}"
-        print(autonomous_error)
+    if recovery_error:
+        print(f"MotionModule recovery mode: {recovery_error}", flush=True)
+        autonomous_error = "Autonomous is unavailable: the robot project could not be loaded."
+    else:
+        # autonomous.py is optional, so a broken one loses the autonomous mode
+        # rather than the whole dashboard. The reason shows up on the page.
+        try:
+            autonomous_routine = load_autonomous_routine(module, drive, project_path)
+        except Exception as error:
+            autonomous_error = f"autonomous.py could not be loaded: {error}"
+            print(autonomous_error)
     app = create_app(
         module,
         drive,
@@ -1354,6 +1474,7 @@ def serve(module, stop_event: threading.Event, project_path: Path | None = None)
         autonomous_error=autonomous_error,
         project_path=project_path,
         camera_auto_install=True,
+        recovery_error=recovery_error,
     )
     with ExitStack() as cleanup:
         # Register cleanup before binding the server. A bind failure or a
@@ -1384,9 +1505,37 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     project_path = args.project.resolve() if args.project else None
-    with MotionModule(load_config(project=project_path.parent if project_path else None)) as module:
-        serve(module, stop_event, project_path)
+    with open_module(project_path) as (module, recovery_error):
+        serve(module, stop_event, project_path, recovery_error)
     return 0
+
+
+@contextmanager
+def open_module(project_path: Path | None):
+    """Yield (module, recovery_error): the robot's MotionModule, or a pinless one.
+
+    A hardware.py that does not load, or GPIO that cannot be opened, used to
+    stop the dashboard from starting at all. Then the module is simulated and
+    drives no pins, and the dashboard shows the reason in recovery mode.
+    """
+
+    folder = project_path.parent if project_path else None
+    try:
+        module = MotionModule(load_config(project=folder))
+        recovery_error = ""
+    except Exception as error:
+        traceback.print_exc()
+        recovery_error = (
+            f"MotionModule could not start the robot's hardware: "
+            f"{project_load_error(error, project_path)}. No pins are being driven."
+        )
+        try:
+            config = load_config(project=folder)
+        except Exception:
+            config = default_config()
+        module = MotionModule(config, gpio=MockGPIO())
+    with module:
+        yield module, recovery_error
 
 
 if __name__ == "__main__":

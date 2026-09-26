@@ -1,33 +1,74 @@
 # Installer behavior
 
-## Upgrading to 0.12: MPU6500 only
+## Upgrading to 0.12.1 (install this, not 0.12.0)
 
-The built-in Pi IMU is now the installed MPU6500 (WHO_AM_I `0x70`). The
-other IMU drivers, chip selector, compatibility aliases and Arduino IMU API
-have been removed. Motors and PCA9685 wiring are unchanged; IMU GND remains
-on physical pin 6 and AD0 on physical pin 20.
+0.12.0 removed the old `GigaIMU` declaration. A robot folder that the
+installer kept because it was edited could still import it, and then the
+robot's web page would not start (nginx showed "502 Bad Gateway"). 0.12.1
+fixes that, so skip 0.12.0 and install 0.12.1 or later:
 
-Untouched Mecanum samples update automatically. For a customized robot folder,
-replace the old `GigaIMU` import and declaration in its `sensors.py` with:
+- Old `sensors.py` files load again. `GigaIMU(...)` from `motion_module.imu`
+  or `motion_module.sensor_bridge` now means the one built-in IMU, the MPU6500
+  on the Pi, and the service log says so. `module.giga(imus=...)` is accepted
+  and ignored; Arduino IMUs are no longer read and report no heading. No other
+  IMU driver came back.
+- Untouched copies of every Mecanum sample ever shipped are recognised and
+  updated automatically; edited robot folders are kept exactly as they are.
+- If a robot project still cannot load, the dashboard opens in **recovery
+  mode** instead of failing. It shows the real error, stops every output,
+  turns the servo outputs off and refuses driving, motor, servo and autonomous
+  commands. Logs, Debug checks, Code → Deploy and Update keep working, so a
+  fixed folder or a newer release can be installed from the browser.
+- On a Raspberry Pi 5 the installer turns on the Pi's own fan control (see
+  "Pi 5 fan cooling" below).
+
+When you next edit a customized `sensors.py`, replace the old lines with:
 
 ```python
 from motion_module.imu import IMUConfig
 IMU = IMUConfig("Main IMU", address=0x68)
 ```
 
-The existing `module.local_imu(IMU)` call works with this configuration;
-`module.local_imu()` also uses these defaults. Additional Arduino inputs use
-`module.giga(pins=...)`; it no longer accepts `imus=`.
+`module.local_imu(IMU)` and `module.local_imu()` both read the MPU6500.
+Motor, PCA9685 and IMU wiring are unchanged (IMU GND on physical pin 6, AD0
+on physical pin 20).
 
 After installing and restarting, run Debug's checks, keep the robot still
-until the Driver Station reports Ready, and zero heading. An identity check
-alone does not verify calibration, turn direction or live heading. The
-software tests simulate those behaviors; confirm them on the physical robot
-before using IMU-guided driving.
+until the Driver Station reports Ready, and zero heading. The software tests
+simulate the IMU; confirm calibration, turn direction and live heading on the
+physical robot before using IMU-guided driving.
 
 For a source archive, extract it and run `bash install.sh` from the extracted
 folder on the Pi. This installs the files in that folder. A wheel alone does
 not include the installer, robot samples or Arduino firmware bundle.
+
+## Pi 5 fan cooling
+
+The Pi 5 active cooler plugs into the board's own four-pin FAN connector, not
+the 40-pin GPIO header. On a Pi 5 the installer adds one marked `[pi5]` block
+to `/boot/firmware/config.txt` (or `/boot/config.txt`) near the top, before
+any `dtoverlay=` line, and keeps a dated backup of the file it changed:
+
+| CPU temperature | Fan |
+| --- | --- |
+| below 50 °C | off (after running, it stops once below 45 °C) |
+| 50 °C | level 1, PWM 75 of 255 |
+| 60 °C | level 2, PWM 125 |
+| 67.5 °C | level 3, PWM 175 |
+| 75 °C | level 4, PWM 250 |
+
+These are the firmware's `cooling_fan` and `fan_temp0`-`fan_temp3` settings
+(with 5 °C `_hyst` each), so the Pi's firmware and kernel run the fan. It keeps
+cooling when MotionModule, the dashboard or the robot project is stopped or
+broken. Running the installer again changes nothing; fan settings you wrote
+yourself outside the block are left in charge. The change takes effect after
+the reboot at the end of the install.
+
+The dashboard's CPU temperature card and Debug checks show the temperature,
+the fan level the kernel chose and, when the Pi reports it, the fan's RPM. A
+fan that is off while the Pi is below 50 °C is normal. If the Pi is hot and the
+fan is asked to run but stays still, switch the Pi off, check the fan's small
+plug is pushed fully into the FAN connector, and power on again.
 
 ## Running the installer
 

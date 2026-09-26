@@ -119,6 +119,19 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('if ! sudo grep -Fqx "$imu_overlay" "$boot_config"; then', self.script)
         self.assertIn("printf '\\n[all]\\n%s\\n' \"$imu_overlay\" | sudo tee -a \"$boot_config\"", self.script)
 
+    def test_install_hands_the_pi5_fan_to_firmware_cooling(self):
+        # Only on a Pi 5, through the stdlib-only cooling.py, and a failure
+        # there must not stop the install.
+        self.assertIn("grep -q 'Raspberry Pi 5'", self.script)
+        self.assertIn(
+            'sudo python3 "$SOURCE_DIR/core/motion_module/cooling.py" configure "$boot_config"',
+            self.script,
+        )
+        self.assertLess(self.script.index("imu_overlay="), self.script.index("cooling.py\" configure"))
+        self.assertIn("the rest of the install continues", self.script)
+        source = (INSTALLER.parents[1] / "core" / "motion_module" / "cooling.py").read_text(encoding="utf-8")
+        self.assertNotRegex(source, r"(?m)^from \.|^import motion_module")
+
     def test_root_bootstrap_enters_the_root_system_installer(self):
         bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
         self.assertIn('${BASH_SOURCE[0]:-}', bootstrap)

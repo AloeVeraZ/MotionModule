@@ -161,6 +161,19 @@ if ! sudo grep -Fqx "$imu_overlay" "$boot_config"; then
     say "Enabled the independent IMU I2C bus on GPIO17/18 for the next reboot."
 fi
 
+# The Pi 5 active cooler plugs into the board's own FAN connector, not the GPIO
+# header. Hand it to the Pi's firmware/kernel fan control (on at 50 C, off
+# below 45 C, faster above) so cooling never depends on MotionModule running.
+# cooling.py writes one marked [pi5] block, keeps a backup, and leaves fan
+# settings someone wrote themselves in charge.
+if tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi 5'; then
+    if cooling_message="$(sudo python3 "$SOURCE_DIR/core/motion_module/cooling.py" configure "$boot_config" 2>&1)"; then
+        say "$cooling_message"
+    else
+        say "Could not set up Pi 5 fan cooling; the rest of the install continues: $cooling_message"
+    fi
+fi
+
 # dialout opens the Arduino GIGA's USB serial port; plugdev lets the udev rule
 # below give the same user its bootloader for firmware installs.
 for group in gpio i2c dialout plugdev; do

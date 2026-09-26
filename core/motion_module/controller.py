@@ -135,23 +135,35 @@ class MotionModule:
             self._local_imu = LocalIMU(declaration, bus=bus, auto_address=True)
             return self._local_imu
 
-    def giga(self, pins=(), *, serial: str = ""):
+    def giga(self, pins=(), imus=(), *, serial: str = ""):
         """Optional USB GPIO expansion through an Arduino GIGA R1 WiFi.
 
         Declare every pin wired to the GIGA in one call, normally in
         sensors.py; calling again with the same declarations returns the same
         bridge. In simulation the board is never opened, so a laptop demo or a
         test cannot take the port from a running robot.
+
+        ``imus`` is accepted only so robot folders written before 0.12 still
+        start. Arduino IMUs are no longer read; ``bridge.imu(name)`` then
+        returns an IMU that reports no heading.
         """
 
         from .sensor_bridge import GigaR1Bridge
 
+        retired = tuple(str(getattr(imu, "name", imu)) for imu in (imus or ()))
+        if retired:
+            logging.getLogger(__name__).warning(
+                "sensors.py passes imus= to module.giga(); Arduino IMUs are no longer read "
+                "(%s). Use module.local_imu(IMUConfig(...)) for the Pi's MPU6500.",
+                ", ".join(retired),
+            )
         with self._lock:
             if self._closed:
                 raise RuntimeError("MotionModule is closed")
             bridge = self._giga
             if bridge is None:
                 bridge = self._giga = GigaR1Bridge(pins, serial=serial, simulated=not self.hardware)
+                bridge.retired_imus = retired
                 return bridge.start()
             if bridge.matches(pins, serial):
                 return bridge

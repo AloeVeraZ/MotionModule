@@ -36,6 +36,34 @@ class IMUConfig:
         object.__setattr__(self, "name", self.name.strip())
 
 
+def GigaIMU(chip="mpu6500", name="IMU", address=None, compass=False, detail=""):  # noqa: N802
+    """Old releases' IMU declaration, kept so a preserved sensors.py still imports.
+
+    Releases before 0.12 declared IMUs as ``GigaIMU("mpu9255", "Main IMU",
+    address=0x68)``, and older ones ``GigaIMU("bno055", ...)`` on the Arduino.
+    The installer keeps robot folders someone edited, so those lines must not
+    stop the robot from starting. Every declaration now means the one built-in
+    IMU, the MPU6500 on the Pi: this returns its IMUConfig. No other chip is
+    read; ``compass`` and ``detail`` are ignored. Replace it with
+    ``IMUConfig(...)`` when you next edit sensors.py.
+    """
+
+    import logging
+
+    chip_name = str(chip).strip().casefold().replace("-", "").replace("_", "")
+    note = "" if chip_name in {"mpu6500", "mpu9255", "mpu9250"} else (
+        f" It declared a {chip}; that chip is no longer read."
+    )
+    logging.getLogger(__name__).warning(
+        "sensors.py uses the retired GigaIMU(%r, %r) declaration; reading the Pi's "
+        "MPU6500 instead.%s Replace it with IMUConfig(%r, address=0x68).",
+        chip, name, note, str(name).strip() or "Main IMU",
+    )
+    if address not in MPU6500_ADDRESSES:
+        address = 0x68
+    return IMUConfig(name=str(name).strip() or "Main IMU", address=address)
+
+
 # -- transport-independent register operations --------------------------
 
 @dataclass(frozen=True, slots=True)

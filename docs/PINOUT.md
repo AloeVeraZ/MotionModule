@@ -302,8 +302,9 @@ Check that NCS is held high for I2C and that SDA/SCL have pull-ups to 3.3 V;
 the product photo does not establish which resistors the delivered board has.
 
 The sample uses `IMUConfig("Main IMU", address=0x68)` from
-`motion_module.imu`. Replace old `GigaIMU(...)` declarations in customized
-robot folders with that configuration when upgrading. Restart the robot
+`motion_module.imu`. Old `GigaIMU(...)` declarations in customized robot
+folders still load from 0.12.1 and read the same MPU6500; replace them with
+that configuration when you next edit them. Restart the robot
 service after installing the update. The driver accepts only MPU6500 identity
 `0x70`; other identities are rejected before configuration writes.
 

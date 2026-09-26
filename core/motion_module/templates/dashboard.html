@@ -1008,6 +1008,7 @@
       </div>
 
       <div class="notice page-notice" id="simulationNotice" hidden><strong>Simulation mode.</strong> Explore the dashboard without moving hardware. Device responses below are simulated.</div>
+      <div class="notice danger page-notice" id="recoveryNotice" role="alert" hidden><strong>Recovery mode: the robot will not move.</strong> The robot project could not be loaded, so every output is stopped and driving, motor, servo and autonomous commands are refused. Logs, diagnostics, Code &rarr; Deploy and Update still work. <span id="recoveryText"></span></div>
       <div class="notice danger page-notice" id="connectionNotice" role="alert" hidden><strong>Connection lost.</strong> Live values are unavailable. Controls are disabled until you reconnect and enable them again.</div>
 
       <div class="stats">
@@ -1029,7 +1030,7 @@
         <article class="card stat">
           <div class="stat-label">CPU temperature <span aria-hidden="true">◴</span></div>
           <div class="stat-value" id="temperature">&mdash;</div>
-          <div class="stat-note">Raspberry Pi processor</div>
+          <div class="stat-note" id="fanNote">Raspberry Pi processor</div>
         </article>
         <article class="card stat">
           <div class="stat-label">Uptime <span aria-hidden="true">◷</span></div>
@@ -2270,6 +2271,17 @@ function healthRow(label, value, good) {
   return row;
 }
 
+/* The Pi's own fan control, read-only. An unavailable reading is shown as
+   unavailable, never as 0, and a fan that is off while the Pi is cool is fine. */
+function fanText(cooling) {
+  if (!cooling) return 'Raspberry Pi processor';
+  if (!cooling.fan_found) return 'Fan: no fan control reported';
+  const rpm = cooling.rpm == null ? '' : ` · ${cooling.rpm} RPM`;
+  if (cooling.state == null) return `Fan: level unavailable${rpm}`;
+  if (cooling.state === 0) return `Fan: off${rpm}`;
+  return `Fan: level ${cooling.state} of ${cooling.max_state || 4}${rpm}`;
+}
+
 function renderHealth(robot, system) {
   const memory = system.memory.used_percent;
   const disk = system.disk.used_percent;
@@ -2280,6 +2292,7 @@ function renderHealth(robot, system) {
       robot.watchdog_tripped ? 'Stopped stale output' : 'Ready',
       !robot.watchdog_tripped,
     ),
+    healthRow('Pi 5 fan', system.cooling?.summary || 'Unavailable', system.cooling?.level !== 'warn'),
     healthRow(
       'Memory',
       memory == null ? 'Unavailable' : `${memory}% used`,
@@ -2442,9 +2455,12 @@ async function refreshStatus() {
     document.body.classList.remove('stale');
     $('#connectionNotice').hidden = true;
     $('#simulationNotice').hidden = robot.hardware;
-    $('#driveEnable').disabled = !configData || Boolean(configData.drive_test?.error);
-    $('#motorSafe').disabled = !configData;
-    $('#servoSafe').disabled = !configData;
+    const recovery = data.recovery || {};
+    $('#recoveryNotice').hidden = !recovery.active;
+    $('#recoveryText').textContent = recovery.active ? `Error: ${recovery.error}` : '';
+    $('#driveEnable').disabled = !configData || Boolean(configData.drive_test?.error) || Boolean(recovery.active);
+    $('#motorSafe').disabled = !configData || Boolean(recovery.active);
+    $('#servoSafe').disabled = !configData || Boolean(recovery.active);
     $('#liveDot').className = 'dot online';
     $('#liveText').textContent = robot.hardware ? 'Robot connected' : 'Simulation connected';
     $('#robotName').textContent = robot.hardware ? (system.hostname || 'MotionModule') : 'LOCAL SIMULATION';
@@ -2454,6 +2470,7 @@ async function refreshStatus() {
       : `GPIO ready · ${robot.watchdog_ms} ms watchdog`;
     $('#activeMotors').textContent = `${running} / ${Object.keys(motors).length}`;
     $('#temperature').textContent = system.temperature_c == null ? 'Not available' : `${system.temperature_c} °C`;
+    $('#fanNote').textContent = fanText(system.cooling);
     $('#uptime').textContent = formatUptime(system.uptime_seconds);
     $('#version').textContent = `MotionModule ${system.version}`;
 
@@ -2472,7 +2489,7 @@ async function refreshStatus() {
       if (notice) notice.hidden = true;
       for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) {
         const box = $(`#${id}`);
-        if (box) box.disabled = false;
+        if (box) box.disabled = Boolean(data.recovery?.active);
       }
     }
     setDriverSignal('#signalComms', 'good', 'Connected');

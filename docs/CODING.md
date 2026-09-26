@@ -254,8 +254,9 @@ The only built-in IMU is MPU6500, with WHO_AM_I `0x70`. Unknown identities,
 including MPU9255 `0x73`, are rejected before configuration writes. There is
 no chip selector or legacy IMU driver. `module.local_imu()` without arguments
 uses `IMUConfig()`; a custom name or alternate address uses the declaration
-above. Replace old `GigaIMU(...)` imports and declarations in customized robot
-folders with `IMUConfig(...)` when upgrading. Arduino expansion uses declared
+above. Old `GigaIMU(...)` imports and declarations in customized robot
+folders still load (0.12.1 and later) and read the MPU6500, with a warning in
+the service log; replace them with `IMUConfig(...)` when you next edit them. Arduino expansion uses declared
 inputs and does not load Pi-side IMU drivers.
 
 The sample shares this single reader between robot.py, autonomous.py and
