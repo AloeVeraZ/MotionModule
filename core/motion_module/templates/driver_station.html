@@ -860,6 +860,17 @@ const IDLE = {forward: 0, strafe: 0, rotate: 0};
 
 const keyLabel = key => key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
 const boundKeys = () => new Set(Object.values(bindings));
+/* Keys and controller buttons dashboard.py gave to the robot's own controls,
+   such as a 90-degree turn: {control: key} and {button: control}. Each press
+   sends that control once, the way clicking its Run button does. */
+let controlKeys = {};
+let controlButtons = {};
+function applyControlBindings(data) {
+  const pick = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : {});
+  controlKeys = pick(data.control_keys);
+  controlButtons = pick(data.control_buttons);
+}
+const controlForKey = key => Object.keys(controlKeys).find(name => controlKeys[name] === key);
 
 async function jsonFetch(url, options = {}) {
   const response = await fetch(url, {cache: 'no-store', ...options});
@@ -1052,6 +1063,11 @@ function padButtonAxis(pressed, positive, negative) {
 /* stop and estop fire the instant their button goes down - not once per
    poll while it stays held - the same way the STOP key and button work. */
 function handlePadKillButtons(pressed) {
+  if (armed && mode === 'teleop') {
+    for (const [button, name] of Object.entries(controlButtons)) {
+      if (pressed.has(button) && !padButtonsHeld.has(button)) sendControl(name, 1);
+    }
+  }
   for (const [button, action] of Object.entries(gamepadButtons)) {
     if ((action === 'stop' || action === 'estop') && pressed.has(button) && !padButtonsHeld.has(button)) {
       $('#armConfirm').checked = false;
@@ -1483,7 +1499,7 @@ function renderSensors(data) {
 }
 
 async function refreshTelemetry() {
-  try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); applyStickLayout(data); renderCameras(data); renderImu(data.imu); renderSensors(data); }
+  try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); applyControlBindings(data); applyStickLayout(data); renderCameras(data); renderImu(data.imu); renderSensors(data); }
   catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; }
 }
 
@@ -1553,6 +1569,12 @@ addEventListener('keydown', event => {
   // The stop key works in either mode; it is the keyboard's big red button.
   if (bindings.stop && key === bindings.stop) {
     event.preventDefault(); $('#armConfirm').checked = false; setArmed(false); return;
+  }
+  const control = controlForKey(key);
+  if (control && !boundKeys().has(key)) {
+    event.preventDefault();
+    if (mode === 'teleop' && !event.repeat) sendControl(control, 1);
+    return;
   }
   if (mode !== 'teleop' || !boundKeys().has(key) || event.repeat) return;
   event.preventDefault(); heldKeys.add(key); paintKeys(); sendDrive();

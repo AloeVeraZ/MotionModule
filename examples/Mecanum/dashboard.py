@@ -6,6 +6,8 @@ reach this file through drive.sensors, so the Driver Station shows exactly
 what the robot code reads.
 """
 
+from dataclasses import replace
+
 from motion_module.telemetry import CameraFeed, IMUReading, TelemetryDashboard
 
 
@@ -33,6 +35,9 @@ class MecanumDashboard(TelemetryDashboard):
 
         Return only what you want to move. Anything left out keeps its default:
         W/S drive, A/D strafe, Q/E turn, space disables and stops.
+
+        A key can also press one of robot.py's controls() buttons by its name:
+        here Z and C snap-turn 90° left and right.
         """
 
         return {
@@ -43,6 +48,8 @@ class MecanumDashboard(TelemetryDashboard):
             "turn_left": "q",
             "turn_right": "e",
             "stop": " ",
+            "turn_left_90": "z",
+            "turn_right_90": "c",
         }
 
     def gamepad_sticks(self):
@@ -72,12 +79,15 @@ class MecanumDashboard(TelemetryDashboard):
         D-pad direction can take any of driver_bindings' six actions, or
         "stop"/"estop" to disable the robot instantly. This sample keeps the
         defaults explicit: the D-pad's down button stops the robot and the
-        right trigger is the emergency stop.
+        right trigger is the emergency stop. A button can also press one of
+        robot.py's controls() buttons by name: the bumpers snap-turn 90°.
         """
 
         return {
             "dpad_down": "stop",
             "right_trigger": "estop",
+            "left_bumper": "turn_left_90",
+            "right_bumper": "turn_right_90",
         }
 
     def touch_sticks(self):
@@ -134,7 +144,12 @@ class MecanumDashboard(TelemetryDashboard):
         if self.sensors is None:
             return IMUReading(name="Robot IMU", connected=False, calibrated=False,
                               detail="Pi MPU6500 is not configured in sensors.py.")
-        return self.sensors.reading()
+        reading = self.sensors.reading()
+        assist = getattr(self.drive, "assist", None)
+        if assist is None or not isinstance(reading, IMUReading) or not reading.connected:
+            return reading
+        # Show what the driving assist is doing under the IMU's own status.
+        return replace(reading, detail=f"{reading.detail} {assist.describe()}".strip())
 
     def usb_controllers(self):
         # No additional USB sensors are declared by this robot.

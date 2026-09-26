@@ -275,5 +275,67 @@ class Mpu6500Tests(LocalImuTestCase):
                 IMUConfig(**kwargs)
 
 
+class ManualZeroTests(LocalImuTestCase):
+    """Only zero() moves the zero; recalibrating the gyro never does."""
+
+    def setUp(self):
+        self.world = World()
+        self.chip = SimMpu6500(self.world)
+        self.build(IMUConfig(), self.chip, self.world)
+        self.run_for(3)
+        self.assertTrue(self.imu.calibrated)
+
+    def turn(self, degrees):
+        self.world.rate = degrees * 2
+        self.run_for(0.5)
+        self.world.rate = 0
+        self.run_for(0.2)
+
+    def test_zero_with_level_makes_the_present_tilt_read_level(self):
+        self.world.pitch, self.world.roll = 6.0, -4.0
+        self.run_for(3)
+        self.assertAlmostEqual(self.imu.pitch(), 6.0, delta=0.5)
+        self.imu.zero(level=True)
+        self.assertAlmostEqual(self.imu.pitch(), 0.0, delta=0.2)
+        self.assertAlmostEqual(self.imu.roll(), 0.0, delta=0.2)
+        self.assertAlmostEqual(self.imu.heading(), 0.0, delta=0.2)
+        reading = self.imu.reading()
+        self.assertAlmostEqual(reading.pitch, 0.0, delta=0.2)
+        pitch, roll = self.imu.level
+        self.assertAlmostEqual(pitch, 6.0, delta=0.5)
+        self.assertAlmostEqual(roll, -4.0, delta=0.5)
+
+    def test_a_saved_level_can_be_restored_and_is_checked(self):
+        self.imu.set_level(2.0, -1.0)
+        self.assertAlmostEqual(self.imu.pitch(), -2.0, delta=0.3)
+        self.assertAlmostEqual(self.imu.roll(), 1.0, delta=0.3)
+        for bad in ((float("nan"), 0), (0, 120)):
+            with self.assertRaises(ValueError):
+                self.imu.set_level(*bad)
+
+    def test_plain_zero_leaves_the_level_alone(self):
+        self.imu.set_level(2.0, -1.0)
+        self.imu.zero()
+        self.assertEqual(self.imu.level, (2.0, -1.0))
+
+    def test_the_zero_stays_until_zeroed_again(self):
+        self.turn(45)
+        self.imu.zero()
+        self.turn(30)
+        self.assertAlmostEqual(self.imu.heading(), 30, delta=2)
+        self.run_for(5)
+        self.assertAlmostEqual(self.imu.heading(), 30, delta=2)
+
+    def test_recalibrating_keeps_the_heading_and_its_zero(self):
+        self.turn(40)
+        before = self.imu.heading()
+        self.imu.recalibrate()
+        self.assertEqual(self.imu.state, "calibrating")
+        self.assertIsNone(self.imu.heading())      # not trusted while measuring
+        self.run_for(2)
+        self.assertTrue(self.imu.calibrated)
+        self.assertAlmostEqual(self.imu.heading(), before, delta=1)
+
+
 if __name__ == '__main__':
     unittest.main()

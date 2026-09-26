@@ -11,6 +11,7 @@ those register operations on the Pi; the Mecanum sample uses this path.
 
 from __future__ import annotations
 
+import math
 import re
 import threading
 import time
@@ -94,6 +95,8 @@ class LocalIMU:
         self._lock = threading.Lock()
         self._offset = 0.0
         self._pending_zero: float | None = None
+        # Pitch and roll that read as level, set by zero(level=True).
+        self._level = (0.0, 0.0)
         self._error = ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -284,27 +287,66 @@ class LocalIMU:
         """Degrees; positive while the front of the robot is raised."""
 
         with self._lock:
-            return self._driver.pitch if self._usable(self._clock()) else None
+            return self._tilt(self._driver.pitch, 0) if self._usable(self._clock()) else None
 
     def roll(self) -> float | None:
         """Degrees; positive while the right side of the robot is lower."""
 
         with self._lock:
-            return self._driver.roll if self._usable(self._clock()) else None
+            return self._tilt(self._driver.roll, 1) if self._usable(self._clock()) else None
 
-    def zero(self, heading: float = 0.0) -> None:
+    def _tilt(self, value, axis: int):
+        """Caller holds the lock."""
+
+        return None if value is None else value - self._level[axis]
+
+    def zero(self, heading: float = 0.0, *, level: bool = False) -> None:
         """Make the direction the robot faces now read ``heading`` degrees.
 
-        Called before the IMU is streaming, it takes effect on the first reading.
+        ``level=True`` also makes the robot's present pitch and roll read 0.
+        Nothing zeroes the IMU except this call: it keeps its zero until the
+        next one (a heading cannot outlive a power-off, since the MPU6500 has
+        no compass). Called before the IMU is streaming, the heading takes
+        effect on the first reading; the level only when it is streaming.
         """
 
         target = float(heading)
         with self._lock:
-            if self._usable(self._clock()):
+            usable = self._usable(self._clock())
+            if usable:
                 self._offset = self._driver.yaw - target
                 self._pending_zero = None
             else:
                 self._pending_zero = target
+            if level and usable and self._driver.pitch is not None and self._driver.roll is not None:
+                self._level = (self._driver.pitch, self._driver.roll)
+
+    @property
+    def level(self) -> tuple[float, float]:
+        """The (pitch, roll) that read as level; (0, 0) until zero(level=True)."""
+
+        with self._lock:
+            return self._level
+
+    def set_level(self, pitch: float, roll: float) -> None:
+        """Restore a level saved from an earlier zero(level=True)."""
+
+        values = (float(pitch), float(roll))
+        if not all(math.isfinite(value) and abs(value) <= 90.0 for value in values):
+            raise ValueError("A level offset is two angles between -90 and 90 degrees")
+        with self._lock:
+            self._level = values
+
+    def recalibrate(self) -> None:
+        """Measure the gyro at rest again; keep the robot still for a second.
+
+        The heading and its zero are kept. The gyro is also measured once at
+        every start-up, because its resting error changes with temperature and
+        an unmeasured one would make the heading drift.
+        """
+
+        with self._lock:
+            self._driver.recalibrate()
 
     def describe(self) -> str:
         """One sentence on what this IMU is doing, for people."""
@@ -358,8 +400,8 @@ class LocalIMU:
                 )),
                 calibrated=usable and driver.calibrated,
                 yaw=wrap180(driver.yaw - self._offset) if usable else None,
-                pitch=driver.pitch if usable else None,
-                roll=driver.roll if usable else None,
+                pitch=self._tilt(driver.pitch, 0) if usable else None,
+                roll=self._tilt(driver.roll, 1) if usable else None,
                 rate=driver.rate if usable else None,
                 detail=self._describe(),
             )

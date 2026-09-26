@@ -260,8 +260,49 @@ the service log; replace them with `IMUConfig(...)` when you next edit them. Ard
 inputs and does not load Pi-side IMU drivers.
 
 The sample shares this single reader between robot.py, autonomous.py and
-dashboard.py. Autonomous uses measured turns when heading is available,
-and timed turns otherwise. No other sensor is predeclared.
+dashboard.py. No other sensor is predeclared.
+
+### Heading control (`motion_module.heading`)
+
+The same loop FTC teams run on their IMU: `error = target - heading`, wrapped
+to ±180° so the robot turns the short way, and `power = kP * error - kD * rate`,
+with the gyro's measured turn rate as the brake. A turn is finished only once
+the heading stays within the tolerance for `settle_seconds`. Starting gains
+follow FIRST's `RobotAutoDriveByGyro` sample and team 8088's PD controller.
+
+```python
+from motion_module.heading import HeadingController, HeadingHold, Settle
+
+HEADING = HeadingController(kp=0.02, kd=0.001, max_power=0.5,
+                            min_turn_power=0.2, tolerance=2.0, settle_seconds=0.1)
+turn = HEADING.power(target, imu.heading(), imu.rate(), in_place=True)
+```
+
+`HeadingHold` is the Driver Station assist in the Mecanum sample. While the
+driver turns, the driver is in charge; about 0.25 s after they let go it locks
+the heading and corrects drift while the robot drives or strafes (never while
+it stands still). `snap(heading, +1 / -1)` turns to the next multiple of 90°;
+a second press stacks another 90°, and moving the turning stick cancels it. If
+the heading runs away from the correction (a reversed turn direction, or a
+stuck robot), holding switches itself off and says why.
+
+Tuning, in `HEADING` in the sample's `robot.py`: lower `kp` or raise `kd` if
+the robot wobbles or overshoots; raise `kp` if drift is corrected too slowly;
+raise `min_turn_power` if turns stop a few degrees short. `min_turn_power` is
+only used when turning on the spot from a standstill.
+
+Zeroing is manual. `imu.zero(level=True)` makes the present direction 0° and
+the present tilt level; nothing else re-zeroes it. The sample saves the level
+in `.imu-level.json` beside `sensors.py`, so it survives a reboot. The heading
+cannot: the MPU6500 has no compass, so after power-off it starts at 0° facing
+wherever the robot faces. `imu.recalibrate()` measures the gyro at rest again
+and keeps the heading. The gyro is also measured once at every start-up
+(keep the robot still), because its resting error changes with temperature.
+
+A key or game-controller button can press any of the drive's `controls()`
+buttons: in `dashboard.py`, give the control's name as the action in
+`driver_bindings()` (`{"turn_left_90": "z"}`) or `gamepad_buttons()`
+(`{"left_bumper": "turn_left_90"}`). Each press sends the control once.
 
 ## Optional USB GPIO expansion
 

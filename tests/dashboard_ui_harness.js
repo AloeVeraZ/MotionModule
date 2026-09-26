@@ -697,6 +697,34 @@ async function run(scenario) {
     await app.settle();
     assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 1, strafe: 0, rotate: 0},
       'A button mapped to forward drives forward at full speed');
+  } else if (scenario === 'station-control-bindings') {
+    // dashboard.py can put a robot control, such as a 90-degree snap turn, on
+    // a key and on a controller button. Each press sends it once.
+    app.setTelemetry({
+      control_keys: {turn_left_90: 'z'},
+      control_buttons: {left_bumper: 'turn_right_90'},
+    });
+    await app.context.dashboard.refreshTelemetry();
+    await app.settle();
+    await app.arm();
+    const controls = () => app.requests.filter(item => item.url === '/api/drive/control').map(item => item.payload);
+    await app.window.fire('keydown', {key: 'z'});
+    await app.settle();
+    assert.deepEqual(controls(), [{name: 'turn_left_90', value: 1}], 'Z presses the snap turn once');
+    await app.window.fire('keydown', {key: 'z', repeat: true});
+    await app.settle();
+    assert.equal(controls().length, 1, 'Holding the key does not repeat the turn');
+
+    const pad = pressed => ({
+      index: 0, id: 'Test pad (STANDARD GAMEPAD)', mapping: 'standard', axes: [0, 0, 0, 0],
+      buttons: Array.from({length: 16}, (_, index) => ({pressed: pressed.includes(index)})),
+    });
+    app.context.navigator.getGamepads = () => [pad([4])];   // 4 is the left bumper
+    await app.context.dashboard.readPad();
+    await app.context.dashboard.readPad();
+    await app.settle();
+    assert.deepEqual(controls().at(-1), {name: 'turn_right_90', value: 1});
+    assert.equal(controls().length, 2, 'A held bumper sends its control once');
   } else if (scenario === 'station-camera-rotation') {
     await app.context.dashboard.refreshTelemetry();
     await app.settle();

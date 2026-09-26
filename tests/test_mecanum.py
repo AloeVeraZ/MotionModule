@@ -1,4 +1,6 @@
+import json
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -155,9 +157,13 @@ class MecanumSensorTests(unittest.TestCase):
             self.assertIsNone(drive.sensors.heading())
             self.assertFalse(drive.sensors.reading().connected)
             names = [control["name"] for control in drive.controls()]
-            self.assertIn("zero_heading", names)
-            self.assertNotIn("calibrate_gyro", names)
-            self.assertEqual(drive.control("zero_heading", 1), {"heading": None})
+            for name in ("zero_heading", "recalibrate_gyro", "turn_left_90", "turn_right_90", "heading_hold"):
+                self.assertIn(name, names)
+            # Without an IMU there is nothing to zero or snap by: say so.
+            with self.assertRaisesRegex(ValueError, "not ready"):
+                drive.control("zero_heading", 1)
+            with self.assertRaisesRegex(ValueError, "IMU"):
+                drive.control("turn_left_90", 1)
 
     def test_sensors_file_declares_only_the_reference_mpu6500(self):
         import sensors
@@ -171,6 +177,10 @@ class MecanumSensorTests(unittest.TestCase):
     def test_pi_imu_uses_discovered_bus_shares_reader_and_closes_on_shutdown(self):
         import sensors
 
+        level_file = Path(tempfile.mkdtemp()) / ".imu-level.json"
+        patcher = patch.object(sensors, "LEVEL_FILE", level_file)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         config = load_project_config(PROJECT_DIR)
         with MotionModule(config, gpio=MockGPIO()) as module:
             module.gpio.is_hardware = True
@@ -178,12 +188,14 @@ class MecanumSensorTests(unittest.TestCase):
                     patch("motion_module.pi_imu.LocalIMU") as reader:
                 reader.return_value.declaration = sensors.IMU
                 reader.return_value.heading.return_value = 42.0
+                reader.return_value.level = (1.5, -2.0)
                 drive = create_drive(module)
                 reader.assert_called_once_with(sensors.IMU, bus=11, auto_address=True)
                 self.assertEqual(drive.sensors.heading(), 42.0)
                 self.assertIs(module.local_imu(sensors.IMU), drive.sensors.imu)
-                drive.sensors.zero_heading()
-                reader.return_value.zero.assert_called_once_with()
+                self.assertTrue(drive.sensors.zero_heading())
+                reader.return_value.zero.assert_called_once_with(level=True)
+                self.assertEqual(json.loads(level_file.read_text()), {"pitch": 1.5, "roll": -2.0})
                 self.assertIs(drive.sensors.reading(), reader.return_value.reading.return_value)
                 module.close()
                 reader.return_value.close.assert_called_once_with()
@@ -207,8 +219,8 @@ class MecanumSensorTests(unittest.TestCase):
         module = TurningModule(sensors)
         drive = MecanumDrive(module, sensors=sensors)
         routine = MecanumAutonomous(module, drive)
-        self.assertTrue(routine.turn_to(90, threading.Event(), timeout=5))
-        self.assertAlmostEqual(sensors.value, 90, delta=routine.TURN_TOLERANCE_DEGREES + 1)
+        self.assertTrue(routine.turn_to(90, threading.Event()))
+        self.assertAlmostEqual(sensors.value, 90, delta=routine.heading.tolerance + 1)
         self.assertEqual(set(module.outputs.values()), {0})
 
     def test_autonomous_turn_takes_the_short_way_round(self):
@@ -217,7 +229,7 @@ class MecanumSensorTests(unittest.TestCase):
         module = TurningModule(sensors)
         drive = MecanumDrive(module, sensors=sensors)
         routine = MecanumAutonomous(module, drive)
-        routine.turn_to(-170, threading.Event(), timeout=5)
+        routine.turn_to(-170, threading.Event())
         # Turning left 20 degrees from 170 lands on -170 after passing 180.
         self.assertGreater(sensors.value, 180)
 

@@ -9,6 +9,7 @@ from breaking the dashboard and put firm limits on browser-facing data.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any, Mapping
 from urllib.parse import urlsplit
@@ -45,6 +46,10 @@ DEFAULT_GAMEPAD_BUTTONS = {
     "dpad_down": "stop",
     "right_trigger": "estop",
 }
+# Besides those actions, a key or button can press one of the robot's own
+# Driver Station controls (the names from its drive object's controls()), such
+# as a 90-degree turn. Such a name is a short lowercase identifier.
+CONTROL_NAME = re.compile(r"[a-z][a-z0-9_]{0,39}")
 
 # The Driver Station's sticks: a game controller's, and the on-screen pair a
 # phone or tablet drives with. Both use these four axis names, and each of
@@ -161,6 +166,8 @@ class TelemetryDashboard:
 
         Return only the actions you want to move; anything you leave out keeps
         its default (WASD to drive and strafe, Q/E to turn, space to stop).
+        A key can also press one of the drive's own controls() buttons: use
+        that control's name as the action, e.g. {"turn_left_90": "z"}.
         This is the competition console's own layout and has nothing to do with
         the fixed bindings in Debug's Mecanum Test.
         """
@@ -190,7 +197,9 @@ class TelemetryDashboard:
         "turn_right"), plus "stop" and "estop", either of which disables the
         robot the instant the button is pressed. Return only what you want to
         change; by default the D-pad's down button is "stop" and the right
-        trigger is "estop". None unbinds a button that took a default.
+        trigger is "estop". None unbinds a button that took a default. A
+        button can also press one of the drive's own controls() buttons: give
+        that control's name as the action, e.g. {"left_bumper": "turn_left_90"}.
         """
 
         return {}
@@ -242,6 +251,8 @@ def empty_snapshot() -> dict[str, Any]:
         "driver_bindings": dict(DEFAULT_DRIVER_BINDINGS),
         "gamepad_sticks": dict(DEFAULT_GAMEPAD_STICKS),
         "gamepad_buttons": dict(DEFAULT_GAMEPAD_BUTTONS),
+        "control_keys": {},
+        "control_buttons": {},
         "touch_sticks": dict(DEFAULT_TOUCH_STICKS),
         "touch_panels": [],
         "sensors": [],
@@ -454,6 +465,49 @@ def _driver_bindings(value: Any) -> dict[str, str]:
     return bindings
 
 
+def _control_keys(value: Any) -> dict[str, str]:
+    """Keys that press one of the drive's own controls, as {control: key}.
+
+    A key already driving, strafing, turning or stopping keeps that job, so
+    one key never does two things.
+    """
+
+    chosen = _mapping(value) or {}
+    taken = set(_driver_bindings(value).values())
+    keys: dict[str, str] = {}
+    for name, raw in chosen.items():
+        if not isinstance(name, str) or name in DRIVER_ACTIONS or not CONTROL_NAME.fullmatch(name):
+            continue
+        key = _text(raw, 20)
+        if len(key) == 1:
+            key = key.casefold()
+        elif not key.isalpha():
+            continue
+        if key in taken:
+            continue
+        taken.add(key)
+        keys[name] = key
+        if len(keys) >= 24:
+            break
+    return keys
+
+
+def _control_buttons(value: Any) -> dict[str, str]:
+    """Game-controller buttons that press one of the drive's own controls."""
+
+    chosen = _mapping(value) or {}
+    buttons: dict[str, str] = {}
+    for button in GAMEPAD_BUTTONS:
+        raw = chosen.get(button)
+        if not isinstance(raw, str):
+            continue
+        name = raw.strip()
+        if name in BUTTON_ACTIONS or not CONTROL_NAME.fullmatch(name):
+            continue
+        buttons[button] = name
+    return buttons
+
+
 def _gamepad_buttons(value: Any) -> dict[str, str]:
     """Fill in the default kill buttons around whatever a project chose.
 
@@ -571,8 +625,10 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
         "pi_inputs": sensors,
         "usb_controllers": controllers,
         "driver_bindings": _driver_bindings(item.get("driver_bindings")),
+        "control_keys": _control_keys(item.get("driver_bindings")),
         "gamepad_sticks": _sticks(item.get("gamepad_sticks"), DEFAULT_GAMEPAD_STICKS),
         "gamepad_buttons": _gamepad_buttons(item.get("gamepad_buttons")),
+        "control_buttons": _control_buttons(item.get("gamepad_buttons")),
         "touch_sticks": _sticks(item.get("touch_sticks"), DEFAULT_TOUCH_STICKS, turn_buttons=True),
         "touch_panels": _touch_panels(item.get("touch_panels")),
         "sensors": sensors,

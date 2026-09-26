@@ -383,8 +383,11 @@ directly to the Raspberry Pi. `sensors.py` reads one MPU6500 on the independent
 `i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VCC on 17, GND on 6, and
 AD0 on 20. Use the single [IMU wiring plan](docs/PINOUT.md#optional-mpu6500-six-axis-imu).
 The Pi installer enables this bus for its next reboot. No extra sensors are declared.
-The robot can still drive without an IMU; heading stays unavailable and the
-sample autonomous routine uses timed turns.
+The robot can still drive without an IMU; heading stays unavailable, the
+driving assist switches off, and the sample autonomous routine does not move.
+With the IMU, the Driver Station holds the robot's heading while it drives,
+Z / C (or the bumpers) snap-turn exactly 90°, and the sample autonomous drives
+an IMU-guided square. The IMU is zeroed only by its Zero IMU button.
 
 An **Arduino GIGA R1 WiFi** can optionally connect by USB for additional GPIO
 inputs. The repository includes USB auto-detection, bridge firmware and a Python

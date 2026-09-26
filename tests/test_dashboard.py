@@ -726,6 +726,10 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200, data.get("error"))
                 self.assertEqual([camera["name"] for camera in data["cameras"]], ["Front camera"])
                 self.assertEqual(data["driver_bindings"], DEFAULT_DRIVER_BINDINGS)
+                self.assertEqual(data["control_keys"], {"turn_left_90": "z", "turn_right_90": "c"})
+                self.assertEqual(data["control_buttons"], {
+                    "left_bumper": "turn_left_90", "right_bumper": "turn_right_90",
+                })
                 self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
                 self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
                 self.assertEqual(data["touch_panels"], [])

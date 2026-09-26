@@ -168,6 +168,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_a_gamepad_buttons_default_stop_button_disables_the_robot(self):
         self.run_behavior("station-gamepad-buttons", self.station_fixture)
 
+    def test_dashboard_py_can_put_a_robot_control_on_a_key_and_a_button(self):
+        self.run_behavior("station-control-bindings", self.station_fixture)
+
     def test_a_camera_can_be_rotated_by_slider_button_or_typed_angle(self):
         self.run_behavior("station-camera-rotation", self.station_fixture)
 

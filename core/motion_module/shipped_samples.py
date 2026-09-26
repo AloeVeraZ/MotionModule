@@ -15,7 +15,7 @@ file that is edited, added or the robot's own is enough to leave the whole
 folder alone: the sample is then only a starting point someone built on.
 
 `shipped_samples.json` beside this file lists every copy of every sample
-MotionModule shipped up to 0.12.0 (26 September 2026), as the SHA-256 of its contents
+MotionModule shipped up to 0.12.1 (26 September 2026), as the SHA-256 of its contents
 with Unix line endings. It does not need entries for later ones: an install
 also counts the sample in the release it replaces, so a folder this step
 updates is recognised by the install after it.

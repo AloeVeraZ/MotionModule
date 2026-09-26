@@ -124,12 +124,33 @@ The Pi installer enables the `i2c-gpio` overlay for its next reboot. The module
 discovers the bus and MPU6500 address, then closes its reader on shutdown.
 Motors and servos keep their Pi wiring.
 
-**Zero heading** sets the current direction to zero. Heading increases turning
-left, like `rotate`. Autonomous uses measured turns when the IMU is ready,
-and timed turns otherwise. Missing hardware is shown as offline. Keep the
-robot still during startup calibration. The Pi uses gyro and accelerometer
-readings; compass/magnetometer and DMP are not used. Relative yaw can drift,
-so zero before a run. Mount +Y forward and +Z upward.
+Heading increases turning left, like `rotate`. Missing hardware is shown as
+offline. The Pi uses gyro and accelerometer readings; compass/magnetometer and
+DMP are not used. Mount +Y forward and +Z upward.
+
+The Driver Station's IMU buttons:
+
+- **Zero IMU** makes the way the robot faces 0° and its present tilt level.
+  Nothing else re-zeroes it. The level is saved and survives a reboot; the
+  heading starts at 0° after every power-on, facing wherever the robot faces,
+  because the MPU6500 has no compass. Relative yaw drifts slowly, so zero
+  before a run.
+- **Recalibrate gyro** measures the gyro at rest again (keep the robot still
+  for a second). The zero is kept. This also happens once at every start-up.
+- **Snap left / right 90°** (keys Z and C, controller bumpers) turn to the next
+  multiple of 90°. Press again for another 90°; moving the turning stick cancels.
+- **Heading hold on/off**: on at start-up. While you drive or strafe without
+  turning, the robot keeps the direction it faces instead of drifting. It
+  switches itself off, and says why under the IMU, if the heading ever runs
+  away from its correction.
+
+Tuning lives in `HEADING` at the top of `robot.py`; see
+[heading control](../../docs/CODING.md#heading-control-motion_moduleheading).
+
+`autonomous.py` drives an IMU-guided square: forward while holding the heading,
+then exactly 90° left, four times, ending where it started. Angles count from
+the way the robot faces when RUN AUTO is pressed; it never zeroes the IMU.
+Without a working IMU it does not move. Edit `PLAN` to make your own.
 
 No extra sensors are declared. An Arduino **GIGA R1 WiFi** can provide optional
 USB GPIO inputs for future additions using the existing auto-detection and
