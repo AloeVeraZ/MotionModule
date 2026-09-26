@@ -129,12 +129,12 @@ class HardwareGuideTests(unittest.TestCase):
         self.assertIn("Experimental", group["note"])
         self.assertIn("3.3 V", group["note"])
 
-    def test_controller_group_recommends_the_linked_mpu9255(self):
+    def test_controller_group_recommends_the_linked_mpu6500(self):
         group = next(g for g in hardware_guide(self.config)['parts_groups'] if g['id'] == 'controllers')
-        imu = next(part for part in group['items'] if 'MPU9255' in part['name'])
+        imu = next(part for part in group['items'] if 'MPU6500' in part['name'])
         self.assertEqual(imu['status'], 'recommended')
         self.assertIn('B0GTVCCY6B', imu['url'])
-        self.assertIn('2.4–3.6 V', imu['selection'])
+        self.assertIn('0x70', imu['selection'])
 
     def test_the_battery_is_chosen_and_carries_its_own_fuse(self):
         power = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "power")

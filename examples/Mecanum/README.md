@@ -125,8 +125,8 @@ discovers the bus and MPU6500 address, then closes its reader on shutdown.
 Motors and servos keep their Pi wiring.
 
 Heading increases turning left, like `rotate`. Missing hardware is shown as
-offline. The Pi uses gyro and accelerometer readings; compass/magnetometer and
-DMP are not used. Mount +Y forward and +Z upward.
+offline. The Pi uses gyro and accelerometer readings; the DMP is not used.
+Mount +Y forward and +Z upward.
 
 The Driver Station's IMU buttons:
 

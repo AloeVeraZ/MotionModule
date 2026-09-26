@@ -22,7 +22,7 @@ class IMUDiagnosticsTests(unittest.TestCase):
         factory.return_value.__exit__.assert_called_once()
         self.assertTrue(all(call.args in ((0x68, 0x75), (0x69, 0x75))
                             for call in bus.read_byte_data.call_args_list))
-        self.assertIn("MPU9255", report["title"])
+        self.assertIn("MPU6500", report["title"])
         bus.write_byte_data.assert_not_called()
         bus.write_i2c_block_data.assert_not_called()
         return report
@@ -32,16 +32,10 @@ class IMUDiagnosticsTests(unittest.TestCase):
             self.assertEqual(self.report(reads)['level'], 'warn')
 
     def test_other_chip_identities_are_not_misreported_as_mpu6500(self):
-        for identity in (0x12, 0xA0, 0x6B):
+        for identity in (0x71, 0x73, 0x12, 0xA0, 0x6B):
             report = self.report([identity, OSError()])
             self.assertEqual(report['level'], 'warn')
             self.assertIn(f'0x68 returned chip ID 0x{identity:02X}', report['detail'])
-
-    def test_mpu9255_and_mpu9250_are_identified_from_the_register(self):
-        for identity, chip in ((0x73, 'MPU9255'), (0x71, 'MPU9250')):
-            report = self.report([identity])
-            self.assertEqual(report['level'], 'pass')
-            self.assertIn(chip + ' detected', report['detail'])
 
     def test_mpu6500_identity_is_named_correctly_at_both_addresses(self):
         for reads, address in (([0x70], '0x68'), ([OSError(), 0x70], '0x69')):

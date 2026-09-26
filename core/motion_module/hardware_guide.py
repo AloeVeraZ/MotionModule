@@ -39,10 +39,10 @@ def parts_groups() -> list[dict]:
                 _part("1", "Argon THRML 30mm active cooler", "Recommended Pi 5 cooler", "Prevents thermal throttling", "selected", "https://argon40.com/products/argon-thrml-30mm-active-cooler"),
                 _part("4", "GODIYMODULES dual H-bridge", "DC 3-18 V dual PWM motor driver", "Two brushed motors per board; eight channels total", "selected", "https://www.amazon.com/dp/B0FKH352D2"),
                 _part("1", "AITRIP PCA9685", "16-channel servo board, address 0x40 with all pads open", "Turns two I2C wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
-                _part("1 recommended", "MPU9255 9-Axis Motion Sensor Module", "Accelerometer, gyroscope and magnetometer; 2.4–3.6 V; I2C / SPI", "Recommended for IMU heading correction and autonomous turns; connects directly to the Pi", "recommended", "https://www.amazon.com/dp/B0GTVCCY6B"),
+                _part("1 recommended", "MPU6500 gyroscope + accelerometer", "6-axis IMU; 3.3 V logic; I2C; chip identity 0x70", "Recommended for IMU heading correction and autonomous turns; connects directly to the Pi", "recommended", "https://www.amazon.com/dp/B0GTVCCY6B"),
                 _part("1 set", "Controller mounting CAD", "Printable mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "placeholder", CAD_REPO),
             ],
-            "note": "The controller and power boards run MotionModule. The Pi-connected IMU is recommended for heading assist and autonomous turns; manual driving remains available without it. The selected module is MPU9255. The reader reports the actual MPU chip identity and independently checks the AK8963 magnetometer.",
+            "note": "The controller and power boards run MotionModule. The Pi-connected IMU is recommended for heading assist and autonomous turns; manual driving remains available without it. Only MPU6500 identity 0x70 is supported. The linked reference board has been sold under an MPU9255 title; verify the actual chip identity.",
         },
         {
             "id": "power", "title": "Power module",

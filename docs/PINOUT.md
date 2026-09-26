@@ -291,7 +291,7 @@ never use 5 V. No additional Pi GPIO is used.
 The driver checks WHO_AM_I register 0x75 for MPU6500 identity 0x70,
 initializes the gyro and
 accelerometer, and calibrates while still. It supplies relative heading,
-pitch, roll and turn rate; it does not use the magnetometer or DMP. Mount
+pitch, roll and turn rate; it does not use the DMP. Mount
 +Y forward and +Z upward. Relative heading can drift; zero before a run.
 ### First setup and a missing sensor
 

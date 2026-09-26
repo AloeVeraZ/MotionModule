@@ -457,11 +457,10 @@ async function run(scenario) {
     assert.match(headings, /Hub port.*1-1.1/);
     assert.match(headings, /Webcam/);
   } else if (scenario === 'station-imu-axes') {
-    vm.runInContext("renderImu({connected:true,calibrated:true,acceleration_g:[0,0,1],gyro_dps:[1,2,3],magnetic_ut:null,magnetometer_detail:'No magnetometer'})", app.context);
+    vm.runInContext("renderImu({connected:true,calibrated:true,acceleration_g:[0,0,1],gyro_dps:[1,2,3]})", app.context);
     assert.match(app.$('#imuAccel').textContent, /Z 1.00/);
     assert.match(app.$('#imuGyro').textContent, /X 1.00/);
-    assert.equal(app.$('#imuMag').textContent, '—');
-    assert.equal(app.$('#imuMagDetail').textContent, 'No magnetometer');
+    assert.equal(app.$('#imuMag'), null);
     vm.runInContext('renderImu(null)', app.context);
     assert.equal(app.$('#imuAccel').textContent, '—');
   } else if (scenario === 'imu-activity') {

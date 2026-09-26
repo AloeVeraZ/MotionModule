@@ -273,7 +273,7 @@
 .track { margin-top: .5rem; height: 5px; overflow: hidden; border-radius: 999px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-soft); }
 .track i { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); }
 .motor-card.reverse .track i { background: var(--amber); }
-.stale #motorGrid, .stale #servoActivity { opacity: .45; }
+.stale #motorGrid, .stale #servoActivity { opacity: var(--dim); }
 
 .steps { display: grid; }
 .step { display: grid; grid-template-columns: 2rem 1fr; gap: .75rem; padding-bottom: .875rem; }
@@ -482,7 +482,7 @@
 /* A board that is not answering is still worth reading as a wiring diagram,
    so its outputs stay legible and clickable - just clearly not live. */
 .servo-board.offline { box-shadow: inset 0 0 0 1px var(--red-line); }
-.servo-board.offline .servo-outputs { opacity: .55; }
+.servo-board.offline .servo-outputs { opacity: max(var(--dim), .55); }
 .servo-board.offline .servo-port { border-style: dashed; }
 .servo-outputs { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: .3125rem; }
 .servo-port {
@@ -1331,10 +1331,10 @@
         </div></article>
 
         <article class="card spaced" id="localImuGuide">
-          <div class="panel-head"><h2>MPU9255 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
+          <div class="panel-head"><h2>MPU6500 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
           <div class="panel-body stack">
-            <p>The selected MPU9255 module uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU9255</strong><span>SDA · SCL · address 0x68</span></div></div>
+            <p>The selected MPU6500 module uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
+            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>SIX-AXIS SENSOR</small><strong>MPU6500</strong><span>SDA · SCL · address 0x68</span></div></div>
             <div class="table-scroll"><table class="name-table"><thead><tr><th>Board signal</th><th>Connection / purpose</th></tr></thead><tbody>
               <tr><td>VCC</td><td>Pi pin 17 · 3.3 V supply</td></tr>
               <tr><td>GND</td><td>Pi pin 6 · signal ground</td></tr>
@@ -1345,11 +1345,11 @@
               <tr><td>INT</td><td>Leave disconnected; MotionModule polls over I²C.</td></tr>
               <tr><td>Auxiliary pins</td><td>EDA / ECL / FSYNC are unused; leave disconnected.</td></tr>
             </tbody></table></div>
-            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
-            <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. The magnetometer and DMP are unused; heading may drift, so zero before a run.</p>
+            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Reference IMU board</a></p>
+            <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. Heading is relative and may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU9255 identity 0x73, MPU9250 0x71, or MPU6500 0x70 at 0x68 or 0x69. The reader also checks the AK8963 magnetometer through I²C bypass. Magnetic measurements are displayed separately from relative gyro heading. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU6500 identity 0x70 at 0x68 or 0x69. Only the MPU6500 gyroscope and accelerometer are supported. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import IMUConfig
 
@@ -1520,7 +1520,6 @@ heading = imu.heading() if imu is not None else None
             <div class="stack" style="width:100%">
           <div class="imu-value"><small>ACCELEROMETER · g (includes gravity)</small><strong id="imuAccel">—</strong></div>
           <div class="imu-value"><small>GYROSCOPE · °/s (bias corrected)</small><strong id="imuGyro">—</strong></div>
-          <div class="imu-value"><small>MAGNETOMETER · µT</small><strong id="imuMag">—</strong><p class="imu-detail" id="imuMagDetail"></p></div>
           <p class="imu-detail">Sensor X / Y / Z axes. At rest, acceleration includes approximately 1 g of gravity; calibration does not remove gravity.</p>
         </div>
         <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
@@ -4329,8 +4328,6 @@ function renderImu(imu) {
     ? values.map((value, index) => `${['X','Y','Z'][index]} ${value.toFixed(2)}`).join(' · ') : '—';
   $('#imuAccel').textContent = axes(imu?.acceleration_g);
   $('#imuGyro').textContent = axes(imu?.gyro_dps);
-  $('#imuMag').textContent = axes(imu?.magnetic_ut);
-  $('#imuMagDetail').textContent = imu?.magnetometer_detail || (imu?.magnetic_ut ? '' : 'No magnetometer readings available.');
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
   $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
 }

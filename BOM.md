@@ -30,18 +30,18 @@ whether an individual servo is plugged into an output. The H-bridge inputs have
 no return path at all, so a configured motor channel is never proof of a
 connection.
 
-### Recommended · Pi-connected MPU9255
+### Recommended · Pi-connected MPU6500
 
 The Mecanum robot's IMU connects directly to the Pi on the independent
 `i2c-gpio` bus. No Arduino is needed for the reference robot.
 
 | Qty | Part | Selection | Notes |
 | ---: | --- | --- | --- |
-| 1 | 9-axis IMU | [MPU9255 9-Axis Motion Sensor Module, Accelerometer Gyroscope Magnetometer, 2.4–3.6 V, I2C SPI Interface](https://www.amazon.com/dp/B0GTVCCY6B) | Read by the Pi; address 0x68 |
+| 1 | MPU6500 gyroscope + accelerometer | [Reference IMU module](https://www.amazon.com/dp/B0GTVCCY6B) | Six-axis IMU; read by the Pi at 0x68; required chip identity 0x70. Seller titles may say MPU9255. |
 
 VIN goes to physical pin 17, GND to 20, SDA to 11, SCL to 12, and AD0 to 6.
-Use the [complete wiring guide](docs/PINOUT.md#optional-mpu9255-nine-axis-imu)
-and [Pi IMU setup](docs/CODING.md#pi-connected-mpu9255-imu). The robot can drive
+Use the [complete wiring guide](docs/PINOUT.md#optional-mpu6500-six-axis-imu)
+and [Pi IMU setup](docs/CODING.md#pi-connected-mpu6500-imu). The robot can drive
 without the IMU, but heading will be unavailable.
 
 ## Required · Power module

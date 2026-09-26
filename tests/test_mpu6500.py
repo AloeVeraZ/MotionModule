@@ -105,7 +105,7 @@ class Mpu6500Tests(LocalImuTestCase):
         self.assertEqual(gyro[2], 0)
 
     def test_other_identities_are_rejected_before_any_write(self):
-        for identity in (0x12, 0xA0, 0x6B, 0x00, 0xFF):
+        for identity in (0x71, 0x73, 0x12, 0xA0, 0x6B, 0x00, 0xFF):
             with self.subTest(identity=identity):
                 self.chip.chip_id = identity
                 self.imu._driver.begin(self.clock.now)
@@ -291,12 +291,12 @@ class ManualZeroTests(LocalImuTestCase):
         self.world.rate = 0
         self.run_for(0.2)
 
-    def test_xyz_telemetry_has_units_and_never_invents_a_magnetometer(self):
+    def test_xyz_telemetry_has_units_and_only_gyro_and_accelerometer(self):
         reading = self.imu.reading()
         self.assertAlmostEqual(sum(a*a for a in reading.acceleration_g) ** 0.5, 1, delta=0.05)
         self.assertTrue(all(abs(axis) < 0.5 for axis in reading.gyro_dps))
-        self.assertIsNone(reading.magnetic_ut)
-        self.assertIn('Magnetometer unavailable', reading.magnetometer_detail)
+        self.assertFalse(hasattr(reading, 'magnetic_ut'))
+        self.assertFalse(any(register == 0x37 for register, _ in self.chip.writes))
         self.world.rate = 30
         self.run_for(0.2)
         self.assertAlmostEqual(self.imu.reading().gyro_dps[2], 30, delta=1)

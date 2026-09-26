@@ -312,7 +312,7 @@ class ImuAxisTelemetryTests(unittest.TestCase):
         imu = normalize_snapshot({'imu': reading})['imu']
         self.assertEqual(imu['acceleration_g'], [0, 0, 1])
         self.assertEqual(imu['gyro_dps'], [1, 2, 3])
-        self.assertIsNone(imu['magnetic_ut'])
+        self.assertNotIn('magnetic_ut', imu)
         for invalid in ((0, 1), (0, float('nan'), 1), 'xyz'):
             imu = normalize_snapshot({'imu': {'acceleration_g': invalid}})['imu']
             self.assertIsNone(imu['acceleration_g'])

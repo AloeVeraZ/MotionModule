@@ -54,6 +54,7 @@
   --line: rgba(247, 244, 237, .12);
   --line-soft: rgba(247, 244, 237, .07);
   --edge-top: rgba(247, 244, 237, .18);   /* the lit top edge of a panel */
+  --dim: .45;                   /* stale or offline readouts */
 
   /* Accent: the site's steel blue */
   --accent: #7ba8d8;
@@ -134,53 +135,54 @@
 html[data-theme="light"] {
   color-scheme: light;
 
-  /* Soft cool slate, not white paper: the brightest surface sits near 89%
+  /* Dimmed slate, not white paper: the brightest surface sits near 75%
      luminance so a bright room or a phone at full brightness is not glare.
-     Every text colour below is at least 4.5:1 on a panel and a well. */
-  --bg: #d5dce7;
-  --surface: #e7ebf2;
-  --surface-2: #eef1f6;
-  --well: #dce2eb;
-  --control: #f0f3f8;
-  --ink: #18202e;
-  --muted: #414b5c;             /* 7.4:1 on a panel */
-  --faint: #566072;             /* 5.3:1 on a panel, 4.9:1 in a well */
-  --line: rgba(24, 32, 46, .14);
-  --line-soft: rgba(24, 32, 46, .08);
-  --edge-top: rgba(255, 255, 255, .55);
+     Every text colour below is at least 4.9:1 on a panel and a well. */
+  --bg: #c3cad5;
+  --surface: #d2d8e1;
+  --surface-2: #d8dde5;
+  --well: #c9d0da;
+  --control: #dce1e8;
+  --ink: #101722;
+  --muted: #2c3441;             /* 8.7:1 on a panel */
+  --faint: #3d4654;             /* 6.7:1 on a panel, 6.1:1 in a well */
+  --line: rgba(16, 23, 34, .16);
+  --line-soft: rgba(16, 23, 34, .09);
+  --edge-top: rgba(255, 255, 255, .4);
+  --dim: .75;                   /* stale or offline readouts stay legible */
 
-  --accent: #285a8f;
-  --accent-light: #234f80;
-  --accent-text: #234f80;
-  --accent-soft: rgba(40, 90, 143, .11);
-  --accent-line: rgba(40, 90, 143, .42);
-  --accent-fill: linear-gradient(180deg, #3468a0, #285a8f);
+  --accent: #1d4a7a;
+  --accent-light: #1d4a7a;
+  --accent-text: #1d4a7a;
+  --accent-soft: rgba(29, 74, 122, .13);
+  --accent-line: rgba(29, 74, 122, .45);
+  --accent-fill: linear-gradient(180deg, #275789, #1d4a7a);
   --accent-ink: #ffffff;
-  --accent-glow: 0 8px 20px -10px rgba(40, 90, 143, .5);
+  --accent-glow: 0 8px 20px -10px rgba(29, 74, 122, .5);
 
-  --green: #0d6552;
-  --green-soft: rgba(13, 101, 82, .1);
-  --green-line: rgba(13, 101, 82, .36);
-  --amber: #7f540a;
-  --amber-soft: rgba(127, 84, 10, .11);
-  --amber-line: rgba(127, 84, 10, .36);
-  --red: #a8323f;
-  --red-soft: rgba(168, 50, 63, .09);
-  --red-line: rgba(168, 50, 63, .36);
-  --blue: #285fad;
-  --blue-soft: rgba(40, 95, 173, .09);
-  --blue-line: rgba(40, 95, 173, .34);
+  --green: #0a5343;
+  --green-soft: rgba(10, 83, 67, .12);
+  --green-line: rgba(10, 83, 67, .4);
+  --amber: #664306;
+  --amber-soft: rgba(102, 67, 6, .12);
+  --amber-line: rgba(102, 67, 6, .4);
+  --red: #8e2834;
+  --red-soft: rgba(142, 40, 52, .1);
+  --red-line: rgba(142, 40, 52, .4);
+  --blue: #1d4f96;
+  --blue-soft: rgba(29, 79, 150, .1);
+  --blue-line: rgba(29, 79, 150, .38);
 
-  --motor: #245596;
-  --motor-soft: rgba(36, 85, 150, .08);
-  --motor-line: rgba(36, 85, 150, .32);
-  --servo: #6443a8;
-  --servo-soft: rgba(100, 67, 168, .08);
-  --servo-line: rgba(100, 67, 168, .32);
-  --ground: #4e6070;
-  --power: #a8323f;
-  --power-line: rgba(168, 50, 63, .32);
-  --reserved: #7f540a;
+  --motor: #1c4884;
+  --motor-soft: rgba(28, 72, 132, .09);
+  --motor-line: rgba(28, 72, 132, .36);
+  --servo: #523593;
+  --servo-soft: rgba(82, 53, 147, .09);
+  --servo-line: rgba(82, 53, 147, .36);
+  --ground: #3b4a59;
+  --power: #8e2834;
+  --power-line: rgba(142, 40, 52, .36);
+  --reserved: #664306;
   --chip-ink: #ffffff;
 
   --code-bg: #0e1116;
@@ -192,11 +194,11 @@ html[data-theme="light"] {
   --board-text: #eff9f6;
   --board-muted: #b5d3cc;
 
-  --grid-major: rgba(40, 90, 143, .07);
-  --grid-minor: rgba(24, 32, 46, .025);
+  --grid-major: rgba(29, 74, 122, .07);
+  --grid-minor: rgba(16, 23, 34, .03);
 
-  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='rgb(65,75,92)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
-  --focus: #285a8f;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='rgb(44,52,65)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  --focus: #1d4a7a;
 }
 
 /* ------------------------------------------------------------- baseline */

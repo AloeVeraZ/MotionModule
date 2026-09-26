@@ -1,7 +1,7 @@
-"""MPU6500 / MPU9250 / MPU9255 setup and relative heading on the Pi.
+"""MPU6500 setup and relative heading on the Pi.
 
-The driver identifies and initializes the MPU chip over I2C. LocalIMU also
-reads an AK8963 magnetometer when one responds through the auxiliary bypass.
+The driver identifies and initializes the MPU6500 over I2C. LocalIMU reads
+its gyroscope and accelerometer directly from the Pi.
 Other sensors belong on the optional Arduino expansion.
 
 Angles are degrees. Yaw counts up as the robot turns counter-clockwise seen
@@ -17,7 +17,6 @@ from struct import unpack
 
 
 MPU6500_ID = 0x70
-MPU_IDENTITIES = {0x70: "MPU6500", 0x71: "MPU9250", 0x73: "MPU9255"}
 MPU6500_ADDRESSES = (0x68, 0x69)
 DEGREES_PER_RADIAN = 57.29577951308232
 RETRY_SECONDS = 2.0
@@ -25,7 +24,7 @@ RETRY_SECONDS = 2.0
 
 @dataclass(frozen=True, slots=True)
 class IMUConfig:
-    """An auto-detected Pi MPU IMU. AD0 low selects 0x68; high selects 0x69."""
+    """The Pi-connected MPU6500. AD0 low selects 0x68; high selects 0x69."""
 
     name: str = "Main IMU"
     address: int = 0x68
@@ -45,8 +44,8 @@ def GigaIMU(chip="mpu6500", name="IMU", address=None, compass=False, detail=""):
     address=0x68)``, and older ones ``GigaIMU("bno055", ...)`` on the Arduino.
     The installer keeps robot folders someone edited, so those lines must not
     stop the robot from starting. Every declaration now means the one built-in
-    IMU on the Pi: this returns its IMUConfig. The reader detects the MPU
-    identity and probes the AK8963; ``compass`` and ``detail`` are ignored. Replace it with
+    IMU on the Pi: this returns its IMUConfig. The reader accepts only MPU6500
+    identity 0x70; ``compass`` and ``detail`` are ignored. Replace it with
     ``IMUConfig(...)`` when you next edit sensors.py.
     """
 
@@ -242,7 +241,7 @@ class _Startup:
 
     @property
     def chip(self) -> str:
-        return MPU_IDENTITIES.get(self.chip_id, "MPU IMU")
+        return "MPU6500" if self.chip_id == MPU6500_ID else "MPU IMU"
 
     def _patient(self, seconds: float) -> bool:
         """A sensor powered up with the Pi can take a moment to answer."""
@@ -416,17 +415,17 @@ class Mpu6500Driver(_Startup):
 
     @property
     def chip(self) -> str:
-        return MPU_IDENTITIES.get(self.chip_id, "MPU IMU")
+        return "MPU6500" if self.chip_id == MPU6500_ID else "MPU IMU"
 
     def _setup(self):
         while True:
             answer = yield Read(self.WHO_AM_I, 1)
             if answer:
                 self.chip_id = answer[0]
-                if self.chip_id not in MPU_IDENTITIES:
+                if self.chip_id != MPU6500_ID:
                     raise WrongChip(
                         f"chip id 0x{self.chip_id:02X} is not supported "
-                        "(expected MPU6500 0x70, MPU9250 0x71 or MPU9255 0x73)"
+                        "(expected MPU6500 0x70)"
                     )
                 break
             if not self._patient(0.3):
@@ -448,7 +447,6 @@ class Mpu6500Driver(_Startup):
         # gyro and accel at ~20 Hz and sample at 100 Hz for our 50 Hz reader.
         settings = (
             (self.POWER, 0x01), (0x6C, 0x00), (0x6A, 0x00), (0x23, 0x00),
-            (0x37, 0x02),  # expose the auxiliary magnetometer through I2C bypass
             (0x1A, 0x04), (0x19, 0x09), (0x1B, 0x18), (0x1C, 0x08), (0x1D, 0x04),
         )
         for register, value in settings:

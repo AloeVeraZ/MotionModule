@@ -104,8 +104,6 @@ class IMUReading:
     identity: str = ""
     acceleration_g: tuple[float, float, float] | None = None
     gyro_dps: tuple[float, float, float] | None = None
-    magnetic_ut: tuple[float, float, float] | None = None
-    magnetometer_detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,8 +338,6 @@ def _imu(value: Any) -> dict[str, Any] | None:
         "identity": _text(item.get("identity"), 8),
         "acceleration_g": _vector(item.get("acceleration_g")),
         "gyro_dps": _vector(item.get("gyro_dps")),
-        "magnetic_ut": _vector(item.get("magnetic_ut")),
-        "magnetometer_detail": _text(item.get("magnetometer_detail"), 160),
         "detail": _text(item.get("detail"), 160),
     }
 

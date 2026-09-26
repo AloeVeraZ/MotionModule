@@ -241,7 +241,7 @@ current heading to zero. `imu.reading()` supplies the Driver Station;
 `connected`, `calibrated`, `pitch()`, `roll()`, `rate()` and `describe()`
 provide status and other readings. Keep the robot still for initial gyro
 calibration. The Pi fuses gyro and accelerometer readings for relative yaw;
-the magnetometer and DMP are unused. Heading can drift over time, so zero it
+the DMP is unused. Heading can drift over time, so zero it
 before a run. Compass mode is unsupported for this driver. Mount +Y toward
 the front and +Z upward to match the pitch/roll convention.
 
@@ -630,23 +630,14 @@ Debug with the chassis raised, then test the project's drive mapping slowly.
 ### Live IMU axes and USB topology
 
 The Driver Station and Test outputs IMU panels include sensor X/Y/Z
-accelerometer readings in g (including gravity), bias-corrected gyro readings
-in degrees/second, and a magnetometer section in microteslas when a telemetry
-provider supplies those readings. `IMUReading` exposes `acceleration_g`,
-`gyro_dps`, and `magnetic_ut` as optional three-axis tuples. Missing or stale
-readings display a dash. Calibrating orientation does not subtract gravity
-from the accelerometer.
+accelerometer readings in g (including gravity) and bias-corrected gyro
+readings in degrees/second. `IMUReading` exposes `acceleration_g` and
+`gyro_dps` as optional three-axis tuples. Missing or stale readings display
+a dash. Calibrating orientation does not subtract gravity from acceleration.
 
-The selected shopping listing names MPU9255; the installed robot has reported
-MPU6500 identity 0x70. The Pi reader now supports MPU9255 (0x73), MPU9250 (0x71), and MPU6500
-(0x70). It reports the actual WHO_AM_I value and independently probes the
-AK8963 at 0x0C through I2C bypass, including when the MPU reports 0x70.
-Magnetic readings use the factory sensitivity adjustment in 16-bit continuous
-mode, with freshness and overflow checks. A failed magnetometer leaves gyro
-heading operational. Magnetic field readings are not fused into autonomous
-heading and are not a hard/soft-iron-calibrated compass.
-
-Register reference: [InvenSense MPU9255 register map, sections 4.38 and 5](https://stanford.edu/class/ee267/misc/MPU-9255-Register-Map.pdf).
+Only the MPU6500, reporting WHO_AM_I 0x70 at address 0x68 or 0x69, is
+supported. Other chip identities are rejected before configuration writes.
+The reader does not initialize or read a magnetometer.
 
 Checks & logs separates Linux USB root hubs from attached devices. It shows
 host ports, their bus paths, and downstream hub ports, including empty ones.
