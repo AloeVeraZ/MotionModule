@@ -214,6 +214,22 @@ class MecanumSensorTests(unittest.TestCase):
                 reader.assert_not_called()
                 self.assertIsNone(module._giga)
 
+    def test_default_auto_supports_legacy_teleop_and_builtin_motor_names(self):
+        from types import SimpleNamespace
+        from autonomous import create_autonomous
+        from motion_module.config import default_config
+        from motion_module.mecanum import mix as channel_mix
+        with MotionModule(default_config(), gpio=MockGPIO()) as module:
+            sensors = SimpleNamespace(heading=lambda: 0, rate=lambda: 0)
+            with patch.object(module, 'local_imu', return_value=sensors):
+                routine = create_autonomous(module, SimpleNamespace())
+            self.assertIs(routine.sensors, sensors)
+            self.assertFalse(any(module.snapshot()['motors'].values()))
+            result = routine.move(0, 0, 0.3, speed=1)
+            self.assertEqual(result['outputs'], channel_mix(0, 0, 0.3))
+            routine.drive.stop()
+            self.assertFalse(any(module.snapshot()['motors'].values()))
+
     def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
         sensors = FakeHeadingSensors()
         module = TurningModule(sensors)

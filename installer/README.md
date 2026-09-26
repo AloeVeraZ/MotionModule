@@ -51,14 +51,13 @@ any `dtoverlay=` line, and keeps a dated backup of the file it changed:
 
 | CPU temperature | Fan |
 | --- | --- |
-| below 50 °C | off (after running, it stops once below 45 °C) |
-| 50 °C | level 1, PWM 75 of 255 |
-| 60 °C | level 2, PWM 125 |
-| 67.5 °C | level 3, PWM 175 |
-| 75 °C | level 4, PWM 250 |
+| below 47 °C | off (after running, it stops once below 45 °C) |
+| 47 °C | approximately 75%, PWM 191 of 255 |
+| 50 °C and above | 100%, PWM 255 of 255 |
+
 
 These are the firmware's `cooling_fan` and `fan_temp0`-`fan_temp3` settings
-(with 5 °C `_hyst` each), so the Pi's firmware and kernel run the fan. It keeps
+(with 2 °C `_hyst` each), so the Pi's firmware and kernel run the fan. It keeps
 cooling when MotionModule, the dashboard or the robot project is stopped or
 broken. Running the installer again changes nothing; fan settings you wrote
 yourself outside the block are left in charge. The change takes effect after
@@ -66,7 +65,7 @@ the reboot at the end of the install.
 
 The dashboard's CPU temperature card and Debug checks show the temperature,
 the fan level the kernel chose and, when the Pi reports it, the fan's RPM. A
-fan that is off while the Pi is below 50 °C is normal. If the Pi is hot and the
+fan that is off while the Pi is below 47 °C is normal. If the Pi is hot and the
 fan is asked to run but stays still, switch the Pi off, check the fan's small
 plug is pushed fully into the FAN connector, and power on again.
 
@@ -198,3 +197,13 @@ deletes the file when the update ends. Runtime changes otherwise require
 an explicit `motionmodule install REF`, `motionmodule activate NAME`, or
 `motionmodule rollback`. Rollback returns to the earlier release of the same
 branch when one is kept; switching branches is always `motionmodule install`.
+
+### Default Mecanum modes
+
+Fresh installs select Mecanum with teleop, Pi IMU support, and the four-turn
+IMU autonomous routine. On upgrades, a customized `robots/Mecanum` folder
+gets `autonomous.py` if it is missing. Every existing file, including its
+hardware map and any existing autonomous routine, is preserved. The added
+routine supports older teleop projects through the confirmed Mecanum mixer.
+Select Autonomous, confirm the area is clear, Enable, then Start to run it;
+installing or starting the service never starts motion.

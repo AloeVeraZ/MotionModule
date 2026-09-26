@@ -41,9 +41,9 @@ class FanConfiguration(unittest.TestCase):
         for line in (
             "[pi5]",
             "dtparam=cooling_fan=on",
-            "dtparam=fan_temp0=50000",
-            "dtparam=fan_temp0_hyst=5000",
-            "dtparam=fan_temp1=60000",
+            "dtparam=fan_temp0=47000",
+            "dtparam=fan_temp0_hyst=2000",
+            "dtparam=fan_temp1=50000",
             "dtparam=fan_temp2=67500",
             "dtparam=fan_temp3=75000",
             "[all]",
@@ -51,7 +51,7 @@ class FanConfiguration(unittest.TestCase):
             self.assertIn(line + "\n", block)
         speeds = [int(line.split("=")[-1]) for line in block.splitlines() if "_speed=" in line]
         self.assertEqual(speeds, sorted(speeds))
-        self.assertEqual(len(set(speeds)), 4)
+        self.assertEqual(speeds, [191, 255, 255, 255])
         self.assertTrue(all(0 < speed <= 255 for speed in speeds))
         self.assertTrue(block.rstrip().endswith("[all]\n" + END))
 
@@ -153,6 +153,9 @@ class CoolingStatus(unittest.TestCase):
         self.assertEqual(status["level"], "ok")
         self.assertIn("off, as expected", status["summary"])
         self.assertEqual(cooling_check(status)["level"], "pass")
+
+    def test_fan_off_at_new_start_threshold_is_a_warning(self):
+        self.assertEqual(cooling_status(fake_sys(temperature=47, fan=0, rpm=0, pwm=0))['level'], 'warn')
 
     def test_a_running_fan_reports_its_level_and_speed(self):
         status = cooling_status(fake_sys(temperature=62.0, fan=2, rpm=3100, pwm=125))

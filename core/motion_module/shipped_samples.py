@@ -12,7 +12,8 @@ robot folder whose every file is a copy this project has shipped is given the
 sample this release ships, and the folder it replaces is kept under
 `~/MotionModule/backups`, beside the copies a dashboard deployment makes. One
 file that is edited, added or the robot's own is enough to leave the whole
-folder alone: the sample is then only a starting point someone built on.
+folder's existing files alone. The one additive upgrade is a missing Mecanum
+autonomous.py, installed to make both default drive modes available.
 
 `shipped_samples.json` beside this file lists every copy of every sample
 MotionModule shipped up to 0.12.1 (26 September 2026), as the SHA-256 of its contents
@@ -174,8 +175,19 @@ def refresh_untouched_samples(
             if value is None or (value != release.get(path) and value not in known.get(path, set()))
         )
         if own:
+            # Mecanum ships both drive modes. Older edited projects get only
+            # the missing routine; never replace user code or the hardware map.
+            auto = target / "autonomous.py"
+            if name == "Mecanum" and not auto.exists() and not auto.is_symlink():
+                try:
+                    content = (example / "autonomous.py").read_bytes()
+                    with auto.open("xb") as output:
+                        output.write(content)
+                    messages.append(f"Added the default IMU autonomous routine to {auto}; existing robot files were preserved.")
+                except OSError as error:
+                    messages.append(f"Could not add the default autonomous routine to {auto}: {error}")
             messages.append(
-                f"Kept {target} as it is: {_named(own)} "
+                f"Kept existing files in {target}: {_named(own)} "
                 f"{'is' if len(own) == 1 else 'are'} this robot's own, so the {name} sample this "
                 "release ships was not copied over it. The dashboard's Code page has that sample "
                 "to download whenever you want it."

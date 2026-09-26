@@ -101,6 +101,23 @@ class ShippedSampleTests(unittest.TestCase):
         self.assertIn("robot.py", messages[0])
         self.assertIn("Code page", messages[0])
 
+    def test_edited_mecanum_gets_missing_auto_without_replacing_existing_files(self):
+        robot = self.copy_sample(self.robots / 'Mecanum', **{'robot.py': '# owner teleop'})
+        (robot / 'autonomous.py').unlink()
+        before = folder_digests(robot)
+        messages = refresh_untouched_samples(self.robots, self.backups)
+        after = folder_digests(robot)
+        self.assertEqual({k: after[k] for k in before}, before)
+        self.assertEqual((robot / 'autonomous.py').read_bytes(), (MECANUM_SAMPLE / 'autonomous.py').read_bytes())
+        self.assertTrue(any('Added the default IMU' in message for message in messages))
+        refresh_untouched_samples(self.robots, self.backups)
+        self.assertEqual(folder_digests(robot), after)
+
+    def test_owner_autonomous_is_never_overwritten(self):
+        robot = self.copy_sample(self.robots / 'Mecanum', **{'autonomous.py': '# owner autonomous'})
+        refresh_untouched_samples(self.robots, self.backups)
+        self.assertEqual((robot / 'autonomous.py').read_text(), '# owner autonomous')
+
     def test_a_file_of_the_robot_s_own_keeps_the_whole_folder(self):
         robot = self.copy_sample(self.robots / "Mecanum", **{"arm.py": "# my mechanism\n"})
         before = folder_digests(robot)

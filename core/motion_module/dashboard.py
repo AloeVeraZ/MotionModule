@@ -482,6 +482,13 @@ def create_app(
         # rate limits itself.
         module.refresh_servo_boards()
         robot = module.snapshot()
+        imu = getattr(module, "_local_imu", None)
+        if imu is None:
+            imu = getattr(getattr(active_drive, "sensors", None), "imu", None)
+        try:
+            robot["imu"] = normalize_snapshot({"imu": imu.reading()})["imu"] if imu is not None else None
+        except Exception:
+            robot["imu"] = None
         with servo_lock:
             robot["servo_commands"] = {
                 f"{board}:{channel}": dict(command)

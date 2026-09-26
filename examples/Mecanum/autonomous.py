@@ -171,4 +171,18 @@ class MecanumAutonomous:
 def create_autonomous(module, drive):
     """Required entry point. Return anything with run(stop)."""
 
+    # Upgrade support: older owner-edited Mecanum projects may have neither
+    # sensors nor a raw move() method. Keep their teleop code and use the
+    # confirmed channel mixer for this bundled routine only.
+    if not callable(getattr(drive, "move", None)) or getattr(drive, "sensors", None) is None:
+        from types import SimpleNamespace
+        from motion_module.imu import IMUConfig
+        from motion_module.mecanum import MecanumTestDrive
+
+        mixer = MecanumTestDrive(module)
+        imu = module.local_imu(IMUConfig("Main IMU", address=0x68))
+        drive = SimpleNamespace(
+            drive=mixer.drive, move=mixer.drive, stop=mixer.stop,
+            sensors=imu, heading=HeadingController(),
+        )
     return MecanumAutonomous(module, drive)

@@ -29,14 +29,13 @@ from pathlib import Path
 
 
 # (threshold, hysteresis) in millidegrees C and a fan PWM value from 0-255.
-# The thresholds are the firmware's documented defaults; the hysteresis keeps
-# each level on until the CPU is 5 C below where it started, so the fan starts
-# at 50 C and stops again below 45 C. The speeds rise level by level.
+# 75% PWM at 47 C, full power at 50 C. Higher firmware stages stay at
+# full power. Two degrees of hysteresis avoid cycling at each threshold.
 COOLING_LEVELS = (
-    (50000, 5000, 75),
-    (60000, 5000, 125),
-    (67500, 5000, 175),
-    (75000, 5000, 250),
+    (47000, 2000, 191),
+    (50000, 2000, 255),
+    (67500, 2000, 255),
+    (75000, 2000, 255),
 )
 BEGIN = "# >>> MotionModule: Raspberry Pi 5 fan cooling (managed block) >>>"
 END = "# <<< MotionModule: Raspberry Pi 5 fan cooling <<<"
@@ -49,7 +48,7 @@ def managed_block() -> str:
         BEGIN,
         "# The Pi 5 fan on its own FAN connector (not the GPIO header), run by the",
         "# Pi's firmware and kernel, so it keeps cooling even when MotionModule is",
-        "# stopped. On at 50 C, off again below 45 C, faster at 60, 67.5 and 75 C.",
+        "# stopped. 75% at 47 C, 100% at 50 C; off again below 45 C.",
         "# The MotionModule installer rewrites this block; delete the whole block",
         "# and set these lines yourself to use other values.",
         "[pi5]",
@@ -120,7 +119,7 @@ def configured_text(text: str) -> tuple[str, str]:
         message = (
             "Kept the Pi 5 fan settings already in config.txt ("
             + "; ".join(foreign[:4]) + ("; ..." if len(foreign) > 4 else "")
-            + "). Delete them and reinstall to use MotionModule's 50 C / 45 C settings."
+            + "). Delete them and reinstall to use MotionModule's 47 C / 75% and 50 C / 100% settings."
         )
         return rest, message + (" Removed MotionModule's older fan block." if had_block else "")
     lines = rest.splitlines(keepends=True)
@@ -132,9 +131,9 @@ def configured_text(text: str) -> tuple[str, str]:
         block += "\n"
     new = "".join(lines[:at]) + block + "".join(lines[at:])
     if new == text:
-        return text, "Pi 5 fan cooling is already configured (on at 50 C, off below 45 C)."
+        return text, "Pi 5 fan cooling is already configured (75% at 47 C, 100% at 50 C, off below 45 C)."
     verb = "Updated" if had_block else "Enabled"
-    return new, f"{verb} Pi 5 fan cooling for the next reboot: on at 50 C, off below 45 C, faster at 60, 67.5 and 75 C."
+    return new, f"{verb} Pi 5 fan cooling for the next reboot: 75% at 47 C, 100% at 50 C, off below 45 C."
 
 
 def configure(path: str | os.PathLike[str]) -> str:
@@ -233,7 +232,7 @@ def _summary(status: dict) -> tuple[str, str]:
         # Off below the start temperature is normal, not a fault.
         if temperature is not None and temperature >= COOLING_LEVELS[0][0] / 1000:
             return f"{heat}; the fan has not been asked to run yet{speed}.", "warn"
-        return f"{heat}; fan off, as expected below 50 °C{speed}.", "ok"
+        return f"{heat}; fan off, as expected below 47 °C{speed}.", "ok"
     if rpm == 0:
         return (
             f"{heat}; fan asked to run (level {state}) but its speed sensor reads 0 RPM. "

@@ -132,6 +132,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_q_and_e_continuously_send_pure_rotation_to_the_full_station(self):
         self.run_behavior("rotation-held", self.station_fixture)
 
+    def test_imu_activity_reports_response_and_connection_loss(self):
+        self.run_behavior('imu-activity')
+
     def test_autonomous_selection_enable_start_and_progress(self):
         self.run_behavior('station-autonomous', self.station_fixture)
 

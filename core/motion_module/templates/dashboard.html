@@ -1135,6 +1135,16 @@
 
           <article class="card">
             <div class="panel-head">
+              <h2>IMU activity</h2>
+              <span id="overviewImuSummary">Checking IMU</span>
+            </div>
+            <div class="panel-body">
+              <div class="health" id="imuActivity"></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="panel-head">
               <h2>System health</h2>
               <span class="live-tag"><i aria-hidden="true"></i>Live</span>
             </div>
@@ -1413,20 +1423,6 @@ heading = imu.heading() if imu is not None else None
 
       <!-- ----------------------------------------------------- tests -->
       <div data-panel="tests" hidden>
-    <section class="card spaced">
-      <div class="panel-head"><h2>IMU calibration</h2><span id="imuStatus">Not configured</span></div>
-      <div class="panel-body imu-body">
-        <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
-        <div class="imu-grid">
-          <div class="imu-value"><small>PITCH</small><strong id="imuPitch">—</strong></div>
-          <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
-          <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
-        </div>
-        <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
-        <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
-        <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
-      </div>
-    </section>
         <div class="notice danger page-notice">
           <strong>Raise the robot first.</strong> Both tools below move real
           hardware. Every wheel must be off the ground, the mechanism path must
@@ -1514,6 +1510,20 @@ heading = imu.heading() if imu is not None else None
             </div>
           </article>
         </div>
+        <section class="card spaced">
+          <div class="panel-head"><h2>IMU calibration</h2><span id="imuStatus">Not configured</span></div>
+          <div class="panel-body imu-body">
+            <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
+            <div class="imu-grid">
+              <div class="imu-value"><small>PITCH</small><strong id="imuPitch">—</strong></div>
+              <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
+              <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
+            </div>
+            <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
+            <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
+            <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
+          </div>
+        </section>
       </div>
 
       <!-- ---------------------------------------------------- checks -->
@@ -2498,6 +2508,13 @@ function setDriverSignal(selector, state, value) {
   item.querySelector('strong').textContent = value;
 }
 
+function renderImuActivity(imu, unavailable = false) {
+  const responding = Boolean(imu?.connected);
+  $('#overviewImuSummary').textContent = unavailable ? 'Response unknown' : `${responding ? 1 : 0}/1 responding`;
+  replaceWith($('#imuActivity'), [healthRow('IMU', unavailable ? 'Connection unavailable'
+    : responding ? (imu.calibrated ? 'Responding' : 'Responding · calibrating') : 'Not responding', responding)]);
+}
+
 async function refreshStatus() {
   try {
     const data = await jsonFetch('/api/status');
@@ -2536,6 +2553,7 @@ async function refreshStatus() {
 
     renderMotorCards(motors);
     renderServos(robot);
+    renderImuActivity(robot.imu);
     renderHealth(robot, system);
     if (!connected) {
       connected = true;
@@ -2562,6 +2580,7 @@ async function refreshStatus() {
    still be moving and we can no longer see it. Disarm everything and make the
    operator re-arm deliberately once the link is back. */
 function markDisconnected() {
+  renderImuActivity(null, true);
   const wasConnected = connected;
   connected = false;
   document.body.classList.add('stale');
@@ -4307,6 +4326,7 @@ $('#calibrateImu').addEventListener('click', async () => {
   } catch (error) { $('#imuCalibration').textContent = error.message; }
   finally { $('#calibrateImu').disabled = false; }
 });
+
 
 async function refreshTestImu() {
   if (document.querySelector('[data-panel="tests"]').hidden) return;

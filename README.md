@@ -40,6 +40,12 @@ copy it replaces is kept under `backups`. The Pi reboots at the end, like any
 install. While a Pi runs this branch, the dashboard's top bar shows a yellow
 **testing** badge.
 
+Fresh installs select Mecanum with teleop and the IMU autonomous routine ready
+to use. Autonomous turns in place through 90°, 180°, 270°, and back to the
+starting direction; it only moves after you Enable and press Start. Debug
+Overview reports IMU activity as 1/1 or 0/1 responding. The Pi 5 fan uses
+approximately 75% PWM at 47 °C and 100% at 50 °C after installation and reboot.
+
 ### Go back to the main line
 
 ```bash

@@ -162,8 +162,8 @@ if ! sudo grep -Fqx "$imu_overlay" "$boot_config"; then
 fi
 
 # The Pi 5 active cooler plugs into the board's own FAN connector, not the GPIO
-# header. Hand it to the Pi's firmware/kernel fan control (on at 50 C, off
-# below 45 C, faster above) so cooling never depends on MotionModule running.
+# header. Firmware/kernel fan control runs at 75% from 47 C and 100% from
+# 50 C, stopping below 45 C. Cooling never depends on MotionModule running.
 # cooling.py writes one marked [pi5] block, keeps a backup, and leaves fan
 # settings someone wrote themselves in charge.
 if tr -d '\0' < /proc/device-tree/model 2>/dev/null | grep -q 'Raspberry Pi 5'; then
@@ -242,7 +242,8 @@ done
 # A robot folder nobody has edited still holds the sample an earlier release
 # put there, so fixes to a sample never reached the robot. Give those folders
 # the sample this release ships, keeping the copy replaced under backups. A
-# folder with any work of its own is left exactly as it is; the module
+# folder with its own work keeps every existing file; a missing Mecanum
+# autonomous.py is added so both default modes are available. The module
 # core/motion_module/shipped_samples.py explains how it tells them apart.
 released_with=()
 if [ -L "$CURRENT_LINK" ] && [ -d "$CURRENT_LINK/examples" ]; then

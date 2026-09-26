@@ -193,6 +193,15 @@ class DashboardTests(unittest.TestCase):
         self.client = self.app.test_client()
         self.headers = {"X-MotionModule-Token": self.app.config["DASHBOARD_TOKEN"]}
 
+    def test_status_reports_real_imu_response_including_calibration_and_loss(self):
+        from motion_module.telemetry import IMUReading
+        self.module._local_imu = Mock()
+        for connected, calibrated in ((True, True), (True, False), (False, False)):
+            self.module._local_imu.reading.return_value = IMUReading(name='Main IMU', connected=connected, calibrated=calibrated)
+            imu = self.client.get('/api/status').get_json()['robot']['imu']
+            self.assertEqual(imu['connected'], connected)
+            self.assertEqual(imu['calibrated'], calibrated)
+
     def test_imu_calibration_requires_session_and_stops_outputs(self):
         imu = Mock()
         self.module._local_imu = imu

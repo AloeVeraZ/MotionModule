@@ -449,6 +449,13 @@ async function run(scenario) {
     const next = reloaded.driveRequests().at(-1).payload.sequence;
     assert(Number.isSafeInteger(next), 'Sequence must retain integer precision');
     assert(next > previous, 'A reloaded page must not restart its sequence below the server watermark');
+  } else if (scenario === 'imu-activity') {
+    for (const [connected, calibrated] of [[true, true], [true, false], [false, false]]) {
+      vm.runInContext(`renderImuActivity({connected:${connected}, calibrated:${calibrated}})`, app.context);
+      assert.equal(app.$('#overviewImuSummary').textContent, `${connected ? 1 : 0}/1 responding`);
+    }
+    vm.runInContext('renderImuActivity(null, true)', app.context);
+    assert.equal(app.$('#overviewImuSummary').textContent, 'Response unknown');
   } else if (scenario === 'station-autonomous') {
     await app.$('#disableButton').fire('click');
     vm.runInContext("autoState = {configured:false, state:'idle'}; updateEnableButton()", app.context);
