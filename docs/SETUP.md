@@ -73,7 +73,7 @@ servos one channel at a time after selecting the correct voltage and behavior.
 
 The reference Mecanum setup keeps its motors, servo controller and MPU9255
 on the Pi. The IMU uses the independent bus shown in **Debug → Wiring**:
-VCC to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
+VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12.
 Follow the [complete MPU9255 guide](PINOUT.md#optional-mpu9255-nine-axis-imu),
 including the board's I2C mode and pull-up notes.
 

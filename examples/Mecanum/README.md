@@ -119,7 +119,7 @@ routine cannot fight over the motors.
 
 `sensors.py` reads one MPU9255 directly from the Pi, shared by `robot.py`,
 `autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-mpu9255-nine-axis-imu):
-VCC to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12.
+VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12.
 The Pi installer enables the `i2c-gpio` overlay for its next reboot. The module
 discovers the bus and MPU9255 address, then closes its reader on shutdown.
 Motors and servos keep their Pi wiring.

@@ -13,15 +13,15 @@ from .pi_imu import find_i2c_gpio_bus
 
 
 def local_imu_check(hardware: bool) -> dict:
-    """Identify a supported reference IMU without resetting or configuring the chip."""
-    check = {"id": "local-imu", "title": "BNO055 IMU · independent I2C bus", "level": "info"}
+    """Identify the reference MPU9255 without resetting or configuring the chip."""
+    check = {"id": "local-imu", "title": "MPU9255 IMU · independent I2C bus", "level": "info"}
     if not hardware:
         return {**check, "detail": "Simulation: physical IMU detection is unavailable."}
     bus_number = find_i2c_gpio_bus()
     if bus_number is None:
         return {**check, "detail": (
             "IMU bus not enabled. Add dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 "
-            "to /boot/firmware/config.txt and reboot. See Wiring for pins 11/12, 17 and 6."
+            "to /boot/firmware/config.txt and reboot. See Wiring for pins 11/12, 17, 6 and 20."
         )}
     try:
         import smbus2
@@ -32,7 +32,6 @@ def local_imu_check(hardware: bool) -> dict:
             answers = []
             read_errors = []
             for address, register, expected, chip in (
-                (0x28, 0x00, 0xA0, "BNO055"), (0x29, 0x00, 0xA0, "BNO055"),
                 (0x68, 0x75, 0x73, "MPU9255"), (0x69, 0x75, 0x73, "MPU9255"),
             ):
                 try:
@@ -53,10 +52,11 @@ def local_imu_check(hardware: bool) -> dict:
             "the i2c-dev module and the service user's i2c group permissions."
         )}
     return {**check, "level": "warn", "detail": (
-        f"No MPU9255 or BNO055 identified on I2C bus {bus_number}. "
-        + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x28, 0x29, 0x68 or 0x69. ")
+        f"No MPU9255 identified on I2C bus {bus_number}. "
+        + ("; ".join(answers) + ". " if answers else "Chip ID could not be read at 0x68 or 0x69. ")
         + ("I2C read errors: " + "; ".join(read_errors) + ". " if read_errors else "")
-        + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and the board's I2C mode."
+        + "Check SDA pin 11, SCL pin 12, 3.3 V pin 17, GND pin 6 and AD0 pin 20, "
+        "soldered header joints, NCS high and SDA/SCL pull-ups to 3.3 V."
     )}
 
 

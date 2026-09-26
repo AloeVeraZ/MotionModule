@@ -74,7 +74,7 @@ def parts_groups() -> list[dict]:
             "items": [
                 _part("1", "MPU9255 9-axis IMU breakout", "JESSINIE MPU9255 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/dp/B0GTVCCY6B"),
             ],
-            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VCC to physical pin 17, GND and AD0 to 6, SDA to 11 and SCL to 12. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
+            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
         },
         {
             "id": "sensors", "title": "Optional USB GPIO expansion",

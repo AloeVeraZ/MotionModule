@@ -207,7 +207,7 @@ configures.
 
 The Mecanum setup uses one MPU9255 wired directly to the Pi. Follow the
 [complete wiring plan](PINOUT.md#optional-mpu9255-nine-axis-imu): VCC to
-physical pin 17, GND and AD0 to pin 6, SDA to 11 (GPIO17) and SCL to 12
+physical pin 17, GND to pin 6 and AD0 to pin 20, SDA to 11 (GPIO17) and SCL to 12
 (GPIO18). Grounding AD0 selects address 0x68. The board must be in I2C mode (CS high); INT is left disconnected. The motor and PCA9685 wiring stays as shipped.
 
 The Pi installer adds this under `[all]` in `/boot/firmware/config.txt` and
@@ -250,8 +250,11 @@ On an existing robot folder that you have customized, update its own
 The installer preserves customized robot folders; untouched shipped samples
 receive the new declaration automatically.
 
-Existing BNO055 projects remain supported with `GigaIMU("bno055")`; those
-boards use addresses 0x28/0x29 and their own onboard fusion.
+The reference `module.local_imu()` path uses MPU9255 only. An old BNO055
+declaration is migrated to MPU9255 at 0x68, with compass mode disabled and
+a migration warning in the log. This does not edit your project files;
+update `sensors.py` explicitly as above. Low-level transport drivers retain
+compatibility for separate USB expansion projects.
 
 The sample shares this single reader between robot.py, autonomous.py and
 dashboard.py. Autonomous uses measured turns when heading is available,

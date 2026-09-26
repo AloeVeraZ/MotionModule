@@ -1296,16 +1296,16 @@
               <tr><td>GND</td><td>Pi pin 6 · signal ground</td></tr>
               <tr><td>SCL</td><td>Pi pin 12 · GPIO18 · I²C clock</td></tr>
               <tr><td>SDA</td><td>Pi pin 11 · GPIO17 · I²C data</td></tr>
-              <tr><td>AD0 / SDO</td><td>Existing Pi pin 6 ground · selects address 0x68</td></tr>
+              <tr><td>AD0 / SDO</td><td>Pi pin 20 ground (secondary IMU ground) · selects address 0x68</td></tr>
               <tr><td>CS / NCS</td><td>Must be high for I²C; verify the breakout's onboard pull-up. No additional Pi GPIO.</td></tr>
               <tr><td>INT</td><td>Leave disconnected; MotionModule polls over I²C.</td></tr>
               <tr><td>Auxiliary pins</td><td>EDA / ECL / FSYNC are unused; leave disconnected.</td></tr>
             </tbody></table></div>
-            <p>Use 3.3 V power and signal pull-ups. Verify the board is configured for I²C. The previous BNO055's BOOT, REST and PS0/PS1 instructions do not apply. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
+            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. The previous BNO055's BOOT, REST and PS0/PS1 instructions do not apply. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
             <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. The magnetometer and DMP are unused; heading may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU9255 identity 0x73 at 0x68 or 0x69. Legacy BNO055 identity 0xA0 at 0x28/0x29 is also recognized. Detection does not initialize the sensor or prove calibrated heading.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks only MPU9255 identity 0x73 at 0x68 or 0x69. Detection does not initialize the sensor or prove calibrated heading. An error at 0x28 means the running software still selects the previous IMU; update MotionModule and the active project's sensors.py.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import GigaIMU
 

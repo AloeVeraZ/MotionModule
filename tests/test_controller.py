@@ -11,6 +11,31 @@ from motion_module.servo import MockServoController
 
 
 class ControllerTests(unittest.TestCase):
+    def test_old_pi_declaration_migrates_to_mpu9255_and_shares_reader(self):
+        from motion_module.imu import GigaIMU
+
+        self.gpio.is_hardware = True
+        for old_address in (0x28, 0x29):
+            old = GigaIMU("bno055", "Main IMU", address=old_address, compass=True)
+            expected = GigaIMU("mpu9255", "Main IMU", address=0x68)
+            self.module._local_imu = None
+            with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=15), \
+                    patch("motion_module.pi_imu.LocalIMU") as reader:
+                reader.return_value.declaration = expected
+                with self.assertLogs("motion_module.controller", level="WARNING"):
+                    imu = self.module.local_imu(old)
+                reader.assert_called_once_with(expected, bus=15, auto_address=True)
+                self.assertIs(self.module.local_imu(old), imu)
+                self.assertIs(self.module.local_imu(expected), imu)
+                with self.assertRaises(ValueError):
+                    self.module.local_imu(GigaIMU("mpu9255", address=0x69))
+
+    def test_reference_pi_reader_rejects_other_chip_families(self):
+        from motion_module.imu import GigaIMU
+
+        with self.assertRaisesRegex(ValueError, "reference Pi IMU is MPU9255"):
+            self.module.local_imu(GigaIMU("ism330dhcx"))
+
     def setUp(self):
         self.config = default_config()
         self.gpio = MockGPIO()

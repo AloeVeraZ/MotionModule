@@ -268,7 +268,7 @@ text(480,3060,'MPU9255',24,'white')
 imu_pads=['VCC','GND','SCL','SDA','AD0','CS','AUX','INT']
 imu_wires=[(17,0,PALETTE['imu-supply']),(6,1,PALETTE['imu-ground']),
            (12,2,PALETTE['imu-signal']),(11,3,PALETTE['imu-signal']),
-           (6,4,PALETTE['imu-ground'])]
+           (20,4,PALETTE['imu-ground'])]
 for i,label in enumerate(imu_pads):
     yy=2820+i*51
     text(740,yy-13,label,24,'white',True)
@@ -278,10 +278,10 @@ for i,(p,row,color) in enumerate(imu_wires):
     escape=sy+15 if p%2 else sy
     line([(sx,sy),(sx+18,escape),(lane,escape),(lane,ty),(912,ty)],color,5,True)
     hole(912,ty);circle(912,ty,4,color)
-    label={17:'P17 · 3.3 V',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND'}[p]
-    text(540,ty-12,label,19,INK if p == 6 else color,bold=True)
+    label={17:'P17 · 3.3 V',12:'P12 · GPIO18',11:'P11 · GPIO17',6:'P6 · GND',20:'P20 · GND'}[p]
+    text(540,ty-12,label,19,INK if p in (6,20) else color,bold=True)
 text(1030,3090,'CS high for I2C: verify onboard pull-up',23,color='#aabecd')
-text(1030,3130,'INT: disconnected • AD0 grounded for 0x68',23,color='#aabecd')
+text(1030,3130,'INT: disconnected • AD0 to P20 ground for 0x68',23,color='#aabecd')
 
 # All forty physical header positions are visible; unused ones stay empty.
 used={p for p,*_ in destinations}|set(servo_pts)|{p for p,_,_ in imu_wires}

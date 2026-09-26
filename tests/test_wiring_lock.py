@@ -93,6 +93,17 @@ def section(text: str, heading: str) -> str:
 
 
 class LockedWiringTests(unittest.TestCase):
+    def test_owner_selected_imu_grounds_are_separate(self):
+        # Owner's MPU9255 connection: board GND on 6, AD0 on 20.
+        config = load_hardware_file(MECANUM_HARDWARE)
+        header = {row["physical"]: row for row in header_rows(config, imu_guide=True)}
+        self.assertIn("GND signal ground", header[6]["role"])
+        self.assertNotIn("AD0", header[6]["role"])
+        self.assertIn("AD0 secondary ground", header[20]["role"])
+        self.assertEqual(header[20]["function"], "GND")
+        doc = PINOUT_DOC.read_text(encoding="utf-8")
+        self.assertRegex(doc, r"\| AD0 / SDO \| Pi pin 20 ground")
+
     def test_every_shipped_pin_map_is_the_locked_wiring(self):
         for path in SHIPPED_PIN_MAPS:
             with self.subTest(path=path.relative_to(ROOT).as_posix()):

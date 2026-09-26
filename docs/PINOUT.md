@@ -279,7 +279,7 @@ wire stays in place.
 | GND | Pi pin 6, ground |
 | SCL | Pi pin 12, GPIO18, software I2C clock |
 | SDA | Pi pin 11, GPIO17, software I2C data |
-| AD0 / SDO | Existing Pi pin 6 ground, selects address 0x68 |
+| AD0 / SDO | Pi pin 20 ground (secondary IMU ground), selects address 0x68 |
 | CS / NCS | Must be high for I2C; verify the breakout's onboard pull-up |
 | INT | Leave disconnected; the driver polls the sensor |
 | EDA / ECL / FSYNC and other auxiliary pins | Leave disconnected; not used by MotionModule |
@@ -292,8 +292,32 @@ The driver checks WHO_AM_I register 0x75 for 0x73, initializes the gyro and
 accelerometer, and calibrates while still. It supplies relative heading,
 pitch, roll and turn rate; it does not use the magnetometer or DMP. Mount
 +Y forward and +Z upward. Relative heading can drift; zero before a run.
-Existing BNO055 projects remain supported at 0x28/0x29 with their original
-board-specific mode and reset pull-ups.
+The reference `module.local_imu()` path uses only MPU9255. Old BNO055
+declarations migrate to MPU9255 at 0x68 at runtime; update the active robot
+folder's `sensors.py` to name `mpu9255` explicitly.
+
+### First setup and a missing sensor
+
+No firmware flashing is needed for this driver. If the supplied header is
+loose, solder it to the board; pushing pins through bare holes is not a
+reliable electrical connection. Match the printed labels in the table above.
+Check that NCS is held high for I2C and that SDA/SCL have pull-ups to 3.3 V;
+the product photo does not establish which resistors the delivered board has.
+
+An error naming `0x28` means the running declaration still selects BNO055.
+Install the updated runtime and restart the robot service. In the active robot
+folder, the intended declaration is:
+
+```python
+IMU = GigaIMU("mpu9255", "Main IMU", address=0x68)
+```
+
+Run **Debug → Checks & logs**. Expect MPU9255 identity `0x73` at `0x68`
+(`0x69` means AD0 is high). A responding address alone does not identify the
+chip. If neither address responds, check power, solder joints, signal labels,
+NCS and pull-ups before blaming calibration. Keep the robot still during
+startup calibration, then zero heading before driving. The runtime initializes
+the gyro and accelerometer automatically.
 
 With power off, wire the board. The Pi installer adds this under `[all]` in
 `/boot/firmware/config.txt` (older Pi OS: `/boot/config.txt`) and reboots.
@@ -304,7 +328,7 @@ dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
 Debug → Wiring shows the optional connections even before hardware is present.
-Checks & logs verifies the MPU9255 (or legacy BNO055) chip ID on the independent bus, below the
+Checks & logs verifies only the MPU9255 chip ID on the independent bus, below the
 PCA9685 checks. Detection is not proof of calibration or usable heading.
 [LocalIMU setup](CODING.md) explains how robot code initializes and reads it.
 

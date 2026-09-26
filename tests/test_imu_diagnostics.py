@@ -20,16 +20,12 @@ class IMUDiagnosticsTests(unittest.TestCase):
             report = local_imu_check(True)
         factory.assert_called_once_with(11)
         factory.return_value.__exit__.assert_called_once()
+        self.assertTrue(all(call.args in ((0x68, 0x75), (0x69, 0x75))
+                            for call in bus.read_byte_data.call_args_list))
+        self.assertIn("MPU9255", report["title"])
         bus.write_byte_data.assert_not_called()
         bus.write_i2c_block_data.assert_not_called()
         return report
-
-    def test_both_addresses_and_identity(self):
-        for reads, address in (([0xA0], '0x28'), ([OSError(), 0xA0], '0x29')):
-            report = self.report(reads)
-            self.assertEqual(report['level'], 'pass')
-            self.assertIn(address, report['detail'])
-            self.assertIn('bus 11', report['detail'])
 
     def test_missing_and_wrong_chip_are_not_success(self):
         for reads in ([OSError(), OSError()], [0x12, 0x34]):
@@ -37,8 +33,8 @@ class IMUDiagnosticsTests(unittest.TestCase):
 
     def test_mpu9255_identity_at_both_addresses(self):
         for reads, address in (
-            ([OSError(), OSError(), 0x73], '0x68'),
-            ([OSError(), OSError(), OSError(), 0x73], '0x69'),
+            ([0x73], '0x68'),
+            ([OSError(), 0x73], '0x69'),
         ):
             report = self.report(reads)
             self.assertEqual(report['level'], 'pass')
@@ -46,7 +42,7 @@ class IMUDiagnosticsTests(unittest.TestCase):
             self.assertIn(address, report['detail'])
 
     def test_mpu9250_identity_is_not_misreported_as_mpu9255(self):
-        report = self.report([OSError(), OSError(), 0x71, OSError()])
+        report = self.report([0x71, OSError()])
         self.assertEqual(report['level'], 'warn')
         self.assertIn('0x68 returned chip ID 0x71', report['detail'])
 
@@ -56,16 +52,16 @@ class IMUDiagnosticsTests(unittest.TestCase):
             OSError(errno.EOPNOTSUPP, 'Operation not supported'),
         ])
         self.assertEqual(report['level'], 'warn')
-        self.assertIn('0x28: [Errno', report['detail'])
+        self.assertIn('0x68: [Errno', report['detail'])
         self.assertIn('Connection timed out', report['detail'])
-        self.assertIn('0x29: [Errno', report['detail'])
+        self.assertIn('0x69: [Errno', report['detail'])
         self.assertIn('Operation not supported', report['detail'])
         self.assertNotIn('No response', report['detail'])
 
     def test_wrong_chip_and_read_error_are_both_reported(self):
         report = self.report([0x12, OSError(errno.EIO, 'Input/output error')])
-        self.assertIn('0x28 returned chip ID 0x12', report['detail'])
-        self.assertIn('0x29: [Errno', report['detail'])
+        self.assertIn('0x68 returned chip ID 0x12', report['detail'])
+        self.assertIn('0x69: [Errno', report['detail'])
         self.assertIn('Input/output error', report['detail'])
 
     def test_simulation_does_not_probe(self):
@@ -90,7 +86,7 @@ class IMUDiagnosticsTests(unittest.TestCase):
         base = header_rows(config)
         guide = header_rows(config, imu_guide=True)
         for old, new in zip(base, guide):
-            if old['physical'] in {6, 11, 12, 17}:
+            if old['physical'] in {6, 11, 12, 17, 20}:
                 self.assertIn('IMU', new['role'])
                 self.assertFalse(new['configured'])
             else:

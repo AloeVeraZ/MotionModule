@@ -1,6 +1,6 @@
 """Read the robot's IMU directly on the Pi's independent I2C bus.
 
-The reference wiring is VCC to physical pin 17, GND and AD0 to 6, SDA to 11,
+The reference wiring is VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11,
 and SCL to 12. Enable the i2c-gpio overlay on GPIO17/18;
 see docs/PINOUT.md and Debug > Wiring for the complete board guide.
 The MPU9255 board must be in I2C mode; INT is left disconnected.
@@ -319,10 +319,14 @@ class LocalIMU:
         where = f"{driver.chip} at 0x{driver.address:02X}"
         state = driver.state
         if state == "missing":
+            setup = (
+                " Check soldered header joints, NCS high for I2C and SDA/SCL pull-ups to 3.3 V."
+                if self.declaration.chip == "mpu9255" else ""
+            )
             return (
                 f"Nothing answers at 0x{driver.address:02X} on I2C bus {self._bus_number}. "
-                "Check the reference Pi wiring: 3.3 V pin 17, GND and AD0 pin 6, "
-                "SDA pin 11 and SCL pin 12."
+                "Check the reference Pi wiring: 3.3 V pin 17, GND pin 6 and AD0 pin 20, "
+                "SDA pin 11 and SCL pin 12." + setup
             )
         if state == "wrong-chip":
             return f"0x{driver.address:02X} answered, but {driver.message}."
