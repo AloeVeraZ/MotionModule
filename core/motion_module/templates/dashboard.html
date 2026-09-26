@@ -1331,10 +1331,10 @@
         </div></article>
 
         <article class="card spaced" id="localImuGuide">
-          <div class="panel-head"><h2>MPU6500 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
+          <div class="panel-head"><h2>MPU9255 IMU · independent I²C bus</h2><span>Reference Pi connection · optional hardware</span></div>
           <div class="panel-body stack">
-            <p>The JESSINIE MPU6500 uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
-            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU6500</strong><span>SDA · SCL · address 0x68</span></div></div>
+            <p>The selected MPU9255 module uses the existing independent I²C connection. Match printed labels, not header positions. Keep all motor wires and the PCA9685 connections on pins 1, 3, 5, 7 and 9 in place.</p>
+            <div class="signal-flow"><div><small>CONTROLLER</small><strong>Raspberry Pi</strong><span>GPIO17 SDA · GPIO18 SCL</span></div><b aria-hidden="true">↔</b><div><small>INDEPENDENT BUS</small><strong>i2c-gpio</strong><span>Physical pins 11 and 12</span></div><b aria-hidden="true">↔</b><div><small>NINE-AXIS SENSOR</small><strong>MPU9255</strong><span>SDA · SCL · address 0x68</span></div></div>
             <div class="table-scroll"><table class="name-table"><thead><tr><th>Board signal</th><th>Connection / purpose</th></tr></thead><tbody>
               <tr><td>VCC</td><td>Pi pin 17 · 3.3 V supply</td></tr>
               <tr><td>GND</td><td>Pi pin 6 · signal ground</td></tr>
@@ -1345,11 +1345,11 @@
               <tr><td>INT</td><td>Leave disconnected; MotionModule polls over I²C.</td></tr>
               <tr><td>Auxiliary pins</td><td>EDA / ECL / FSYNC are unused; leave disconnected.</td></tr>
             </tbody></table></div>
-            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU6500 board</a></p>
+            <p>Use 3.3 V power and signal pull-ups. Verify NCS is held high for I²C and the header is soldered securely. No sensor firmware flashing is needed. <a href="https://www.amazon.com/dp/B0GTVCCY6B" target="_blank" rel="noopener">Selected MPU9255 board</a></p>
             <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. The magnetometer and DMP are unused; heading may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks only MPU6500 identity 0x70 at 0x68 or 0x69. The installed board supplies gyro/accelerometer heading without a magnetometer. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU9255 identity 0x73, MPU9250 0x71, or MPU6500 0x70 at 0x68 or 0x69. The reader also checks the AK8963 magnetometer through I²C bypass. Magnetic measurements are displayed separately from relative gyro heading. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import IMUConfig
 
@@ -1417,8 +1417,6 @@ heading = imu.heading() if imu is not None else None
         <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects &rarr;</a></div>
         <div id="partsGroups" class="stack"></div>
         <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
-        <article class="card spaced"><div class="panel-head"><h2>Build details still needed</h2><span>Not specified in BOM.md</span></div><div class="panel-body"><p class="muted small">The driver boards are identified. These remaining selections depend on your actual robot.</p><div id="missingSpecs" class="spec-grid spaced"></div></div></article>
-        <article class="card spaced"><div class="panel-head"><h2>A little robotics vocabulary</h2><span>Plain-language reference</span></div><div id="hardwareGlossary" class="panel-body glossary"></div></article>
       </div>
 
       <!-- ----------------------------------------------------- tests -->
@@ -1519,7 +1517,13 @@ heading = imu.heading() if imu is not None else None
               <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
               <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
             </div>
-            <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
+            <div class="stack" style="width:100%">
+          <div class="imu-value"><small>ACCELEROMETER · g (includes gravity)</small><strong id="imuAccel">—</strong></div>
+          <div class="imu-value"><small>GYROSCOPE · °/s (bias corrected)</small><strong id="imuGyro">—</strong></div>
+          <div class="imu-value"><small>MAGNETOMETER · µT</small><strong id="imuMag">—</strong><p class="imu-detail" id="imuMagDetail"></p></div>
+          <p class="imu-detail">Sensor X / Y / Z axes. At rest, acceleration includes approximately 1 g of gravity; calibration does not remove gravity.</p>
+        </div>
+        <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
             <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
             <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
           </div>
@@ -1621,7 +1625,7 @@ heading = imu.heading() if imu is not None else None
 
         <article class="card spaced">
           <div class="panel-head">
-            <h2>Connected USB devices</h2>
+            <h2>USB ports &amp; devices</h2>
             <div class="button-row">
               <span class="hint" id="usbSummary">Scanning&hellip;</span>
               <button class="button" id="refreshUsb" type="button">Refresh USB</button>
@@ -1631,7 +1635,7 @@ heading = imu.heading() if imu is not None else None
             <div class="usb-grid" id="usbDevices">
               <p class="muted">Reading the Pi USB bus&hellip;</p>
             </div>
-            <p class="muted small spaced">USB devices identify
+            <p class="muted small spaced">Root hubs are the Pi’s host infrastructure, not plugged-in devices. Port paths identify the bus and connection; USB 2 / USB 3 peers share a socket. Hubs show their downstream ports. USB devices identify
               themselves, so MotionModule can list what is plugged in, its USB
               ID, driver, port, and access. Basic GPIO motor drivers send
               nothing back to the Pi and stay marked configured but unverified.
@@ -3183,7 +3187,7 @@ function guideConnection(label, route, purpose) {
 
 function renderHardwareGuide(guide) {
   if (!guide) return;
-  const labels = {selected: 'Selected part', required: 'Required', optional: 'Optional', needs_spec: 'To specify', placeholder: 'Not chosen yet'};
+  const labels = {recommended: 'Recommended', selected: 'Selected part', required: 'Required', optional: 'Optional', needs_spec: 'To specify', placeholder: 'Not chosen yet'};
   const statusClass = {needs_spec: ' needed', placeholder: ' pending', optional: ' optional'};
   replaceWith($('#partsGroups'), guide.parts_groups.map(group => {
     const card = element('article', 'card parts-group');
@@ -3217,12 +3221,6 @@ function renderHardwareGuide(guide) {
     table.append(body); scroll.append(table); card.append(head, scroll);
     if (group.note) card.append(element('p', 'parts-note', group.note));
     return card;
-  }));
-  replaceWith($('#missingSpecs'), guide.missing_specs.map(item => {
-    const div = element('div'); div.append(element('strong', null, item.name), element('p', null, item.needed)); return div;
-  }));
-  replaceWith($('#hardwareGlossary'), guide.glossary.map(item => {
-    const dl = element('dl'); dl.append(element('dt', null, item.term), element('dd', null, item.meaning)); return dl;
   }));
   for (const [id, items] of [['logicConnections', guide.wiring.logic_connections], ['servoConnections', guide.wiring.servo_connections]]) {
     replaceWith($(`#${id}`), items.map(item => guideConnection(item.label, `${item.from} → ${item.to}`, item.purpose)));
@@ -3505,22 +3503,7 @@ $('#refreshUpdates')?.addEventListener('click', () => refreshUpdates(true));
 
 /* ------------------------------------------------------------ USB list */
 
-async function refreshUsb() {
-  if (!$('#usbDevices')) return;
-  try {
-    const data = await jsonFetch('/api/usb');
-    $('#usbSummary').textContent = data.available
-      ? `${data.devices.length} device${data.devices.length === 1 ? '' : 's'} detected`
-      : 'USB inventory unavailable';
-    if (!data.devices.length) {
-      replaceWith($('#usbDevices'), [element('p', 'muted', data.available
-        ? 'No USB devices are connected.'
-        : 'USB inventory is available when this dashboard runs on Raspberry Pi Linux.')]);
-      return;
-    }
-    const giga = data.devices.some(isGiga);
-    if (giga) await loadGigaFirmware();
-    replaceWith($('#usbDevices'), data.devices.map(device => {
+function usbDeviceCard(device) {
       const card = element('div', 'usb-device');
       const top = element('div', 'usb-device-top');
       const state = element('span', 'device-state',
@@ -3546,7 +3529,37 @@ async function refreshUsb() {
       card.append(top, meta);
       if (isGiga(device)) card.append(gigaFirmwarePanel(device));
       return card;
-    }));
+}
+function usbPortCard(port, root = false) {
+  const card = element('div', 'usb-device');
+  card.append(element('h3', '', `${root ? 'Pi USB port' : 'Hub port'} · ${port.paths.join(' / ')}`));
+  card.append(element('p', 'muted small', `Bus ${port.buses.join(' / ')} · ${port.connected ? 'Occupied' : 'Empty'}${port.paired ? ' · USB 2 / USB 3 share this socket' : ''}`));
+  for (const device of port.devices) card.append(usbDeviceCard(device));
+  if (port.ports.length) {
+    const children = element('div', 'stack spaced');
+    for (const child of port.ports) children.append(usbPortCard(child));
+    card.append(children);
+  }
+  return card;
+}
+async function refreshUsb() {
+  if (!$('#usbDevices')) return;
+  try {
+    const data = await jsonFetch('/api/usb');
+    const devices = data.devices || [];
+    const ports = data.ports || [];
+    const hubs = devices.filter(device => device.kind === 'USB hub');
+    $('#usbSummary').textContent = data.available
+      ? `${ports.length} host ports · ${devices.length - hubs.length} attached devices · ${hubs.length} hub interfaces`
+      : 'USB inventory unavailable';
+    if (devices.some(isGiga)) await loadGigaFirmware();
+    const shown = new Set();
+    const collect = port => { port.devices.forEach(device => shown.add(device.path)); port.ports.forEach(collect); };
+    ports.forEach(collect);
+    const cards = ports.map(port => usbPortCard(port, true));
+    for (const device of devices) if (!shown.has(device.path)) cards.push(usbDeviceCard(device));
+    replaceWith($('#usbDevices'), cards.length ? cards : [element('p', 'muted', data.available
+      ? 'No USB port topology reported by Linux.' : 'USB inventory is available on Raspberry Pi Linux.')]);
   } catch (error) {
     $('#usbSummary').textContent = 'Scan failed';
     replaceWith($('#usbDevices'), [element('p', 'muted', error.message)]);
@@ -4312,6 +4325,12 @@ function renderImu(imu) {
   // Yaw counts up turning left (counter-clockwise), as robot code and rotate
   // do. Shown from -180 to 180; the needle turns the way the robot turned.
   const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
+  const axes = values => Array.isArray(values) && values.length === 3 && values.every(Number.isFinite)
+    ? values.map((value, index) => `${['X','Y','Z'][index]} ${value.toFixed(2)}`).join(' · ') : '—';
+  $('#imuAccel').textContent = axes(imu?.acceleration_g);
+  $('#imuGyro').textContent = axes(imu?.gyro_dps);
+  $('#imuMag').textContent = axes(imu?.magnetic_ut);
+  $('#imuMagDetail').textContent = imu?.magnetometer_detail || (imu?.magnetic_ut ? '' : 'No magnetometer readings available.');
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
   $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
 }

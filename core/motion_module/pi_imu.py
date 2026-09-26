@@ -18,8 +18,9 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
-from .imu import IMUConfig, MPU6500_ADDRESSES, MPU6500_ID, Mpu6500Driver, Read, wrap180
+from .imu import IMUConfig, MPU6500_ADDRESSES, MPU_IDENTITIES, Mpu6500Driver, Read, wrap180
 from .telemetry import IMUReading
+from .magnetometer import AK8963Reader
 
 POLL_SECONDS = 0.02   # ~50 Hz, the same cadence the GIGA bridge reads at
 STALE_AFTER = 1.0     # seconds; an older reading is treated as disconnected
@@ -90,6 +91,8 @@ class LocalIMU:
         self._bus = None
         self._clock = clock if clock is not None else time.monotonic
         self._driver = Mpu6500Driver(declaration)
+        self._magnetometer = AK8963Reader()
+        self._magnetic = (None, "Waiting for IMU startup")
         self._auto_address = auto_address
         self._next_address_probe = 0.0
         self._lock = threading.Lock()
@@ -168,6 +171,14 @@ class LocalIMU:
             state = self._driver.state
         if state in ("ok", "calibrating"):
             self._read_streams(self._driver, now)
+            self._magnetometer.poll(self._bus, now)
+            magnetic = self._magnetometer.reading(now)
+            with self._lock:
+                self._magnetic = magnetic
+        else:
+            self._magnetometer.reset()
+            with self._lock:
+                self._magnetic = (None, "Waiting for IMU startup")
         return True
 
     def _detect_address(self, now: float) -> bool:
@@ -179,7 +190,7 @@ class LocalIMU:
         if not self._auto_address or now < self._next_address_probe:
             return False
         self._next_address_probe = now + RETRY_SECONDS
-        register, expected = Mpu6500Driver.WHO_AM_I, MPU6500_ID
+        register = Mpu6500Driver.WHO_AM_I
         # Prefer the selected address when two boards answer on the bus.
         addresses = dict.fromkeys((self._driver.address, *MPU6500_ADDRESSES))
         for address in addresses:
@@ -187,7 +198,7 @@ class LocalIMU:
                 chip_id = self._bus.read_i2c_block_data(address, register, 1)[0]
             except (OSError, IndexError):
                 continue
-            if chip_id == expected:
+            if chip_id in MPU_IDENTITIES:
                 if address != self._driver.address:
                     with self._lock:
                         self._driver = Mpu6500Driver(replace(self.declaration, address=address))
@@ -374,6 +385,8 @@ class LocalIMU:
         if self._error:
             return self._error
         where = f"{driver.chip} at 0x{driver.address:02X}"
+        if driver.chip_id is not None:
+            where += f" (WHO_AM_I 0x{driver.chip_id:02X})"
         state = driver.state
         if state == "missing":
             setup = (
@@ -417,6 +430,12 @@ class LocalIMU:
                 roll=self._tilt(driver.roll, 1) if usable else None,
                 rate=driver.rate if usable else None,
                 detail=self._describe(),
+                chip=driver.chip,
+                acceleration_g=driver.acceleration_g if usable else None,
+                gyro_dps=driver.gyro_dps if usable else None,
+                identity=f"0x{driver.chip_id:02X}" if driver.chip_id is not None else "",
+                magnetic_ut=self._magnetic[0] if usable else None,
+                magnetometer_detail=self._magnetic[1],
             )
 
     def close(self) -> None:

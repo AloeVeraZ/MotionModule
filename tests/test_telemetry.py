@@ -303,3 +303,16 @@ class MergeCamerasTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImuAxisTelemetryTests(unittest.TestCase):
+    def test_vectors_keep_units_and_reject_invalid_axes(self):
+        from motion_module.telemetry import IMUReading, normalize_snapshot
+        reading = IMUReading(acceleration_g=(0, 0, 1), gyro_dps=(1, 2, 3))
+        imu = normalize_snapshot({'imu': reading})['imu']
+        self.assertEqual(imu['acceleration_g'], [0, 0, 1])
+        self.assertEqual(imu['gyro_dps'], [1, 2, 3])
+        self.assertIsNone(imu['magnetic_ut'])
+        for invalid in ((0, 1), (0, float('nan'), 1), 'xyz'):
+            imu = normalize_snapshot({'imu': {'acceleration_g': invalid}})['imu']
+            self.assertIsNone(imu['acceleration_g'])

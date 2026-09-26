@@ -8,6 +8,7 @@ pin modes stay in the robot project's ``sensors.py``.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 
@@ -120,8 +121,63 @@ def usb_devices(
                 "serial_port": serial_ports[0] if serial_ports else "",
                 "controller": profile,
             }
+        item["root_hub"] = bool(re.fullmatch(r"usb\d+", candidate.name))
+        count = _read(candidate / "maxchild")
+        item["port_count"] = min(int(count), 255) if count.isdigit() else 0
         devices.append(item)
-    return {"available": True, "devices": devices, "error": ""}
+    roots = [device for device in devices if device["root_hub"]]
+    attached = [device for device in devices if not device["root_hub"]]
+    return {"available": True, "devices": attached, "host_controllers": roots,
+            "ports": _usb_ports(root, devices), "error": ""}
+
+
+def _usb_ports(root: Path, devices: list[dict]) -> list[dict]:
+    """Group USB2/USB3 peer paths into sockets, with recursive hub ports.
+
+    Linux exposes a peer link for the two logical ports sharing a connector.
+    Never infer front/back socket labels or pair buses by their numbers.
+    """
+    by_path = {device["path"]: device for device in devices}
+    ports = {}
+    nodes = {}
+    for hub in devices:
+        if hub["kind"] != "USB hub":
+            continue
+        name = hub["path"]
+        interface = f"{hub['bus']}-0:1.0" if hub["root_hub"] else f"{name}:1.0"
+        for number in range(1, hub["port_count"] + 1):
+            node = root / name / interface / f"{name}-port{number}"
+            child = f"{hub['bus']}-{number}" if hub["root_hub"] else f"{name}.{number}"
+            key = str(node.resolve())
+            nodes[key] = node
+            ports[key] = {"id": f"{name}-port{number}", "number": number,
+                          "root": hub["root_hub"], "hub": name, "path": child,
+                          "bus": hub["bus"]}
+    groups = {}
+    for key, port in ports.items():
+        try:
+            peer = str((nodes[key] / "peer").resolve(strict=True))
+        except OSError:
+            peer = key
+        group = min(key, peer) if peer in ports else key
+        groups.setdefault(group, []).append(port)
+
+    def describe(members, seen):
+        connected = [by_path[p["path"]] for p in members if p["path"] in by_path]
+        hub_names = {device["path"] for device in connected if device["kind"] == "USB hub"}
+        children = []
+        if len(seen) < 16:
+            for key, downstream in groups.items():
+                if key not in seen and any(p["hub"] in hub_names for p in downstream):
+                    children.append(describe(downstream, seen | {key}))
+        return {"id": members[0]["id"], "number": members[0]["number"],
+                "paths": [p["path"] for p in members],
+                "buses": sorted({p["bus"] for p in members if p["bus"] is not None}),
+                "devices": connected, "ports": children,
+                "connected": bool(connected), "paired": len(members) > 1}
+
+    return [describe(members, {key}) for key, members in groups.items()
+            if any(p["root"] for p in members)]
 
 
 def sensor_controllers(inventory: dict | None = None) -> list[dict]:

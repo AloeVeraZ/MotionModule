@@ -449,6 +449,21 @@ async function run(scenario) {
     const next = reloaded.driveRequests().at(-1).payload.sequence;
     assert(Number.isSafeInteger(next), 'Sequence must retain integer precision');
     assert(next > previous, 'A reloaded page must not restart its sequence below the server watermark');
+  } else if (scenario === 'usb-topology') {
+    vm.runInContext(`replaceWith($('#usbDevices'), [usbPortCard({paths:['1-1','2-1'],buses:[1,2],connected:true,paired:true,devices:[{path:'1-1',product:'USB splitter',kind:'USB hub'}],ports:[{paths:['1-1.1'],buses:[1],connected:false,paired:false,devices:[],ports:[]},{paths:['1-1.2'],buses:[1],connected:true,paired:false,devices:[{path:'1-1.2',product:'Webcam',kind:'USB device'}],ports:[]}]}, true)])`, app.context);
+    const headings = app.$('#usbDevices').querySelectorAll('h3').map(node => node.textContent).join(' ');
+    assert.match(headings, /1-1.*2-1/);
+    assert.match(headings, /USB splitter/);
+    assert.match(headings, /Hub port.*1-1.1/);
+    assert.match(headings, /Webcam/);
+  } else if (scenario === 'station-imu-axes') {
+    vm.runInContext("renderImu({connected:true,calibrated:true,acceleration_g:[0,0,1],gyro_dps:[1,2,3],magnetic_ut:null,magnetometer_detail:'No magnetometer'})", app.context);
+    assert.match(app.$('#imuAccel').textContent, /Z 1.00/);
+    assert.match(app.$('#imuGyro').textContent, /X 1.00/);
+    assert.equal(app.$('#imuMag').textContent, '—');
+    assert.equal(app.$('#imuMagDetail').textContent, 'No magnetometer');
+    vm.runInContext('renderImu(null)', app.context);
+    assert.equal(app.$('#imuAccel').textContent, '—');
   } else if (scenario === 'imu-activity') {
     for (const [connected, calibrated] of [[true, true], [true, false], [false, false]]) {
       vm.runInContext(`renderImuActivity({connected:${connected}, calibrated:${calibrated}})`, app.context);

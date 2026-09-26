@@ -105,7 +105,7 @@ class Mpu6500Tests(LocalImuTestCase):
         self.assertEqual(gyro[2], 0)
 
     def test_other_identities_are_rejected_before_any_write(self):
-        for identity in (0x73, 0x71, 0xA0, 0x6B, 0x00, 0xFF):
+        for identity in (0x12, 0xA0, 0x6B, 0x00, 0xFF):
             with self.subTest(identity=identity):
                 self.chip.chip_id = identity
                 self.imu._driver.begin(self.clock.now)
@@ -143,7 +143,7 @@ class Mpu6500Tests(LocalImuTestCase):
         self.run_for(1)
         self.assertEqual(self.imu.state, 'missing')
         self.chip.present = True
-        self.chip.chip_id = 0x71  # another chip must not receive MPU6500 setup writes
+        self.chip.chip_id = 0x12  # unsupported chips must not receive setup writes
         self.run_for(3)
         self.assertEqual(self.imu.state, 'wrong-chip')
         self.assertFalse(self.chip.writes)
@@ -210,7 +210,7 @@ class Mpu6500Tests(LocalImuTestCase):
         class AddressedBus(FakeBus):
             def read_i2c_block_data(self, address, register, length):
                 if address == 0x68:
-                    return [0x71] * length
+                    return [0x12] * length
                 return super().read_i2c_block_data(address, register, length)
 
             def write_i2c_block_data(self, address, register, data):
@@ -290,6 +290,19 @@ class ManualZeroTests(LocalImuTestCase):
         self.run_for(0.5)
         self.world.rate = 0
         self.run_for(0.2)
+
+    def test_xyz_telemetry_has_units_and_never_invents_a_magnetometer(self):
+        reading = self.imu.reading()
+        self.assertAlmostEqual(sum(a*a for a in reading.acceleration_g) ** 0.5, 1, delta=0.05)
+        self.assertTrue(all(abs(axis) < 0.5 for axis in reading.gyro_dps))
+        self.assertIsNone(reading.magnetic_ut)
+        self.assertIn('Magnetometer unavailable', reading.magnetometer_detail)
+        self.world.rate = 30
+        self.run_for(0.2)
+        self.assertAlmostEqual(self.imu.reading().gyro_dps[2], 30, delta=1)
+        self.imu.calibrate_zero()
+        self.assertIsNone(self.imu.reading().acceleration_g)
+        self.assertIsNone(self.imu.reading().gyro_dps)
 
     def test_zero_with_level_makes_the_present_tilt_read_level(self):
         self.world.pitch, self.world.roll = 6.0, -4.0

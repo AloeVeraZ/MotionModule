@@ -39,9 +39,10 @@ def parts_groups() -> list[dict]:
                 _part("1", "Argon THRML 30mm active cooler", "Recommended Pi 5 cooler", "Prevents thermal throttling", "selected", "https://argon40.com/products/argon-thrml-30mm-active-cooler"),
                 _part("4", "GODIYMODULES dual H-bridge", "DC 3-18 V dual PWM motor driver", "Two brushed motors per board; eight channels total", "selected", "https://www.amazon.com/dp/B0FKH352D2"),
                 _part("1", "AITRIP PCA9685", "16-channel servo board, address 0x40 with all pads open", "Turns two I2C wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
+                _part("1 recommended", "MPU9255 9-Axis Motion Sensor Module", "Accelerometer, gyroscope and magnetometer; 2.4–3.6 V; I2C / SPI", "Recommended for IMU heading correction and autonomous turns; connects directly to the Pi", "recommended", "https://www.amazon.com/dp/B0GTVCCY6B"),
                 _part("1 set", "Controller mounting CAD", "Printable mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "placeholder", CAD_REPO),
             ],
-            "note": "These five boards plus the power group are the whole controller. With them wired up, MotionModule boots, serves this dashboard and drives outputs.",
+            "note": "The controller and power boards run MotionModule. The Pi-connected IMU is recommended for heading assist and autonomous turns; manual driving remains available without it. The selected module is MPU9255. The reader reports the actual MPU chip identity and independently checks the AK8963 magnetometer.",
         },
         {
             "id": "power", "title": "Power module",
@@ -67,14 +68,6 @@ def parts_groups() -> list[dict]:
                 _part("Alternative", "Standard three-pin servos", "Any standard 3-pin hobby servo works; match its voltage to the servo rail", "Drop-in alternative to the Axon", "optional", "https://www.gobilda.com/standard-size-servos"),
             ],
             "note": "Recommendations, not requirements. The controller runs without any of this; these are the parts known to work well on it.",
-        },
-        {
-            "id": "pi-i2c-sensors", "title": "Pi-connected MPU6500 IMU",
-            "requirement": "recommended",
-            "items": [
-                _part("1", "MPU6500 6-axis IMU breakout", "JESSINIE MPU6500 module", "Heading, tilt and turn rate, read directly by the Pi", "selected", "https://www.amazon.com/dp/B0GTVCCY6B"),
-            ],
-            "note": "The Mecanum IMU uses motion_module.pi_imu.LocalIMU on the independent i2c-gpio bus: VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12. Follow Debug > Wiring for the complete board guide and overlay setup. The robot can drive without heading when the IMU is absent.",
         },
         {
             "id": "sensors", "title": "Optional USB GPIO expansion",

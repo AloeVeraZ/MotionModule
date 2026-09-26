@@ -132,6 +132,12 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_q_and_e_continuously_send_pure_rotation_to_the_full_station(self):
         self.run_behavior("rotation-held", self.station_fixture)
 
+    def test_usb_hub_ports_and_downstream_devices_render(self):
+        self.run_behavior('usb-topology')
+
+    def test_station_displays_acceleration_and_gyro_without_fake_magnetic_values(self):
+        self.run_behavior('station-imu-axes', self.station_fixture)
+
     def test_imu_activity_reports_response_and_connection_loss(self):
         self.run_behavior('imu-activity')
 

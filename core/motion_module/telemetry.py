@@ -100,6 +100,12 @@ class IMUReading:
     roll: float | None = None
     rate: float | None = None
     detail: str = ""
+    chip: str = ""
+    identity: str = ""
+    acceleration_g: tuple[float, float, float] | None = None
+    gyro_dps: tuple[float, float, float] | None = None
+    magnetic_ut: tuple[float, float, float] | None = None
+    magnetometer_detail: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,6 +317,13 @@ def _camera(value: Any, index: int) -> dict[str, Any] | None:
     }
 
 
+def _vector(value: Any):
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    axes = [_number(axis) for axis in value]
+    return axes if all(axis is not None for axis in axes) else None
+
+
 def _imu(value: Any) -> dict[str, Any] | None:
     item = _mapping(value)
     if item is None:
@@ -323,6 +336,12 @@ def _imu(value: Any) -> dict[str, Any] | None:
         "pitch": _number(item.get("pitch")),
         "roll": _number(item.get("roll")),
         "rate": _number(item.get("rate")),
+        "chip": _text(item.get("chip"), 32),
+        "identity": _text(item.get("identity"), 8),
+        "acceleration_g": _vector(item.get("acceleration_g")),
+        "gyro_dps": _vector(item.get("gyro_dps")),
+        "magnetic_ut": _vector(item.get("magnetic_ut")),
+        "magnetometer_detail": _text(item.get("magnetometer_detail"), 160),
         "detail": _text(item.get("detail"), 160),
     }
 

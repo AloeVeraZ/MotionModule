@@ -739,6 +739,12 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
           <div class="imu-value"><small>ROLL</small><strong id="imuRoll">—</strong></div>
           <div class="imu-value"><small>RATE</small><strong id="imuRate">—</strong></div>
         </div>
+        <div class="stack" style="width:100%">
+          <div class="imu-value"><small>ACCELEROMETER · g (includes gravity)</small><strong id="imuAccel">—</strong></div>
+          <div class="imu-value"><small>GYROSCOPE · °/s (bias corrected)</small><strong id="imuGyro">—</strong></div>
+          <div class="imu-value"><small>MAGNETOMETER · µT</small><strong id="imuMag">—</strong><p class="imu-detail" id="imuMagDetail"></p></div>
+          <p class="imu-detail">Sensor X / Y / Z axes. At rest, acceleration includes approximately 1 g of gravity; calibration does not remove gravity.</p>
+        </div>
         <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
         <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
         <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
@@ -1462,6 +1468,12 @@ function renderImu(imu) {
   // Yaw counts up turning left (counter-clockwise), as robot code and rotate
   // do. Shown from -180 to 180; the needle turns the way the robot turned.
   const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
+  const axes = values => Array.isArray(values) && values.length === 3 && values.every(Number.isFinite)
+    ? values.map((value, index) => `${['X','Y','Z'][index]} ${value.toFixed(2)}`).join(' · ') : '—';
+  $('#imuAccel').textContent = axes(imu?.acceleration_g);
+  $('#imuGyro').textContent = axes(imu?.gyro_dps);
+  $('#imuMag').textContent = axes(imu?.magnetic_ut);
+  $('#imuMagDetail').textContent = imu?.magnetometer_detail || (imu?.magnetic_ut ? '' : 'No magnetometer readings available.');
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
   $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
 }

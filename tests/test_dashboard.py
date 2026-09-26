@@ -260,7 +260,9 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b'id="servoProfile"', debug)
         self.assertIn(b"Zero servo", debug)
         self.assertIn(b'id="hostnameForm"', debug)
-        self.assertIn(b"Connected USB devices", debug)
+        self.assertIn(b"USB ports &amp; devices", debug)
+        self.assertNotIn(b"Build details still needed", debug)
+        self.assertNotIn(b"A little robotics vocabulary", debug)
         self.assertIn(b'id="usbDevices"', debug)
         self.assertIn(b"hostname is this robot", debug)
 
