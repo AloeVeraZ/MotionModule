@@ -1,13 +1,68 @@
 """Runtime upgrades snapshot every project without replacing the live code."""
 import json
+import os
+import socket
+import stat
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from motion_module.project_preservation import snapshot_projects
 
 
 class ProjectPreservationTests(unittest.TestCase):
+    def test_runtime_objects_are_skipped_recursively_without_name_based_exclusions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            project = workspace / 'robots/Mecanum'
+            project.mkdir(parents=True)
+            files = {'robot.py': b'# owner code', 'nested/.lgd-nfy0': b'runtime FIFO',
+                     'runtime.sock': b'runtime socket', 'device': b'character device',
+                     'disk': b'block device', '.lgd-nfy-real-data': b'keep this file'}
+            for relative, data in files.items():
+                target = project / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+            runtime_modes = {project / 'nested/.lgd-nfy0': stat.S_IFIFO,
+                             project / 'runtime.sock': stat.S_IFSOCK,
+                             project / 'device': stat.S_IFCHR, project / 'disk': stat.S_IFBLK}
+            original_lstat = Path.lstat
+
+            def lstat(path):
+                if path in runtime_modes:
+                    return SimpleNamespace(st_mode=runtime_modes[path])
+                return original_lstat(path)
+
+            with patch.object(Path, 'lstat', lstat):
+                destination = snapshot_projects(workspace / 'robots', workspace / 'backups', 'release')
+            copied = destination / 'robots/Mecanum'
+            self.assertEqual((copied / 'robot.py').read_bytes(), files['robot.py'])
+            self.assertEqual((copied / '.lgd-nfy-real-data').read_bytes(), files['.lgd-nfy-real-data'])
+            for path in runtime_modes:
+                self.assertFalse((copied / path.relative_to(project)).exists())
+                self.assertTrue(path.exists(), 'The live runtime object is never deleted')
+            manifest = json.loads((destination / 'snapshot.json').read_text())
+            self.assertEqual(set(manifest['skipped_runtime_objects']), {str(p) for p in runtime_modes})
+
+    @unittest.skipUnless(hasattr(os, 'mkfifo') and hasattr(socket, 'AF_UNIX'), 'Requires Unix filesystem objects')
+    def test_live_gpio_fifo_and_unix_socket_do_not_block_code_backup(self):
+        with tempfile.TemporaryDirectory() as folder:
+            workspace = Path(folder)
+            project = workspace / 'robots/Mecanum'
+            project.mkdir(parents=True)
+            (project / 'robot.py').write_bytes(b'# owner code')
+            fifo = project / '.lgd-nfy0'
+            os.mkfifo(fifo)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(str(project / 'runtime.sock'))
+                destination = snapshot_projects(workspace / 'robots', workspace / 'backups', 'release')
+                self.assertEqual((destination / 'robots/Mecanum/robot.py').read_bytes(), b'# owner code')
+                self.assertFalse((destination / 'robots/Mecanum/.lgd-nfy0').exists())
+                self.assertFalse((destination / 'robots/Mecanum/runtime.sock').exists())
+                self.assertTrue(stat.S_ISFIFO(fifo.stat().st_mode))
+
     def test_snapshot_keeps_all_code_and_data_including_unedited_samples(self):
         with tempfile.TemporaryDirectory() as folder:
             workspace = Path(folder)
