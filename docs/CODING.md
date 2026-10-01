@@ -264,11 +264,11 @@ dashboard.py. No other sensor is predeclared.
 
 ### Heading control (`motion_module.heading`)
 
-The same loop FTC teams run on their IMU: `error = target - heading`, wrapped
+The IMU heading loop uses `error = target - heading`, wrapped
 to ±180° so the robot turns the short way, and `power = kP * error - kD * rate`,
 with the gyro's measured turn rate as the brake. A turn is finished only once
-the heading stays within the tolerance for `settle_seconds`. Starting gains
-follow FIRST's `RobotAutoDriveByGyro` sample and team 8088's PD controller.
+the heading stays within the tolerance for `settle_seconds`. Tune the gains
+for your robot using the defaults below as a starting point.
 
 ```python
 from motion_module.heading import HeadingController, HeadingHold, Settle

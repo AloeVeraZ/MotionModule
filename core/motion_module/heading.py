@@ -1,17 +1,16 @@
 """Heading control from the IMU: hold a direction, turn to one, snap by 90°.
 
-This is the loop FTC teams run on their IMU, in one place so driving and
-autonomous behave the same way:
+The IMU heading loop lives in one place so driving and autonomous
+behave the same way:
 
     error = target - heading, wrapped to -180..180 so it turns the short way
     power = kP * error - kD * turn_rate
 
 kP pushes toward the target; kD, fed by the gyro's measured turn rate, brakes
-so the robot does not overshoot. The starting gains follow FIRST's
-RobotAutoDriveByGyro sample (0.02 per degree turning) and team 8088's PD
-heading controller (about 0.019 per degree, plus damping). A turn counts as
-finished only after the heading has stayed within the tolerance for a moment,
-as 8088's does, so a robot swinging through the target does not count.
+so the robot does not overshoot. The starting proportional gain is 0.02 per
+degree, with damping from the gyro. A turn counts as finished only after the
+heading has stayed within the tolerance for a moment, so a robot swinging
+through the target does not count.
 
 Angles are degrees and count up turning left (counter-clockwise), the same
 way a positive ``rotate`` turns, so a positive power turns left. Powers here

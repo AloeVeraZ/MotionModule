@@ -10,7 +10,7 @@ autonomous.
 
 What it does: turn left to 90, 180, 270 and 360 degrees from the starting
 direction, settling within two degrees at each stop. It never translates.
-Change PLAN to make your own. The heading loop is the one FTC teams use (see
+Change PLAN to make your own. The IMU heading loop (see
 motion_module/heading.py) and shares its tuning, HEADING in robot.py, with
 the Driver Station's snap turns.
 
@@ -79,7 +79,7 @@ class MecanumAutonomous:
     def drive_for(self, forward, strafe, seconds, stop):
         """Drive or strafe for a while, adding a turn that holds the heading.
 
-        This is FIRST's gyro drive-straight: the further off the heading, the
+        This is gyro-based straight driving: the further off the heading, the
         harder it steers back. The loop also refreshes the motor watchdog.
         """
 

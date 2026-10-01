@@ -5,7 +5,7 @@ Driver Station's forward / strafe / rotate commands into wheel power, and
 `sensors.py` reads the robot's MPU6500 directly from the Raspberry Pi.
 
 The same three numbers arrive whether someone is using the keyboard or a game
-controller, the way an FTC opmode reads one gamepad's sticks:
+controller, using the same stick mapping:
 
     forward  left stick Y   (W / S)
     strafe   left stick X   (A / D)

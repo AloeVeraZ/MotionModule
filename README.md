@@ -5,8 +5,7 @@ DC motors, a PCA9685 servo board with sixteen outputs, and a Pi-connected IMU.
 The idea is to bring the controller and expansion functions of a REV Robotics
 Control Hub and Expansion Hub together in one buildable, open-source project.
 Anyone can build it using the supplied code, wiring guide, bill of materials
-and enclosure CAD. It is an independent robotics project with no connection
-to FIRST Tech Challenge (FTC).
+and enclosure CAD.
 
 The reusable runtime owns GPIO, I2C, safety, networking, diagnostics, and the
 browser dashboard. Each robot is one separate Python folder containing its own
