@@ -1,5 +1,20 @@
 # MotionModule
 
+> [!WARNING]
+> **You are on `testing`, the experimental development branch.**
+>
+> Changes here are still being developed and tested. Running this branch may
+> introduce bugs, break features that work on `main`, or change how your robot
+> behaves. An update can also introduce new issues, even if an earlier testing
+> version worked for you. Use [`main`](https://github.com/AloeVeraZ/MotionModule/tree/main)
+> for normal robot use; choose `testing` when you want to try experimental changes
+> and troubleshoot problems. Raise the wheels when checking a testing build.
+>
+> To return an installed controller to the main branch, run:
+> ```bash
+> motionmodule install main
+> ```
+
 MotionModule is an open-source Raspberry Pi robot controller for eight brushed
 DC motors, a PCA9685 servo board with sixteen outputs, and a Pi-connected IMU.
 The idea is to bring the controller and expansion functions of a REV Robotics
