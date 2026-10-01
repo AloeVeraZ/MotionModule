@@ -1,2 +1,5 @@
 # The prebuilt GIGA firmware must reach the Pi byte for byte.
 *.bin binary
+
+# Preserve supplied CAD exports byte for byte and avoid enormous text diffs.
+*.step binary

@@ -145,10 +145,27 @@ class HardwareGuideTests(unittest.TestCase):
         batteries = [part for part in power["items"] if "battery" in part["name"].lower()]
         self.assertEqual({part["status"] for part in batteries}, {"selected"})
         self.assertTrue(all(part["url"] for part in batteries))
-        # The only unfinished thing in the power group is its own CAD.
+        # Both enclosure models are supplied with the reference build.
         pending = {part["name"] for part in power["items"] if part["status"] == "placeholder"}
-        self.assertEqual(pending, {"Power module CAD"})
+        self.assertEqual(pending, set())
         self.assertIn("3.3-6 V", power["note"])
+
+    def test_cad_links_match_the_supplied_step_models(self):
+        guide = hardware_guide(self.config)
+        cad = [part for group in guide["parts_groups"] for part in group["items"]
+               if part["name"].endswith("CAD")]
+        self.assertEqual(len(cad), 2)
+        self.assertNotIn("CAD files", [spec["name"] for spec in guide["missing_specs"]])
+        root = Path(__file__).resolve().parents[1]
+        for part in cad:
+            with self.subTest(part=part["name"]):
+                self.assertEqual(part["status"], "selected")
+                self.assertTrue(part["url"].startswith(
+                    "https://github.com/AloeVeraZ/MotionModule/blob/main/cad/"))
+                model = root / "cad" / part["url"].rsplit("/", 1)[1]
+                data = model.read_bytes().strip()
+                self.assertTrue(data.startswith(b"ISO-10303-21;"))
+                self.assertTrue(data.endswith(b"END-ISO-10303-21;"))
 
     def test_wiring_drops_the_parts_that_ship_with_the_boards(self):
         wiring = next(g for g in hardware_guide(self.config)["parts_groups"] if g["id"] == "wiring")

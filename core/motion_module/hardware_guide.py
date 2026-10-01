@@ -11,7 +11,7 @@ from .pinout import PHYSICAL_BY_BCM, motor_rows, servo_rows
 
 
 # CAD for the controller stack and the power module lives in the repository.
-CAD_REPO = "https://github.com/AloeVeraZ/MotionModule/tree/main/cad"
+CAD_REPO = "https://github.com/AloeVeraZ/MotionModule/blob/main/cad"
 
 
 def _part(quantity, name, selection, purpose, status="required", url=None):
@@ -40,7 +40,7 @@ def parts_groups() -> list[dict]:
                 _part("4", "GODIYMODULES dual H-bridge", "DC 3-18 V dual PWM motor driver", "Two brushed motors per board; eight channels total", "selected", "https://www.amazon.com/dp/B0FKH352D2"),
                 _part("1", "AITRIP PCA9685", "16-channel servo board, address 0x40 with all pads open", "Turns two I2C wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
                 _part("1 recommended", "MPU6500 gyroscope + accelerometer", "6-axis IMU; 3.3 V logic; I2C; chip identity 0x70", "Recommended for IMU heading correction and autonomous turns; connects directly to the Pi", "recommended", "https://www.amazon.com/dp/B0GTVCCY6B"),
-                _part("1 set", "Controller mounting CAD", "Printable mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "placeholder", CAD_REPO),
+                _part("1 set", "Controller mounting CAD", "Printable mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "selected", CAD_REPO + "/motion-module.step"),
             ],
             "note": "The controller and power boards run MotionModule. The Pi-connected IMU is recommended for heading assist and autonomous turns; manual driving remains available without it. Only MPU6500 identity 0x70 is supported. The linked reference board has been sold under an MPU9255 title; verify the actual chip identity.",
         },
@@ -54,7 +54,7 @@ def parts_groups() -> list[dict]:
                 _part("1", "12 V to 5 V USB-C converter", "Steps the 12 V rail down to a Pi-rated 5 V USB-C supply", "Powers the Raspberry Pi independently of motor load", "selected", "https://www.amazon.com/dp/B0FD735LFG"),
                 _part("1", "Rocker switch", "KCD1 automotive rocker switch, DC rated", "The battery module's physical on/off cutoff", "selected", "https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462"),
                 _part("1", "12 V/24 V to 5 V 5 A buck converter", "PlusRoc waterproof buck converter, fixed 5 V output, 5 A / 25 W max, open-wire leads, sold as a 2-pack", "Steps the 12 V battery rail down for the PCA9685 servo V+ terminal, which is rated 3.3-6 V", "selected", "https://www.amazon.com/dp/B0FYNCSV2Z"),
-                _part("1 set", "Power module CAD", "Enclosure and mounting for the battery, switch and converters", "Holds the power side together as one assembly", "placeholder", CAD_REPO),
+                _part("1 set", "Power module CAD", "STEP enclosure for REV Slim or goBILDA batteries, switch and battery lead; hollow compartment for 12 V wiring", "Hides buck converters and motor-driver power distribution for cleaner wiring", "selected", CAD_REPO + "/electronics-box.step"),
             ],
             "note": "One 12 V battery runs everything. Both batteries above ship with their own fuse, so no separate fuse or breaker is needed. The drivers take 12 V directly and the Pi gets 5 V from the USB-C converter. The servo rail is stepped down on the power module itself, by the buck converter above: the PCA9685 V+ terminal is rated 3.3-6 V, and the servos on it top out around 8.4 V, so 12 V must never reach that terminal. 5 V/5 A is 25 W total for every servo moving at once - size your servo load against that.",
         },
@@ -168,9 +168,7 @@ def hardware_guide(config) -> dict:
         "capacity": {"motors": 8, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
         "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. The reference MPU6500 connects directly to the Pi; Arduino GIGA R1 WiFi USB GPIO expansion is an experimental extra.",
         "parts_groups": parts_groups(),
-        "missing_specs": [
-            {"name": "CAD files", "needed": "The controller and power-module CAD folders in the repository are still being filled in."},
-        ],
+        "missing_specs": [],
         "wiring": {
             "summary": "Five wires connect the PCA9685 to the Pi: 3.3 V, ground, SDA, SCL and OE. Every other terminal on the board either belongs to the separate servo supply, is a chaining duplicate, or is left alone. The 16 servo outputs live on the board, not on Pi pins.",
             "motor_connections": motors,

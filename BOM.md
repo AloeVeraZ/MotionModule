@@ -23,7 +23,7 @@ servos, wire — is a recommendation, not a requirement.
 | 1 | Pi 5 active cooler | [Argon THRML 30 mm active cooler](https://argon40.com/products/argon-thrml-30mm-active-cooler) | Prevents thermal throttling in an enclosed robot |
 | 4 | Dual H-bridge motor driver | [GODIYMODULES DC 3–18 V, dual H-bridge PWM driver](https://www.amazon.com/dp/B0FKH352D2) | Two brushed motors per board; eight channels total |
 | 1 | 16-channel servo controller | [AITRIP PCA9685](https://www.amazon.com/dp/B07WS5XY63) at address `0x40`, all pads open | Sixteen servo PWM channels over I²C |
-| 1 set | Controller mounting CAD | [`cad/` in this repository](https://github.com/AloeVeraZ/MotionModule/tree/main/cad) | Printable mounts holding the Pi, drivers and servo board together |
+| 1 set | Controller mounting CAD | [motion-module.step](cad/motion-module.step) | Printable mounts holding the Pi, drivers and servo board together |
 
 The PCA9685 confirms over I²C that its logic is present, but it cannot report
 whether an individual servo is plugged into an output. The H-bridge inputs have
@@ -54,7 +54,7 @@ without the IMU, but heading will be unavailable.
 | 1 | 12 V → 5 V USB-C converter | [Amazon B0FD735LFG](https://www.amazon.com/dp/B0FD735LFG) | Selected |
 | 1 | Rocker switch | [DaierTek KCD1 automotive rocker switch](https://www.amazon.com/DaierTek-Listed-Switches-Automotive-KCD1-5Pack/dp/B07S1MV462) | Selected |
 | 1 | 12 V/24 V → 5 V 5 A buck converter | [PlusRoc waterproof buck converter, 2-pack](https://www.amazon.com/dp/B0FYNCSV2Z) | Selected |
-| 1 set | Power module CAD | [`cad/` in this repository](https://github.com/AloeVeraZ/MotionModule/tree/main/cad) | **Being drawn** |
+| 1 set | Power module CAD | [electronics-box.step](cad/electronics-box.step) | Included STEP model |
 
 **Both batteries ship with their own fuse**, so there is no separate fuse or
 breaker to buy. The rocker switch is the physical cutoff. **The buck converter
@@ -137,8 +137,11 @@ boot, a 10 kΩ pull-down from that input to signal ground holds it low.
 
 ---
 
-## Still to decide
+## Enclosure CAD
 
-1. The CAD files themselves — both `cad/` folders are still being filled in.
+Both STEP assemblies are included in [cad/](cad/README.md). The electronics
+box fits either reference battery. Its switch-and-battery-lead section sits
+beside a hollow compartment for the 12 V wiring; the reference robot hides
+its buck converters and motor-driver power distribution inside that space.
 
 The complete signal wiring is in [docs/PINOUT.md](docs/PINOUT.md).

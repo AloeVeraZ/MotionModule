@@ -1,72 +1,5 @@
 # MotionModule
 
-<!-- TESTING BRANCH NOTICE: delete this whole block when `testing` is merged into `main`,
-     and change the demo links under "Try the dashboard without a robot" from testing to main. -->
-> [!WARNING]
-> **This is the `testing` branch. It is not the main line.**
->
-> Every new change lands here first, before it is merged into `main`. Right
-> now that is the redesigned dashboard and Driver Station, and Arduino GIGA
-> USB GPIO expansion with firmware installed from the Pi. Code on this branch
-> can be unfinished or broken at any time. **If something stops working after
-> you install from `testing`, assume it is because you are on the testing
-> branch**, and go back to `main` before reporting a bug.
-
-### Run the testing branch on a robot
-
-A Pi that already has MotionModule installed:
-
-```bash
-motionmodule install testing
-```
-
-A fresh Raspberry Pi:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/install.sh | bash -s -- --version testing
-```
-
-Keep `--version testing` on that second command. Without it the installer
-downloads `main`, even from this branch's link.
-
-Either command builds the testing code, runs the test suite on the Pi, and,
-once the testing version is running, removes the MotionModule software the Pi
-had before. If the testing build fails its tests, the installer stops and the
-version you had stays active. The robot folders you have edited, their
-backups, the active project, `hardware.py`, and Wi-Fi settings are never
-touched, so the same `robot.py` keeps running. A robot folder that still holds
-an untouched copy of a sample takes the sample the new version ships, and the
-copy it replaces is kept under `backups`. The Pi reboots at the end, like any
-install. While a Pi runs this branch, the dashboard's top bar shows a yellow
-**testing** badge.
-
-Fresh installs select Mecanum with teleop and the IMU autonomous routine ready
-to use. Autonomous turns in place through 90°, 180°, 270°, and back to the
-starting direction; it only moves after you Enable and press Start. Debug
-Overview reports IMU activity as 1/1 or 0/1 responding. The Pi 5 fan uses
-approximately 75% PWM at 47 °C and 100% at 50 °C after installation and reboot.
-
-### Go back to the main line
-
-```bash
-motionmodule install main
-```
-
-That replaces the testing software with `main` the same way and keeps every
-robot file. Switching between the two branches is safe in either direction,
-as often as you need.
-
-### Work on this branch from a computer
-
-```bash
-git clone -b testing https://github.com/AloeVeraZ/MotionModule.git
-# or, in an existing clone:
-git fetch origin
-git switch testing
-```
-
-<!-- END TESTING BRANCH NOTICE -->
-
 MotionModule is a Raspberry Pi robot controller for eight brushed motors and
 PCA9685 servo boards. It is an independent, FTC-style system inspired by the
 idea of combining a Control Hub and Expansion Hub, but it does not use or
@@ -82,6 +15,65 @@ walking, or other robot.
 > controller. Fuse every power branch, keep a physical motor-power cutoff in
 > reach, and raise the wheels for initial tests.
 
+## Wiring at a glance
+
+The complete reference wiring below shows the Pi, all four motor drivers,
+the PCA9685 servo board, the MPU6500 IMU and the power rails. Labels use
+**physical Pi header pin numbers**. Wire colors match **Debug → Wiring →
+Follow the signal** in the dashboard, which also includes this diagram below
+**Names you can use in code**.
+
+[Open the full-size diagram](docs/images/motionmodule-complete-wiring.png)
+or use the [scalable SVG](docs/images/motionmodule-complete-wiring.svg).
+See the [pinout guide](docs/PINOUT.md) for the connection tables and power details.
+
+![Complete MotionModule wiring diagram](docs/images/motionmodule-complete-wiring.png)
+
+## Built for a personal Mecanum test robot
+
+These photos show MotionModule in use on the owner's personal Mecanum testing
+robot. The electronics are reusable; this four-wheel drivetrain is one example
+of what the controller can run.
+
+| Installed motion module | Controller with the cover removed |
+| --- | --- |
+| ![MotionModule mounted in the Mecanum robot](docs/images/robot/motion-module-installed.jpg) | ![Pi, four motor drivers and PCA9685 inside the module, without the IMU plugged in](docs/images/robot/motion-module-internals-no-imu.jpg) |
+
+The open-module photo shows the build **without the IMU plugged in**. The
+current build adds a Pi-connected MPU6500, supported by the included sensor
+code for heading assist and autonomous turns. The labelled cover keeps the
+motor-driver terminals and servo channels accessible.
+
+<details>
+<summary>Another view of the motion-module cover</summary>
+
+![Labelled motion-module cover and accessible connectors](docs/images/robot/motion-module-cover.jpg)
+
+</details>
+
+### Battery and electronics box
+
+| Battery module on the robot | Switch and battery lead |
+| --- | --- |
+| ![Battery module mounted on the Mecanum chassis](docs/images/robot/battery-module-mounted.jpg) | ![Electronics box with the rocker switch and outgoing battery lead](docs/images/robot/battery-module-switch-and-lead.jpg) |
+
+The electronics box accommodates both the **REV Slim and goBILDA 12 V NiMH
+batteries** listed in the [bill of materials](BOM.md). One part holds the
+battery, rocker switch and outgoing battery wire. The other part is an empty,
+hollow enclosure for your 12 V wiring. In this robot, the buck converters and
+power distribution feeding all four motor drivers are hidden inside that
+compartment to keep the wiring cleaner.
+
+### Download the CAD
+
+| STEP model | What it contains |
+| --- | --- |
+| [Motion module](cad/motion-module.step) | Controller enclosure and mounting assembly |
+| [Electronics box](cad/electronics-box.step) | Battery/switch section and hollow power-wiring compartment |
+
+Import these STEP files into your CAD application. See the [CAD notes](cad/README.md)
+for the assembly descriptions and the photos above for the installed examples.
+
 ## Try the dashboard without a robot
 
 To show the dashboard off, or to work on it, run it on any computer. The demo
@@ -93,13 +85,13 @@ touches hardware or the computer's network.
 Windows, in PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/demo.ps1 | iex
+irm https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/demo.ps1 | iex
 ```
 
 macOS or Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/testing/demo.sh | bash
+curl -fsSL https://raw.githubusercontent.com/AloeVeraZ/MotionModule/main/demo.sh | bash
 ```
 
 The command downloads MotionModule, sets up its own Python environment (it
@@ -140,24 +132,9 @@ Pi header power pin.
 
 The controller boards and the power module are what the robot actually needs;
 motors, servos and wire below them are recommendations. Both batteries ship
-already fused, so there is no separate breaker to buy. The only open choice left
-is the servo rail regulator. **Debug → Parts list** shows the whole reference
+already fused, so there is no separate breaker to buy. The enclosure STEP files are included in [cad/](cad/README.md). **Debug → Parts list** shows the whole reference
 BOM, marked required or recommended, and works inside the app with no internet
 connection.
-
-### Wiring diagram
-
-The complete reference wiring below shows the Pi, all four motor drivers,
-the PCA9685 servo board, the MPU6500 IMU and the power rails. Labels use
-**physical Pi header pin numbers**. Wire colors match **Debug → Wiring →
-Follow the signal** in the dashboard, which also includes this diagram below
-**Names you can use in code**.
-
-[Open the full-size diagram](docs/images/motionmodule-complete-wiring.png)
-or use the [scalable SVG](docs/images/motionmodule-complete-wiring.svg).
-See the [pinout guide](docs/PINOUT.md) for the connection tables and power details.
-
-![Complete MotionModule wiring diagram](docs/images/motionmodule-complete-wiring.png)
 
 ## Install on a Raspberry Pi
 
@@ -177,6 +154,12 @@ Do not put `sudo` before that command. The installer:
 4. runs the non-moving MotionModule Doctor automatically;
 5. prints the GitHub pinout as its final message; and
 6. reboots the Pi.
+
+Fresh installs select Mecanum with teleop and the IMU autonomous routine ready
+to use. Autonomous turns in place through 90°, 180°, 270°, and back to the
+starting direction; it only moves after you Enable and press Start. Debug
+Overview reports IMU activity as 1/1 or 0/1 responding. The Pi 5 fan uses
+approximately 75% PWM at 47 °C and 100% at 50 °C after installation and reboot.
 
 The first install uses hostname `motionmodule`. Give multiple robots unique
 names with `--hostname motionmodule-01`. Updates are always explicit: the Pi
@@ -214,8 +197,7 @@ Three workspace pages plus the separate Driver Station:
   status, and a three-step guide for a first-time build.
 - **Debug** — **Wiring** (colour-coded 40-pin header map, driver and servo
   wiring, separate 16-output servo-board diagrams, the names you can use in
-  code, and USB inventory), **Parts** (complete reference BOM and missing
-  specifications),
+  code, and USB inventory), **Parts** (complete reference BOM and enclosure CAD),
   **Tests** (guarded raised-wheel motor and servo tests, chosen by name),
   **Drive Test** (Mecanum by default; customize motor/servo mappings in `test.py`),
   **Checks & logs** (Doctor, service log, command reference), and **Network**
@@ -620,7 +602,8 @@ MotionModule/
 │   ├── hardware.py        # the shipped pin and name definitions
 │   └── hardware_guide.py  # offline parts list and wiring reference
 ├── installer/             # Pi install, services, Wi-Fi, versions, rollback
-├── docs/                  # setup, coding, pinout, and architecture
+├── cad/                   # motion-module and electronics-box STEP models
+├── docs/                  # guides, wiring diagram, and reference-build photos
 ├── examples/
 │   └── Mecanum/           # complete downloadable Python robot folder
 │       ├── robot.py
