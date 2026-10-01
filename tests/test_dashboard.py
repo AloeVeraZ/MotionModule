@@ -441,7 +441,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn(b">testing</span>", page)
         with patch("motion_module.dashboard.install_ref", return_value="main"):
             app = create_app(self.module, MecanumDrive(self.module), self.network)
-        self.assertNotIn(b'class="build-pill"', app.test_client().get("/").data)
+        self.assertIn(b'data-ref="main"', app.test_client().get("/").data)
 
     def test_config_api_matches_driver_harness_and_complete_header(self):
         data = self.client.get("/api/config").get_json()

@@ -85,6 +85,21 @@ hollow enclosure for your 12 V wiring. In this robot, the buck converters and
 power distribution feeding all four motor drivers are hidden inside that
 compartment to keep the wiring cleaner.
 
+### Full and Mini builds
+
+| Build | Motor drivers | Motor outputs | Servo outputs | IMU |
+| --- | ---: | ---: | ---: | --- |
+| [MotionModule](MotionModule/README.md) | 4 | 8 | 16 | MPU6500 |
+| [MotionModule Mini](MotionModuleMini/README.md) | 2 | 4 | 16 | MPU6500 |
+
+Both builds share the same runtime, dashboard and robot API. Mini keeps channels
+1–4 on the locked reference pins and omits Drivers 3 and 4. Its folder includes
+the hardware profile, parts list and two-driver wiring diagram. On the Pi, run
+`motionmodule install testing --variant mini` to try Mini, or select the module
+in the dashboard Updates section. The installer preserves that choice across
+updates. Change back with `--variant standard`; changing module selects its
+Mecanum sample and keeps existing robot folders. Mini is on testing pending review.
+
 ### Download the CAD
 
 ![Current motion-module enclosure CAD preview](cad/motion-module.png)

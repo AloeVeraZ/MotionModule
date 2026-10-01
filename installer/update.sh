@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Install a MotionModule branch on this Pi, started from the dashboard.
 #
-# The dashboard runs this through sudo, which allows exactly three commands:
-# this script followed by "main", "testing" or "password" (see
-# /etc/sudoers.d/motionmodule-update). Nothing else is accepted here either,
+# The dashboard runs this through sudo, which allows only named branches,
+# branch/variant pairs, and "password" (see /etc/sudoers.d/motionmodule-update).
+# Nothing else is accepted here either,
 # apart from "forget", which only systemd runs, as root.
 #
 # The install itself runs as the MotionModule user in its own transient
@@ -30,6 +30,13 @@ SECRET="$SECRET_DIR/sudo-password"
 fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 2; }
 
 REF="${1:-}"
+variant_options=()
+case "$REF" in
+    main-mini|testing-mini|main-standard|testing-standard)
+        variant_options=(--variant "${REF##*-}")
+        REF="${REF%-*}"
+        ;;
+esac
 [ "$#" -eq 1 ] || fail "Usage: motionmodule-update main|testing"
 [ "$(id -u)" -eq 0 ] || fail "This helper is run by the dashboard through sudo."
 
@@ -108,7 +115,7 @@ if ! systemd-run \
     --property=StandardOutput=append:"$LOG" \
     --property=StandardError=append:"$LOG" \
     --property=TimeoutStartSec=infinity \
-    /usr/local/bin/motionmodule install "$REF" >/dev/null; then
+    /usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" >/dev/null; then
     rm -rf -- "$SECRET_DIR"
     fail "Could not start the update."
 fi

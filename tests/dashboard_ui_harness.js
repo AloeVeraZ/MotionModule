@@ -242,7 +242,19 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'cad-downloads') {
+  if (scenario === 'mini-hardware') {
+    const guide = fixture.guide;
+    vm.runInContext(`renderDrivers(${JSON.stringify(guide.wiring.motor_connections)}, ${guide.capacity.motors / 2}); renderMotorTests(${JSON.stringify(guide.wiring.motor_connections)}); renderHardwareGuide(${JSON.stringify(guide)})`, app.context);
+    const cards = app.$('#driverGrid').children;
+    assert.equal(cards.length, 2);
+    assert.deepEqual(cards.map(card => card.dataset.driver), [1, 2]);
+    assert.equal(app.$('#motorTests').children.length, 4);
+    app.$('#updateVariant').value = 'mini';
+    await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
+    await app.settle();
+    const request = app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST').at(-1);
+    assert.deepEqual(request.payload, {ref: 'testing', variant: 'mini'});
+  } else if (scenario === 'cad-downloads') {
     vm.runInContext(`renderHardwareGuide(${JSON.stringify(fixture.guide)})`, app.context);
     const links = app.$('#partsGroups').querySelectorAll('a');
     const cad = links.filter(link => link.href.startsWith('/api/cad/'));
@@ -673,7 +685,7 @@ async function run(scenario) {
     await app.context.dashboard.installUpdate(line);
     await app.settle();
     assert.equal(dialog.open, false, 'No popup when sudo on the Pi needs no password');
-    assert.deepEqual(posts().at(-1).payload, {ref: 'testing'});
+    assert.deepEqual(posts().at(-1).payload, {ref: 'testing', variant: 'standard'});
 
     app.failures.set('/api/updates', asking);
     await app.context.dashboard.installUpdate(line);
@@ -700,7 +712,7 @@ async function run(scenario) {
     input.value = 'right-password';
     await app.$('#updatePasswordForm').fire('submit');
     await app.settle();
-    assert.deepEqual(posts().at(-1).payload, {ref: 'testing', password: 'right-password'});
+    assert.deepEqual(posts().at(-1).payload, {ref: 'testing', variant: 'standard', password: 'right-password'});
     assert.equal(dialog.open, false, 'The popup closes once the update starts');
     assert.equal(input.value, '', 'The password is not left in the page');
     assert.match(app.$('#toast').textContent, /started/i);

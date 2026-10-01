@@ -327,14 +327,15 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("visudo -cf \"$update_sudoers_temp\"", self.script)
 
         helper = (INSTALLER.parent / "update.sh").read_text(encoding="utf-8")
-        # Only the two branches, and only ever one argument.
+        # Two branches with optional named variants, and only ever one argument.
         self.assertIn("main|testing) ;;", helper)
         self.assertIn('[ "$#" -eq 1 ]', helper)
         # The update outlives the restart of the service that started it and
         # keeps the installer's default successful-install reboot enabled.
         self.assertIn("systemd-run", helper)
         self.assertIn('--uid="$OWNER"', helper)
-        self.assertIn('/usr/local/bin/motionmodule install "$REF" >/dev/null', helper)
+        self.assertIn('/usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" >/dev/null', helper)
+        self.assertIn('main-mini|testing-mini|main-standard|testing-standard)', helper)
         self.assertNotIn('install "$REF" --no-reboot', helper)
         self.assertIn("/var/log/motionmodule-update.log", helper)
 
@@ -351,10 +352,12 @@ class InstallerFinishTests(unittest.TestCase):
             self.script,
         )
         self.assertIn("NOPASSWD: /usr/local/sbin/motionmodule-update password", self.script)
-        # All three rules go through the same visudo check before installing.
+        # Branch, named-variant and password rules share the same visudo check.
         rules = self.script[self.script.index('update_sudoers_temp="$(mktemp)"'):
                             self.script.index('visudo -cf "$update_sudoers_temp"')]
-        self.assertEqual(rules.count('>> "$update_sudoers_temp"'), 2)
+        self.assertEqual(rules.count('>> "$update_sudoers_temp"'), 3)
+        self.assertIn('for update_branch in main testing', rules)
+        self.assertIn('for update_variant in standard mini', rules)
         self.assertIn("motionmodule-update password", rules)
         askpass = (INSTALLER.parent / "askpass.sh").read_text(encoding="utf-8")
         self.assertIn("exec sudo -n /usr/local/sbin/motionmodule-update password", askpass)

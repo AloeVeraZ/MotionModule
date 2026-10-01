@@ -3,6 +3,12 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 import html
 import re
+import argparse
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--mini', action='store_true', help='Draw two drivers / four motors with the same servo and IMU wiring')
+MINI = parser.parse_args().mini
+STEM = 'motionmodule-mini-complete-wiring' if MINI else 'motionmodule-complete-wiring'
 
 OUT = Path(__file__).parent
 W, H = 3800, 3500
@@ -60,7 +66,7 @@ def chip(x,y,w,h):
         line([(xx,y-8),(xx,y)],'#bdc8cc',4)
         line([(xx,y+h),(xx,y+h+8)],'#bdc8cc',4)
 
-text(100,42,'MotionModule / complete wiring',58,bold=True)
+text(100,42,'MotionModule Mini / complete wiring' if MINI else 'MotionModule / complete wiring',58,bold=True)
 text(100,116,'Physical Pi header pins • every control wire is drawn end to end',29,color='#58707e')
 
 # Power: two independent buses, switched positive and direct battery return.
@@ -209,6 +215,8 @@ drivers=[(4,950,[15,13,18,16,14],['7 • spare','8 • spare']),
          (2,2150,[40,38,36,32,34],['3 • front_right','4 • rear_right']),
          (1,2750,[37,35,33,31,39],['1 • front_left','2 • rear_left'])]
 destinations=[]
+if MINI:
+    drivers = [(n, y, pins, motors) for n, y, pins, motors in drivers if n <= 2]
 SHIFT_X=500
 for n,y,pins,motors in drivers:
     rect((1720,y,2260,y+460),'#267b98','#165468',15)
@@ -298,9 +306,9 @@ text(100,3370,'Thin wires: control signals. Heavy red / black: battery power. Bl
 line([(100,3420),(3695,3420)],'#4d6371',2)
 text(100,3450,'Physical pin numbers, not BCM GPIO. Crossings connect only at dots. Board drawings are schematic; follow terminal labels.',24)
 svg.append('</svg>')
-im.save(OUT/'motionmodule-complete-wiring.png')
+im.save(OUT/f'{STEM}.png')
 # Ship the same image with the dashboard for offline and installed use.
-(palette_path.parent/'motionmodule-complete-wiring.png').write_bytes(
-    (OUT/'motionmodule-complete-wiring.png').read_bytes())
-(OUT/'motionmodule-complete-wiring.svg').write_text('\n'.join(svg),encoding='utf-8')
-print(OUT/'motionmodule-complete-wiring.png')
+(palette_path.parent/f'{STEM}.png').write_bytes(
+    (OUT/f'{STEM}.png').read_bytes())
+(OUT/f'{STEM}.svg').write_text('\n'.join(svg),encoding='utf-8')
+print(OUT/f'{STEM}.png')

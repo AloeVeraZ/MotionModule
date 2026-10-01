@@ -24,7 +24,7 @@ def _part(quantity, name, selection, purpose, status="required", url=None, image
     return part
 
 
-def parts_groups() -> list[dict]:
+def parts_groups(config=None) -> list[dict]:
     """The reference build.
 
     The first two groups are the robot: buy those and MotionModule runs.
@@ -32,7 +32,7 @@ def parts_groups() -> list[dict]:
     up, and those are recommendations rather than a required list.
     """
 
-    return [
+    groups = [
         {
             "id": "controllers", "title": "Controller & control boards",
             "requirement": "required",
@@ -104,6 +104,25 @@ def parts_groups() -> list[dict]:
     ]
 
 
+    if config is not None and config.variant == "mini":
+        for group in groups:
+            group["items"] = [part for part in group["items"] if part["name"] != "Controller mounting CAD"]
+            for part in group["items"]:
+                if part["name"] == "GODIYMODULES dual H-bridge":
+                    part.update(quantity="2", purpose="Two brushed motors per board; four channels total")
+                elif part["name"] in {"Brushed DC motors", "3.5 mm bullet lead, MH-FC to bare wire"}:
+                    part["quantity"] = "Up to 4"
+                    if part["name"] == "Brushed DC motors":
+                        part["purpose"] = "Two motors per driver board, four in total"
+                elif part["name"] == "Self-tapping screws":
+                    part["selection"] = "Fasvicna M1.7-M3, 750-piece assortment; 4 x M2.3 x 5 mm for the Pi; M3 x 5 mm for the other mounts"
+                    part["purpose"] = "Mount the two motor drivers, PCA9685 servo board and IMU with M3 x 5 mm screws. Enclosure screw count depends on the Mini enclosure; the standard enclosure's 22-screw total does not apply."
+                elif part["name"] == "Power module CAD":
+                    part["purpose"] = "Hides buck converters and power distribution for the two motor drivers"
+        groups[0]["note"] += " Mini has two motor drivers and four motor outputs. A Mini-specific enclosure CAD model has not been supplied."
+    return groups
+
+
 def hardware_guide(config) -> dict:
     """Build a display-ready guide for the actual active configuration."""
 
@@ -167,11 +186,11 @@ def hardware_guide(config) -> dict:
             ],
         })
     return {
-        "reference": "MotionModule reference build · BOM.md + docs/PINOUT.md",
-        "summary": "Eight motor channels and sixteen servo outputs in the reference build. The Pi header map shows controller connections; the servo output headers are on the PCA9685 board.",
-        "capacity": {"motors": 8, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
+        "reference": "MotionModule Mini reference build · MotionModuleMini/BOM.md + MotionModuleMini/PINOUT.md" if config.variant == "mini" else "MotionModule reference build · BOM.md + docs/PINOUT.md",
+        "summary": f"{'Four' if config.variant == 'mini' else 'Eight'} motor channels and sixteen servo outputs in the reference build. The Pi header map shows controller connections; the servo output headers are on the PCA9685 board.",
+        "capacity": {"motors": config.motor_capacity, "servos_per_board": 16, "configured_motors": len(motors), "configured_servo_boards": len(boards), "servo_enabled": servo.enabled},
         "inventory_note": "Parts below describe the reference build, not detected inventory. The controller and power groups are what the robot needs; motors, servos, sensors and wire are recommendations. The reference MPU6500 connects directly to the Pi; Arduino GIGA R1 WiFi USB GPIO expansion is an experimental extra.",
-        "parts_groups": parts_groups(),
+        "parts_groups": parts_groups(config),
         "missing_specs": [],
         "wiring": {
             "summary": "Five wires connect the PCA9685 to the Pi: 3.3 V, ground, SDA, SCL and OE. Every other terminal on the board either belongs to the separate servo supply, is a chaining duplicate, or is left alone. The 16 servo outputs live on the board, not on Pi pins.",
@@ -187,7 +206,7 @@ def hardware_guide(config) -> dict:
             "notes": [
                 "Use physical pin numbers to locate the connector, and BCM/GPIO numbers in hardware.py. They are different numbering systems.",
                 "Pins 27/28 belong to the Pi ID EEPROM interface and must stay disconnected. Default UART pins 8/10 are left for serial use. Unused GPIO pins have no configured sensor or device.",
-                "SPI must be disabled for the reference GPIO7/8/9/11 motor connections.",
+                "Mini leaves GPIO7/8/9/11 disconnected; its two motor drivers use channels 1-4." if config.variant == "mini" else "SPI must be disabled for the reference GPIO7/8/9/11 motor connections.",
                 "Yellow Jacket motor leads end in 3.5 mm FH-MC bullets, so the mating lead is the MH-FC one; its bare end goes straight into the driver's screw terminals. goBILDA's JST VH adaptor is for a REV Expansion Hub and is not used here. Swapping which bullet goes to which terminal reverses that motor, but set direction with `inverted` in hardware.py instead.",
                 "Pi GPIO pins are inputs until Linux starts, so keep motor power switched off through boot and confirm nothing moves before trusting the outputs.",
                 "Join all supply negatives at a planned common-ground point. Motor and servo load currents return directly to their supplies.",
@@ -214,8 +233,8 @@ def hardware_guide(config) -> dict:
             {"term": "Configured vs detected", "meaning": "Configured means named in software. Only feedback-capable devices such as the I2C controller can report a response."},
         ],
         "sources": [
-            {"title": "Reference parts", "url": "https://github.com/AloeVeraZ/MotionModule/blob/main/BOM.md"},
-            {"title": "Reference pinout", "url": "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md"},
+            {"title": "Reference parts", "url": "https://github.com/AloeVeraZ/MotionModule/blob/testing/MotionModuleMini/BOM.md" if config.variant == "mini" else "https://github.com/AloeVeraZ/MotionModule/blob/main/BOM.md"},
+            {"title": "Reference pinout", "url": "https://github.com/AloeVeraZ/MotionModule/blob/testing/MotionModuleMini/PINOUT.md" if config.variant == "mini" else "https://github.com/AloeVeraZ/MotionModule/blob/main/docs/PINOUT.md"},
             {"title": "PCA9685 chip datasheet", "url": "https://www.nxp.com/docs/en/data-sheet/PCA9685.pdf"},
             {"title": "PCA9685 connector reference", "url": "https://learn.adafruit.com/16-channel-pwm-servo-driver/pinouts"},
         ],

@@ -104,6 +104,12 @@ class DashboardUIBehaviorTests(unittest.TestCase):
             **self.fixture, "guide": hardware_guide(default_config()),
         })
 
+    def test_mini_renders_only_two_drivers_and_four_motor_test_rows(self):
+        from motion_module.config import MINI_HARDWARE_PATH, load_hardware_file
+        from motion_module.hardware_guide import hardware_guide
+        guide = hardware_guide(load_hardware_file(MINI_HARDWARE_PATH))
+        self.run_behavior("mini-hardware", {**self.fixture, "guide": guide})
+
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
 

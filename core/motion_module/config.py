@@ -11,7 +11,7 @@ import ast
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from pprint import pformat
 
@@ -19,6 +19,7 @@ from .errors import ConfigurationError
 
 
 DEFAULT_HARDWARE_PATH = Path(__file__).with_name("hardware.py")
+MINI_HARDWARE_PATH = Path(__file__).with_name("hardware_mini.py")
 RESERVED_ID_GPIOS = {0, 1}
 I2C_GPIOS = {2, 3}
 VALID_BCM_GPIOS = set(range(28))
@@ -67,6 +68,11 @@ class ModuleConfig:
     watchdog_ms: int
     motors: tuple[MotorConfig, ...]
     servos: ServoConfig
+    variant: str = "standard"
+
+    @property
+    def motor_capacity(self) -> int:
+        return 4 if self.variant == "mini" else 8
 
     def motor(self, channel: int) -> MotorConfig:
         try:
@@ -156,6 +162,10 @@ def _as_name(value: object, label: str) -> str:
 
 
 def _validate(config: ModuleConfig) -> ModuleConfig:
+    if not isinstance(config.variant, str) or config.variant not in {"standard", "mini"}:
+        raise ConfigurationError("module.variant must be standard or mini")
+    if config.variant == "mini" and any(m.channel > 4 for m in config.motors):
+        raise ConfigurationError("MotionModule Mini supports only motor channels 1-4 (Drivers 1 and 2)")
     if not 1 <= config.pwm_hz <= 2000:
         raise ConfigurationError("module.pwm_hz must be between 1 and 2000 for this driver")
     if not 0 <= config.deadtime_ms <= 1000:
@@ -313,6 +323,7 @@ def _config_from_mapping(data: object, source: Path) -> ModuleConfig:
         )
         addresses = tuple(_as_int(item, "servos.addresses") for item in servo_data["addresses"])
         config = ModuleConfig(
+            variant=module_data.get("variant", "standard"),
             pwm_hz=_as_int(module_data["pwm_hz"], "module.pwm_hz"),
             deadtime_ms=_as_int(module_data["deadtime_ms"], "module.deadtime_ms"),
             watchdog_ms=_as_int(module_data["watchdog_ms"], "module.watchdog_ms"),
@@ -414,7 +425,19 @@ def load_project_config(project: str | os.PathLike[str]) -> ModuleConfig:
 def default_config() -> ModuleConfig:
     """The pin map that ships with MotionModule."""
 
-    return load_hardware_file(DEFAULT_HARDWARE_PATH)
+    return load_hardware_file(MINI_HARDWARE_PATH if installed_variant() == "mini" else DEFAULT_HARDWARE_PATH)
+
+
+def installed_variant() -> str:
+    """Persist the board limit across project changes and release updates."""
+    variant = os.environ.get("MOTIONMODULE_VARIANT")
+    if variant is None:
+        folder = Path(os.environ.get("MOTIONMODULE_CONFIG_DIR", "~/.config/motionmodule")).expanduser()
+        marker = folder / "variant"
+        variant = marker.read_text(encoding="utf-8").strip() if marker.is_file() else "standard"
+    if variant not in {"standard", "mini"}:
+        raise ConfigurationError("MOTIONMODULE_VARIANT must be standard or mini")
+    return variant
 
 
 def resolve_config_path(
@@ -443,11 +466,12 @@ def resolve_config_path(
         # switching a customized robot back to other GPIOs is unsafe.
         return Path(configured).expanduser()
     config_dir = Path(os.environ.get("MOTIONMODULE_CONFIG_DIR", "~/.config/motionmodule")).expanduser()
-    for name in (PROJECT_CONFIG_NAME, "config.toml"):
+    names = ("mini-hardware.py", "mini-config.toml") if installed_variant() == "mini" else (PROJECT_CONFIG_NAME, "config.toml")
+    for name in names:
         candidate = config_dir / name
         if candidate.is_file():
             return candidate
-    return DEFAULT_HARDWARE_PATH
+    return MINI_HARDWARE_PATH if installed_variant() == "mini" else DEFAULT_HARDWARE_PATH
 
 
 def load_config(
@@ -459,7 +483,8 @@ def load_config(
 
     selected = resolve_config_path(path, project=project)
     if selected.suffix.casefold() == ".py":
-        return load_hardware_file(selected)
+        config = load_hardware_file(selected)
+        return _validate(replace(config, variant="mini")) if installed_variant() == "mini" else config
     try:
         data = tomllib.loads(selected.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
@@ -468,7 +493,8 @@ def load_config(
         raise ConfigurationError(f"Invalid TOML in {selected}: {error}") from error
     except (OSError, UnicodeError) as error:
         raise ConfigurationError(f"Cannot read configuration file {selected}: {error}") from error
-    return _config_from_mapping(data, selected)
+    config = _config_from_mapping(data, selected)
+    return _validate(replace(config, variant="mini")) if installed_variant() == "mini" else config
 
 
 def hardware_source(config: ModuleConfig) -> str:
@@ -479,6 +505,7 @@ def hardware_source(config: ModuleConfig) -> str:
             "pwm_hz": config.pwm_hz,
             "deadtime_ms": config.deadtime_ms,
             "watchdog_ms": config.watchdog_ms,
+            **({"variant": config.variant} if config.variant != "standard" else {}),
         },
         "motors": {
             motor.channel: {

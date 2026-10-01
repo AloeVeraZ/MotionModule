@@ -202,6 +202,7 @@ def update_lines(installed: dict, remotes: dict, *, error: str = "") -> list[dic
 def start_update(
     ref: str,
     *,
+    variant: str | None = None,
     password: str | None = None,
     run=subprocess.run,
     helper: Path = UPDATE_HELPER,
@@ -217,6 +218,8 @@ def start_update(
 
     if ref not in BRANCHES:
         raise MotionModuleError("MotionModule installs the main or the testing branch")
+    if variant is not None and variant not in {"standard", "mini"}:
+        raise MotionModuleError("Module variant must be standard or mini")
     if not os.access(helper, os.X_OK):
         raise MotionModuleError(
             "This Pi was set up before the update button existed. Update it once over SSH with "
@@ -238,7 +241,8 @@ def start_update(
         secret = password
     try:
         # The helper reads the password on stdin; empty means none is needed.
-        result = run(["sudo", "-n", str(helper), ref], input=f"{secret}\n" if secret else "",
+        helper_ref = f"{ref}-{variant}" if variant is not None else ref
+        result = run(["sudo", "-n", str(helper), helper_ref], input=f"{secret}\n" if secret else "",
                      capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as error:
         raise MotionModuleError(f"Could not start the update: {_short(error)}") from error
@@ -367,7 +371,7 @@ class UpdateChecker:
             self._checked_at = time.time()
             self._checking = False
 
-    def start_update(self, ref: str, password: str | None = None) -> str:
+    def start_update(self, ref: str, password: str | None = None, variant: str | None = None) -> str:
         with self._start_lock:
             now = self._clock()
             self._rejected = [moment for moment in self._rejected if now - moment < PASSWORD_WINDOW_SECONDS]
@@ -377,7 +381,7 @@ class UpdateChecker:
                 )
             try:
                 message = start_update(
-                    ref, password=password, run=self._run, helper=self._helper, askpass=self._askpass
+                    ref, password=password, variant=variant, run=self._run, helper=self._helper, askpass=self._askpass
                 )
             except PasswordRequired as refusal:
                 if refusal.rejected:

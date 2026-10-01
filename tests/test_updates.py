@@ -160,6 +160,13 @@ class StartUpdateTests(unittest.TestCase):
         self.assertEqual(runner.options[-1]["input"], "")
         self.assertIn("testing", message)
 
+    def test_module_switch_uses_an_explicit_allowlisted_helper_argument(self):
+        runner = Runner()
+        self.start("testing", runner, variant="mini")
+        self.assertEqual(runner.commands[-1], ["sudo", "-n", str(self.helper), "testing-mini"])
+        with self.assertRaisesRegex(MotionModuleError, "variant"):
+            self.start("testing", runner, variant="mini; reboot")
+
     def test_an_older_pi_without_the_helper_is_told_what_to_run(self):
         with self.assertRaisesRegex(MotionModuleError, "motionmodule install main"):
             start_update("main", run=Runner(), helper=self.helper.with_name("missing"))

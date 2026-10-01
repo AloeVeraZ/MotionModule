@@ -8,6 +8,9 @@ START_SERVICE=true
 REBOOT_SYSTEM=true
 ROBOT_PROJECT="${MOTIONMODULE_ROBOT_PROJECT:-Mecanum}"
 ROBOT_EXPLICIT=false
+MODULE_VARIANT="${MOTIONMODULE_VARIANT:-}"
+VARIANT_EXPLICIT=false
+if [ -n "${MOTIONMODULE_VARIANT:-}" ]; then VARIANT_EXPLICIT=true; fi
 
 if [ -n "${MOTIONMODULE_ROBOT_PROJECT:-}" ]; then
     ROBOT_EXPLICIT=true
@@ -15,6 +18,11 @@ fi
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --variant)
+            MODULE_VARIANT="$2"
+            VARIANT_EXPLICIT=true
+            shift 2
+            ;;
         --source)
             SOURCE_DIR="$2"
             shift 2
@@ -76,8 +84,6 @@ SOURCE_DIR="$(cd "$SOURCE_DIR" && pwd)"
 if ! printf '%s' "$ROBOT_PROJECT" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'; then
     fail "Invalid robot project name: $ROBOT_PROJECT"
 fi
-[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
-[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/hardware.py" ] || fail "Robot example $ROBOT_PROJECT is missing hardware.py."
 command -v sudo >/dev/null || fail "sudo is required for Raspberry Pi setup."
 
 INSTALL_ROOT="${MOTIONMODULE_INSTALL_ROOT:-$HOME/.local/share/motionmodule}"
@@ -89,6 +95,24 @@ ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
 CONFIG_FILE="$CONFIG_DIR/hardware.py"
 LEGACY_CONFIG_FILE="$CONFIG_DIR/config.toml"
+VARIANT_FILE="$CONFIG_DIR/variant"
+PREVIOUS_VARIANT="standard"
+[ ! -f "$VARIANT_FILE" ] || PREVIOUS_VARIANT="$(cat "$VARIANT_FILE")"
+MODULE_VARIANT="${MODULE_VARIANT:-$PREVIOUS_VARIANT}"
+case "$MODULE_VARIANT" in standard|mini) ;; *) fail "Module variant must be standard or mini." ;; esac
+DEFAULT_HARDWARE="hardware.py"
+if [ "$MODULE_VARIANT" = mini ]; then
+    DEFAULT_HARDWARE="hardware_mini.py"
+    CONFIG_FILE="$CONFIG_DIR/mini-hardware.py"
+    LEGACY_CONFIG_FILE="$CONFIG_DIR/mini-config.toml"
+    if [ "$ROBOT_EXPLICIT" != true ]; then ROBOT_PROJECT="MecanumMini"; fi
+fi
+if [ "$VARIANT_EXPLICIT" = true ] && [ "$MODULE_VARIANT" != "$PREVIOUS_VARIANT" ] && [ "$ROBOT_EXPLICIT" != true ]; then
+    # Selecting a different module selects its sample; existing robot folders stay intact.
+    ROBOT_EXPLICIT=true
+fi
+[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
+[ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/hardware.py" ] || fail "Robot example $ROBOT_PROJECT is missing hardware.py."
 
 if [ "$TARGET_HOSTNAME" = "__default__" ]; then
     if [ -L "$CURRENT_LINK" ]; then
@@ -202,7 +226,7 @@ python3 -m venv --system-site-packages "$release_dir/.venv"
 "$release_dir/.venv/bin/python" -m pip install --no-cache-dir --no-build-isolation -e "$release_dir"
 (
     cd "$release_dir"
-    ./.venv/bin/python -m unittest discover -s tests -v
+    MOTIONMODULE_VARIANT=standard ./.venv/bin/python -m unittest discover -s tests -v
 )
 touch "$release_dir/.complete"
 
@@ -257,6 +281,7 @@ done < <("$release_dir/.venv/bin/python" -m motion_module.shipped_samples \
 [ -f "$ROBOT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
 
 ACTIVE_LINK="$PROJECT_DIR/active"
+old_active_target="$(readlink -f "$ACTIVE_LINK" 2>/dev/null || true)"
 if [ -e "$ACTIVE_LINK" ] && [ ! -L "$ACTIVE_LINK" ]; then
     fail "$ACTIVE_LINK must be a managed symlink; rename that file or directory and rerun the installer."
 fi
@@ -298,7 +323,7 @@ with Path(sys.argv[2]).open("x", encoding="utf-8") as output:
 PY
     say "Converted the existing pin map to $CONFIG_FILE; kept $LEGACY_CONFIG_FILE for rollback."
 else
-    install -m 0644 "$release_dir/core/motion_module/hardware.py" "$CONFIG_FILE"
+    install -m 0644 "$release_dir/core/motion_module/$DEFAULT_HARDWARE" "$CONFIG_FILE"
     say "Installed the default pin and name definitions at $CONFIG_FILE."
 fi
 
@@ -374,6 +399,11 @@ rm -f "$sudoers_temp"
 update_sudoers_temp="$(mktemp)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update main\n' "$USER" > "$update_sudoers_temp"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update testing\n' "$USER" >> "$update_sudoers_temp"
+for update_branch in main testing; do
+    for update_variant in standard mini; do
+        printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update %s-%s\n' "$USER" "$update_branch" "$update_variant" >> "$update_sudoers_temp"
+    done
+done
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update password\n' "$USER" >> "$update_sudoers_temp"
 sudo visudo -cf "$update_sudoers_temp" >/dev/null
 install_system_file 0440 "$update_sudoers_temp" /etc/sudoers.d/motionmodule-update
@@ -429,6 +459,10 @@ sudo ln -sfn /etc/nginx/sites-available/motionmodule /etc/nginx/sites-enabled/mo
 installed_system_files+=(/etc/nginx/sites-enabled/motionmodule)
 
 service_temp="$(mktemp)"
+old_service_temp="$(mktemp)"
+if [ -f /etc/systemd/system/motionmodule.service ]; then
+    sudo cat /etc/systemd/system/motionmodule.service > "$old_service_temp"
+fi
 cat > "$service_temp" <<EOF
 [Unit]
 Description=MotionModule robot dashboard and runtime
@@ -441,6 +475,8 @@ User=$USER
 WorkingDirectory=$PROJECT_DIR/active
 Environment=PYTHONUNBUFFERED=1
 Environment=MOTIONMODULE_CONFIG=$CONFIG_FILE
+Environment=MOTIONMODULE_CONFIG_DIR=$CONFIG_DIR
+Environment=MOTIONMODULE_VARIANT=$MODULE_VARIANT
 Environment=MOTIONMODULE_ACTIVE_PROJECT=$PROJECT_DIR/active
 ExecStart=/usr/local/sbin/motionmodule-dashboard "$CURRENT_LINK" "$PROJECT_DIR/active/robot.py"
 Restart=always
@@ -500,6 +536,10 @@ if [ -n "$TARGET_HOSTNAME" ]; then
 fi
 
 say "Activating the new release..."
+# Check the selected robot against the new module limit before activation.
+MOTIONMODULE_VARIANT="$MODULE_VARIANT" MOTIONMODULE_CONFIG="$CONFIG_FILE" \
+    "$release_dir/.venv/bin/python" -c 'import sys; from motion_module.config import load_config; load_config(project=sys.argv[1])' "$active_target"
+printf '%s\n' "$MODULE_VARIANT" > "$VARIANT_FILE"
 old_target=""
 if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK/.complete" ]; then
     old_target="$(readlink -f "$CURRENT_LINK")"
@@ -512,6 +552,14 @@ if [ "$START_SERVICE" = true ]; then
     sudo systemctl restart motionmodule-network.service
     if ! sudo systemctl restart motionmodule.service; then
         if [ -n "$old_target" ]; then
+            printf '%s\n' "$PREVIOUS_VARIANT" > "$VARIANT_FILE"
+            if [ -s "$old_service_temp" ]; then
+                install_system_file 0644 "$old_service_temp" /etc/systemd/system/motionmodule.service
+                sudo systemctl daemon-reload
+            fi
+            if [ -n "$old_active_target" ] && [ -f "$old_active_target/robot.py" ]; then
+                ln -sfn "$old_active_target" "$ACTIVE_LINK"
+            fi
             ln -s "$old_target" "$INSTALL_ROOT/current.restore.$$"
             mv -Tf "$INSTALL_ROOT/current.restore.$$" "$CURRENT_LINK"
             sudo systemctl restart motionmodule.service || true
@@ -532,6 +580,7 @@ if [ "$START_SERVICE" = true ]; then
         new_release_running=true
     fi
 fi
+rm -f "$old_service_temp"
 
 # ---- Replace the old software, keep the robot --------------------------------
 # An install replaces MotionModule rather than stacking versions beside each

@@ -432,6 +432,17 @@ def create_app(
                 usb_sensor_cache["checked"] = now
             return list(usb_sensor_cache["controllers"])
 
+    @app.context_processor
+    def module_variant_context():
+        mini = module.config.variant == "mini"
+        return {
+            "module_name": "MotionModule Mini" if mini else "MotionModule",
+            "is_mini": mini,
+            "motor_capacity": module.config.motor_capacity,
+            "driver_count": module.config.motor_capacity // 2,
+            "wiring_image": "motionmodule-mini-complete-wiring.png" if mini else "motionmodule-complete-wiring.png",
+        }
+
     @app.after_request
     def cache_static_assets(response):
         if request.path.startswith("/static/") and response.status_code == 200:
@@ -575,6 +586,8 @@ def create_app(
 
     @app.get("/api/cad/<filename>")
     def cad_file(filename):
+        if module.config.variant == "mini" and filename == "motion-module.step":
+            return jsonify({"ok": False, "error": "Mini enclosure CAD has not been supplied"}), 404
         if filename not in {"motion-module.step", "electronics-box.step"}:
             return jsonify({"ok": False, "error": "Unknown CAD model"}), 404
         return send_file(
@@ -601,7 +614,9 @@ def create_app(
     def update_status():
         """What GitHub has, what this Pi runs, and any update in progress."""
 
-        return jsonify({"ok": True, **updates.snapshot(refresh=request.args.get("refresh") == "1")})
+        return jsonify({"ok": True, "module_variant": module.config.variant,
+                        "module_name": "MotionModule Mini" if module.config.variant == "mini" else "MotionModule",
+                        **updates.snapshot(refresh=request.args.get("refresh") == "1")})
 
     @app.post("/api/updates")
     def install_update():
@@ -612,6 +627,9 @@ def create_app(
         body = request.get_json(silent=True)
         body = body if isinstance(body, dict) else {}
         ref = str(body.get("ref", ""))
+        variant = body.get("variant")
+        if variant is not None and (not isinstance(variant, str) or variant not in {"standard", "mini"}):
+            return jsonify({"ok": False, "error": "Module variant must be standard or mini"}), 400
         # Sent only when sudo on this Pi asked for it; it goes to this update
         # and nowhere else.
         password = body.get("password") or None
@@ -622,7 +640,8 @@ def create_app(
         with command_lock:
             stop_outputs()
         try:
-            message = updates.start_update(ref, password=password)
+            options = {"variant": variant} if variant is not None and variant != module.config.variant else {}
+            message = updates.start_update(ref, password=password, **options)
         except PasswordRequired as error:
             return jsonify({
                 "ok": False, "error": str(error), "password_required": True,

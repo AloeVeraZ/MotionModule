@@ -207,3 +207,15 @@ hardware map and any existing autonomous routine, is preserved. The added
 routine supports older teleop projects through the confirmed Mecanum mixer.
 Select Autonomous, confirm the area is clear, Enable, then Start to run it;
 installing or starting the service never starts motion.
+
+## Module variants
+
+Use `motionmodule install testing --variant mini` for four motors on two drivers,
+or `--variant standard` for eight motors on four drivers. Both keep the same
+sixteen servo outputs and Pi-connected MPU6500. A fresh checkout can use
+`bash install.sh --version testing --variant mini`. The installed module choice
+is kept in `~/.config/motionmodule/variant` and survives updates.
+
+Changing module selects its Mecanum sample and keeps previous robot folders.
+Mini rejects project maps containing motor channels 5–8. See the
+[Mini build guide](../MotionModuleMini/README.md) for its parts and pinout.

@@ -33,7 +33,7 @@ from flask import Response
 from werkzeug.serving import WSGIRequestHandler, make_server
 
 from . import __version__
-from .config import default_config, load_config
+from .config import default_config, installed_variant, load_config
 from .controller import MotionModule
 from .dashboard import IdleDrive, create_app, load_autonomous_routine, load_drive
 from .errors import MotionModuleError
@@ -167,9 +167,10 @@ def camera_svg(name: str) -> str:
 def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
     """Build the demo dashboard. Returns the Flask app and the simulated module."""
 
-    project = EXAMPLE_PROJECT / "robot.py"
+    example_project = EXAMPLE_PROJECT.with_name("MecanumMini") if installed_variant() == "mini" else EXAMPLE_PROJECT
+    project = example_project / "robot.py"
     have_example = project.is_file()
-    config = load_config(project=EXAMPLE_PROJECT) if have_example else default_config()
+    config = load_config(project=example_project) if have_example else default_config()
     # Always simulated, even when this runs on a Raspberry Pi next to a real
     # robot service: the demo must never claim GPIO or talk to a servo board.
     module = MotionModule(config, gpio=MockGPIO())
@@ -184,9 +185,9 @@ def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
         module,
         drive,
         DemoNetwork(dashboard_url),
-        project_name="Mecanum" if have_example else "No project",
+        project_name=example_project.name if have_example else "No project",
         terminal_manager=DemoTerminal(),
-        config_path=EXAMPLE_PROJECT / "hardware.py" if have_example else None,
+        config_path=example_project / "hardware.py" if have_example else None,
         dashboard_telemetry=DemoTelemetry(),
         autonomous_routine=routine,
         autonomous_error=routine_error,

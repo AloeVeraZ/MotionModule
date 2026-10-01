@@ -17,7 +17,7 @@
   root.setAttribute('data-theme', theme === 'light' ? 'light' : 'dark');
 })();
 </script>
-<title>MotionModule</title>
+<title>{{ module_name }}</title>
 <link rel="icon" href="/static/favicon.svg?v={{ asset_version }}" type="image/svg+xml">
 <link rel="preload" href="/static/fonts/barlow-condensed-700-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -86,6 +86,7 @@
   letter-spacing: .1em;
 }
 .page-name { display: none; color: var(--muted); font-size: .875rem; white-space: nowrap; }
+.build-pill[data-ref="main"] { border-color: var(--line-soft); background: var(--well); color: var(--muted); }
 
 .nav-panel { display: flex; flex: 1; align-items: center; gap: 1rem; min-width: 0; }
 .nav-links { display: flex; align-items: center; gap: .25rem; margin: 0 auto; }
@@ -982,8 +983,8 @@
   <div class="topbar-inner">
     <a class="brand" href="/">
       <span class="brand-mark" aria-hidden="true"><img src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt=""></span>
-      <span class="brand-name">MotionModule</span>
-      {% if install_ref and install_ref != 'main' %}<span class="build-pill" title="Installed from the {{ install_ref }} branch. Expect unfinished work.">{{ install_ref }}</span>{% endif %}
+      <span class="brand-name">{{ module_name }}</span>
+      {% if install_ref %}<span class="build-pill" data-ref="{{ install_ref }}" title="Installed from the {{ install_ref }} branch.">{{ install_ref }}</span>{% endif %}
     </a>
     <span class="page-name" id="pageName">Overview</span>
 
@@ -1053,7 +1054,7 @@
         </article>
         <article class="card stat">
           <div class="stat-label">Motor activity <span aria-hidden="true">↔</span></div>
-          <div class="stat-value" id="activeMotors">0 / 8</div>
+          <div class="stat-value" id="activeMotors">0 / {{ motor_capacity }}</div>
           <div class="stat-note">Watchdog stops stale commands</div>
         </article>
         <article class="card stat" id="servoStat">
@@ -1245,7 +1246,7 @@
           </div>
         </div>
 
-        <div class="section-heading"><div><p class="eyebrow">02 / Motor drivers</p><h2>Two motors per board.</h2><p>Each dual H-bridge board takes four signal wires and a ground from the Pi, and drives two motors from the 12&nbsp;V battery.</p></div><span class="pill">4 BOARDS · 8 MOTORS</span></div>
+        <div class="section-heading"><div><p class="eyebrow">02 / Motor drivers</p><h2>Two motors per board.</h2><p>Each dual H-bridge board takes four signal wires and a ground from the Pi, and drives two motors from the 12&nbsp;V battery.</p></div><span class="pill">{{ driver_count }} BOARDS · {{ motor_capacity }} MOTORS</span></div>
         <article class="card">
           <div class="panel-head">
             <h2>Four dual H-bridge drivers</h2>
@@ -1315,7 +1316,7 @@
             </div>
             <div>
               <h3 class="subheading">Where each driver sits</h3>
-              <p class="small muted">The cards below are laid out like the reference controller plate: the Pi on the left with its USB ports at the bottom, <strong>Driver&nbsp;1</strong> beside those ports, <strong>Driver&nbsp;2</strong> above it, <strong>Driver&nbsp;3</strong> to the right of Driver&nbsp;1 and <strong>Driver&nbsp;4</strong> above Driver&nbsp;3. That is how the project&rsquo;s Mecanum sample is wired, with its four wheels on Drivers 1 and 2. Wire the same way to run the sample unchanged, or change the pins in <code>hardware.py</code> to match your own wiring.</p>
+              <p class="small muted">The cards below are laid out like the reference controller plate: the Pi on the left with its USB ports at the bottom, <strong>Driver&nbsp;1</strong> beside those ports, <strong>Driver&nbsp;2</strong> above it, {% if not is_mini %}<strong>Driver&nbsp;3</strong> to the right of Driver&nbsp;1 and <strong>Driver&nbsp;4</strong> above Driver&nbsp;3.{% endif %} That is how the project&rsquo;s Mecanum sample is wired, with its four wheels on Drivers 1 and 2. Wire the same way to run the sample unchanged, or change the pins in <code>hardware.py</code> to match your own wiring.</p>
             </div>
             <div class="driver-grid" id="driverGrid"></div>
           </div>
@@ -1401,12 +1402,12 @@ heading = imu.heading() if imu is not None else None
         <article class="card spaced">
           <div class="panel-head">
             <h2>Complete wiring diagram</h2>
-            <a class="button" href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener">Open full-size diagram</a>
+            <a class="button" href="/static/{{ wiring_image }}?v={{ asset_version }}" target="_blank" rel="noopener">Open full-size diagram</a>
           </div>
           <div class="panel-body">
             <p class="small muted">The reference build, from the Pi to the motor drivers, servo board and IMU, with the power connections included. Wire colors match Follow the signal above. Labels show physical Pi header pins.</p>
-            <a href="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" target="_blank" rel="noopener" aria-label="Open complete wiring diagram at full size">
-              <img class="complete-wiring-image" src="/static/motionmodule-complete-wiring.png?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to four motor drivers, the PCA9685 servo board and MPU6500 IMU, plus battery and regulated power rails.">
+            <a href="/static/{{ wiring_image }}?v={{ asset_version }}" target="_blank" rel="noopener" aria-label="Open complete wiring diagram at full size">
+              <img class="complete-wiring-image" src="/static/{{ wiring_image }}?v={{ asset_version }}" width="3800" height="3500" loading="lazy" alt="Complete MotionModule wiring: Raspberry Pi header connections to {{ driver_count }} motor drivers, the PCA9685 servo board and MPU6500 IMU, plus battery and regulated power rails.">
             </a>
           </div>
         </article>
@@ -1414,7 +1415,7 @@ heading = imu.heading() if imu is not None else None
 
       <!-- ----------------------------------------------------- parts -->
       <div data-panel="parts" hidden>
-        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>Bill of materials</h2><p>Browse the reference parts and download the motion-module and electronics-box STEP files below. The parts list and both CAD downloads work offline on the robot hotspot. Reference parts are not a live inventory.</p></div><span class="pill">8 MOTORS · 16 SERVOS</span></div>
+        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>Bill of materials</h2><p>{% if is_mini %}Browse the Mini reference parts and download the electronics-box STEP file below. The parts list, product image and power-box CAD work offline on the robot hotspot. Mini enclosure CAD has not been supplied.{% else %}Browse the reference parts and download the motion-module and electronics-box STEP files below. The parts list and both CAD downloads work offline on the robot hotspot.{% endif %} Reference parts are not a live inventory.</p></div><span class="pill">{{ motor_capacity }} MOTORS · 16 SERVOS</span></div>
         <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects &rarr;</a></div>
         <div id="partsGroups" class="stack"></div>
         <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
@@ -1545,6 +1546,13 @@ heading = imu.heading() if imu is not None else None
             settings, runs the tests before switching, and puts the old version
             back if the new one will not start.</p>
           <div class="panel-body">
+            <p class="small spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ install_ref or 'local' }} branch</p>
+            <label class="spaced" for="updateVariant">Module for the next install</label>
+            <select id="updateVariant">
+              <option value="standard" {% if not is_mini %}selected{% endif %}>MotionModule · 8 motors · 16 servos · IMU</option>
+              <option value="mini" {% if is_mini %}selected{% endif %}>MotionModule Mini · 4 motors · 16 servos · IMU</option>
+            </select>
+            <p class="small muted">Choose the module, then install main or testing below. Changing module selects its Mecanum sample; your existing robot folders are kept. Match the selected module to your hardware.</p>
             <div class="update-lines" id="updateLines">
               <p class="muted">Looking for this Pi's version&hellip;</p>
             </div>
@@ -2961,13 +2969,13 @@ function driverOutput(motor) {
   return block;
 }
 
-function renderDrivers(motors) {
+function renderDrivers(motors, boardCount = 4) {
   const drivers = new Map();
   motors.forEach(motor => {
     if (!drivers.has(motor.driver)) drivers.set(motor.driver, []);
     drivers.get(motor.driver).push(motor);
   });
-  const numbers = [...new Set([1, 2, 3, 4, ...drivers.keys()])].sort((a, b) => a - b);
+  const numbers = [...new Set([...Array.from({length: boardCount}, (_, index) => index + 1), ...drivers.keys()])].sort((a, b) => a - b);
   const cards = numbers.map(driver => {
     const outputs = (drivers.get(driver) || []).sort((a, b) => a.output.localeCompare(b.output));
     const card = element('div', `driver-card${outputs.length ? '' : ' unused'}`);
@@ -3284,7 +3292,7 @@ function renderHardware(data) {
   renderHardwareGuide(data.hardware_guide);
   renderStarterSnippet(data);
   renderPinMap(data.header, data.motors);
-  renderDrivers(data.motors);
+  renderDrivers(data.motors, (data.hardware_guide?.capacity?.motors || 8) / 2);
   renderNameTables(data);
   renderServoPicker(data);
   renderMotorTests(data.bench_motors || data.motors);
@@ -3356,6 +3364,8 @@ function updateLineCard(line, data) {
 }
 
 function renderUpdates(data) {
+  const moduleLine = $('#installedModuleLine');
+  if (moduleLine) moduleLine.textContent = `Installed: ${data.module_name || 'MotionModule'} · ${data.installed?.ref || 'local'} branch`;
   const job = data.job || {state: 'idle', log: []};
   const running = job.state === 'running';
   if (running) updateWatched = true;
@@ -3429,9 +3439,11 @@ async function refreshUpdates(force = false) {
 }
 
 async function installUpdate(line) {
+  line = {...line, variant: $('#updateVariant')?.value || 'standard'};
+  const moduleLabel = line.variant === 'mini' ? 'MotionModule Mini (4 motors)' : 'MotionModule (8 motors)';
   const question = line.current
-    ? `Update this robot to the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept.`
-    : `Install the ${line.label.toLowerCase()} on this robot? Motors stop, the Pi reboots automatically, and your robot folders are kept.`;
+    ? `Install ${moduleLabel} from the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. A module change selects its Mecanum sample.`
+    : `Install ${moduleLabel} from the ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. A module change selects its Mecanum sample.`;
   if (!confirm(question)) return;
   await requestUpdate(line);
 }
@@ -3446,7 +3458,7 @@ async function requestUpdate(line, password = '') {
   try {
     const answer = await jsonFetch('/api/updates', {
       method: 'POST', headers: apiHeaders,
-      body: JSON.stringify(password ? {ref: line.ref, password} : {ref: line.ref}),
+      body: JSON.stringify({ref: line.ref, variant: line.variant, ...(password ? {password} : {})}),
     });
     closeUpdatePassword();
     toast(answer.message || 'Update started. Keep the robot powered.');
