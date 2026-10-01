@@ -412,17 +412,14 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(response.data, EXAMPLE_DIR.parents[1].joinpath("cad", filename).read_bytes())
         self.assertEqual(self.client.get("/api/cad/unknown.step").status_code, 404)
 
-    def test_screw_assortment_image_is_bundled_for_offline_parts_list(self):
+    def test_screw_assortment_link_keeps_the_image_only_in_repository_docs(self):
         guide = self.client.get("/api/hardware-guide").get_json()
         screws = next(part for group in guide["parts_groups"] for part in group["items"]
                       if part["name"] == "Self-tapping screws")
         self.assertEqual(screws["url"], "https://www.amazon.com/dp/B0H8CK9QVW")
-        response = self.client.get(screws["image"])
-        self.addCleanup(response.close)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.mimetype, "image/png")
-        self.assertEqual(response.data, EXAMPLE_DIR.parents[1].joinpath(
-            "docs/images/fasvicna-self-tapping-screws.png").read_bytes())
+        self.assertNotIn("image", screws)
+        self.assertTrue(EXAMPLE_DIR.parents[1].joinpath(
+            "docs/images/fasvicna-self-tapping-screws.png").is_file())
 
     def test_static_assets_are_cacheable_but_downloads_are_not(self):
         response = self.client.get("/static/motionmodule.js")

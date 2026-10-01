@@ -178,6 +178,7 @@ function browser(now = 1700000000000) {
       if (failure) return {ok: false, status: failure.status, json: async () => ({error: failure.message, ...failure.data})};
       const data = url === '/api/status' ? currentStatus
         : url === '/api/drive/telemetry' ? currentTelemetry
+        : url === '/api/diagnostics' ? {ok: true, checks: [{level: 'pass', title: 'Fan', detail: 'Healthy'}]}
         : {ok: true};
       return {ok: true, status: 200, json: async () => data};
     },
@@ -242,18 +243,43 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'mini-hardware') {
+  if (scenario === 'doctor-polling') {
+    const checks = () => app.requests.filter(item => item.url === '/api/diagnostics');
+    vm.runInContext('startDoctorPolling()', app.context);
+    await app.settle();
+    assert.equal(checks().length, 1, 'Check immediately when Debug opens');
+    const polling = [...app.intervals.values()].filter(timer => timer.delay === 300000);
+    assert.equal(polling.length, 1);
+    await polling[0].callback();
+    await app.settle();
+    assert.equal(checks().length, 2, 'Fetch fresh checks five minutes later');
+    assert.equal(app.$('#doctorSummary').textContent, 'All checks clear');
+    await app.$('#refreshDoctor').fire('click');
+    await app.settle();
+    assert.equal(checks().length, 3, 'The manual button still refreshes checks');
+  } else if (scenario === 'mini-hardware') {
     const guide = fixture.guide;
     vm.runInContext(`renderDrivers(${JSON.stringify(guide.wiring.motor_connections)}, ${guide.capacity.motors / 2}); renderMotorTests(${JSON.stringify(guide.wiring.motor_connections)}); renderHardwareGuide(${JSON.stringify(guide)})`, app.context);
     const cards = app.$('#driverGrid').children;
     assert.equal(cards.length, 2);
     assert.deepEqual(cards.map(card => card.dataset.driver), [1, 2]);
     assert.equal(app.$('#motorTests').children.length, 4);
-    app.$('#updateVariant').value = 'mini';
+    const miniChoice = app.$('[data-module-variant="mini"]');
+    const fullChoice = app.$('[data-module-variant="standard"]');
+    await miniChoice.fire('click');
+    assert.equal(miniChoice.attrs['aria-pressed'], 'true');
+    assert(miniChoice.classList.contains('primary'));
+    assert.equal(fullChoice.attrs['aria-pressed'], 'false');
     await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
     await app.settle();
     const request = app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST').at(-1);
     assert.deepEqual(request.payload, {ref: 'testing', variant: 'mini'});
+    await fullChoice.fire('click');
+    assert.equal(fullChoice.attrs['aria-pressed'], 'true');
+    assert.equal(miniChoice.attrs['aria-pressed'], 'false');
+    await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
+    assert.deepEqual(app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST').at(-1).payload,
+      {ref: 'testing', variant: 'standard'});
   } else if (scenario === 'cad-downloads') {
     vm.runInContext(`renderHardwareGuide(${JSON.stringify(fixture.guide)})`, app.context);
     const links = app.$('#partsGroups').querySelectorAll('a');
@@ -264,10 +290,7 @@ async function run(scenario) {
     assert(cad.every(link => link.textContent === 'Download STEP CAD ↗'));
     assert(links.filter(link => !link.href.startsWith('/api/cad/'))
       .every(link => link.textContent === 'View selected product ↗'));
-    const productImage = app.$('#partsGroups').querySelector('img');
-    assert(productImage, 'Parts list should show the screw assortment image');
-    assert.equal(productImage.src, '/static/fasvicna-self-tapping-screws.png');
-    assert(productImage.alt.includes('Fasvicna'));
+    assert.equal(app.$('#partsGroups').querySelector('img'), null, 'Product images stay in the GitHub BOM');
   } else if (scenario === 'custom-servo') {
     vm.runInContext(`configData = {servos: {profiles: [{id: 'custom_position', label: 'Custom', kind: 'position', step: 0.1, unit: '°', minimum_pulse_us: 500, maximum_pulse_us: 2500}]}}`, app.context);
     app.$('#servoProfile').value = 'custom_position';

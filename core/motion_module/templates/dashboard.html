@@ -547,7 +547,9 @@
 .parts-table td { padding: .875rem 1.125rem; border-top: 1px solid var(--line-soft); font-size: .8125rem; vertical-align: top; }
 .parts-table td:first-child { width: 6rem; font: 700 1.0625rem/1.15 var(--font-display); }
 .parts-table strong { display: block; font-size: .875rem; font-weight: 650; }
-.parts-table .part-image { display: block; width: 15rem; max-width: 100%; height: auto; margin-top: .75rem; border-radius: .5rem; }
+.module-choices { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .625rem; }
+.module-choices .button { flex: 1 1 12rem; display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; padding: .875rem 1rem; }
+.module-choices small { font: 500 .75rem/1.5 var(--font-text); text-transform: none; letter-spacing: normal; }
 .parts-table p { max-width: 70ch; margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .parts-table a { display: inline-block; margin-top: .375rem; font-size: .75rem; font-weight: 650; text-decoration: none; }
 .part-status {
@@ -1415,7 +1417,7 @@ heading = imu.heading() if imu is not None else None
 
       <!-- ----------------------------------------------------- parts -->
       <div data-panel="parts" hidden>
-        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>Bill of materials</h2><p>{% if is_mini %}Browse the Mini reference parts and download the electronics-box STEP file below. The parts list, product image and power-box CAD work offline on the robot hotspot. Mini enclosure CAD has not been supplied.{% else %}Browse the reference parts and download the motion-module and electronics-box STEP files below. The parts list and both CAD downloads work offline on the robot hotspot.{% endif %} Reference parts are not a live inventory.</p></div><span class="pill">{{ motor_capacity }} MOTORS · 16 SERVOS</span></div>
+        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>Bill of materials</h2><p>{% if is_mini %}Browse the Mini reference parts and download the electronics-box STEP file below. The parts list and power-box CAD work offline on the robot hotspot. Mini enclosure CAD has not been supplied.{% else %}Browse the reference parts and download the motion-module and electronics-box STEP files below. The parts list and both CAD downloads work offline on the robot hotspot.{% endif %} Reference parts are not a live inventory.</p></div><span class="pill">{{ motor_capacity }} MOTORS · 16 SERVOS</span></div>
         <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects &rarr;</a></div>
         <div id="partsGroups" class="stack"></div>
         <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
@@ -1547,11 +1549,11 @@ heading = imu.heading() if imu is not None else None
             back if the new one will not start.</p>
           <div class="panel-body">
             <p class="small spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ install_ref or 'local' }} branch</p>
-            <label class="spaced" for="updateVariant">Module for the next install</label>
-            <select id="updateVariant">
-              <option value="standard" {% if not is_mini %}selected{% endif %}>MotionModule · 8 motors · 16 servos · IMU</option>
-              <option value="mini" {% if is_mini %}selected{% endif %}>MotionModule Mini · 4 motors · 16 servos · IMU</option>
-            </select>
+            <p class="spaced">Module for the next install</p>
+            <div class="module-choices" role="group" aria-label="Module for the next install">
+              <button class="button{% if not is_mini %} primary{% endif %}" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><strong>MotionModule</strong><small>8 motors · 4 driver boards</small></button>
+              <button class="button{% if is_mini %} primary{% endif %}" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><strong>MotionModule Mini</strong><small>4 motors · 2 driver boards</small></button>
+            </div>
             <p class="small muted">Choose the module, then install main or testing below. Changing module selects its Mecanum sample; your existing robot folders are kept. Match the selected module to your hardware.</p>
             <div class="update-lines" id="updateLines">
               <p class="muted">Looking for this Pi's version&hellip;</p>
@@ -1573,6 +1575,7 @@ heading = imu.heading() if imu is not None else None
             <p class="lead">These checks never intentionally move a motor or
               servo. Run them again after changing wiring or code.</p>
             <div class="panel-body check-list" id="doctorChecks"></div>
+            <p class="parts-note">Checks refresh automatically every five minutes while Debug is open.</p>
           </article>
 
           <article class="card">
@@ -3218,11 +3221,6 @@ function renderHardwareGuide(guide) {
       row.dataset.search = `${part.name} ${part.selection} ${part.purpose}`.toLowerCase();
       const copy = element('td');
       copy.append(element('strong', null, part.name), element('p', null, part.selection), element('p', null, part.purpose));
-      if (part.image) {
-        const image = element('img', 'part-image');
-        image.src = part.image; image.alt = part.selection;
-        image.loading = 'lazy'; copy.append(image);
-      }
       if (part.url) {
         const link = element('a', null, part.url.endsWith('.step') ? 'Download STEP CAD ↗' : 'View selected product ↗');
         link.href = part.url; link.target = '_blank'; link.rel = 'noreferrer'; copy.append(link);
@@ -3334,6 +3332,20 @@ const UPDATE_STATES = {
   'other-line': {label: 'Other branch', tone: 'other'},
 };
 
+let selectedModuleVariant = {{ ('mini' if is_mini else 'standard') | tojson }};
+
+function selectModuleVariant(variant) {
+  selectedModuleVariant = variant;
+  document.querySelectorAll('[data-module-variant]').forEach(button => {
+    const selected = button.dataset.moduleVariant === variant;
+    button.classList.toggle('primary', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+}
+document.querySelectorAll('[data-module-variant]').forEach(button => {
+  button.addEventListener('click', () => selectModuleVariant(button.dataset.moduleVariant));
+});
+
 function updateLineCard(line, data) {
   const state = UPDATE_STATES[line.status] || UPDATE_STATES.unknown;
   const row = element('div', `update-line ${state.tone}${line.current ? ' current-line' : ''}`);
@@ -3439,7 +3451,7 @@ async function refreshUpdates(force = false) {
 }
 
 async function installUpdate(line) {
-  line = {...line, variant: $('#updateVariant')?.value || 'standard'};
+  line = {...line, variant: selectedModuleVariant};
   const moduleLabel = line.variant === 'mini' ? 'MotionModule Mini (4 motors)' : 'MotionModule (8 motors)';
   const question = line.current
     ? `Install ${moduleLabel} from the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. A module change selects its Mecanum sample.`
@@ -4134,7 +4146,16 @@ addEventListener('pagehide', () => {
 
 /* ------------------------------------------------------ doctor + logs */
 
+let doctorRefreshing = false;
+
+function startDoctorPolling() {
+  refreshDoctor();
+  return setInterval(refreshDoctor, 5 * 60 * 1000);
+}
+
 async function refreshDoctor() {
+  if (doctorRefreshing) return;
+  doctorRefreshing = true;
   try {
     const data = await jsonFetch('/api/diagnostics');
     let warnings = 0;
@@ -4153,6 +4174,8 @@ async function refreshDoctor() {
       : 'All checks clear';
   } catch (error) {
     toast(error.message, true);
+  } finally {
+    doctorRefreshing = false;
   }
 }
 
@@ -4385,7 +4408,7 @@ if (activePage === 'diagnostics') {
   setDriveSignals();
   setInterval(sendDrive, 80);
   setInterval(readPad, 120);
-  refreshDoctor();
+  startDoctorPolling();
   refreshLogs();
   refreshUsb();
   setInterval(refreshUsb, 5000);

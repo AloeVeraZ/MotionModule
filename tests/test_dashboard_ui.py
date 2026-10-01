@@ -110,6 +110,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         guide = hardware_guide(load_hardware_file(MINI_HARDWARE_PATH))
         self.run_behavior("mini-hardware", {**self.fixture, "guide": guide})
 
+    def test_doctor_refreshes_every_five_minutes_and_manual_refresh_still_works(self):
+        self.run_behavior("doctor-polling")
+
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
 

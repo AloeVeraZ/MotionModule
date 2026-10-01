@@ -14,14 +14,11 @@ from .pinout import PHYSICAL_BY_BCM, motor_rows, servo_rows
 CAD_DOWNLOAD = "/api/cad"
 
 
-def _part(quantity, name, selection, purpose, status="required", url=None, image=None):
-    part = {
+def _part(quantity, name, selection, purpose, status="required", url=None):
+    return {
         "quantity": quantity, "name": name, "selection": selection,
         "purpose": purpose, "status": status, "url": url,
     }
-    if image:
-        part["image"] = image
-    return part
 
 
 def parts_groups(config=None) -> list[dict]:
@@ -44,7 +41,7 @@ def parts_groups(config=None) -> list[dict]:
                 _part("1", "AITRIP PCA9685", "16-channel servo board, address 0x40 with all pads open", "Turns two I2C wires into 16 servo control signals", "selected", "https://www.amazon.com/dp/B07WS5XY63"),
                 _part("1 recommended", "MPU6500 gyroscope + accelerometer", "6-axis IMU; 3.3 V logic; I2C; chip identity 0x70", "Recommended for IMU heading correction and autonomous turns; connects directly to the Pi", "recommended", "https://www.amazon.com/dp/B0GTVCCY6B"),
                 _part("1 set", "Controller mounting CAD", "Downloadable STEP enclosure and mounts for the Pi, drivers and servo board", "Holds the boards together as one assembly", "selected", CAD_DOWNLOAD + "/motion-module.step"),
-                _part("1 assortment", "Self-tapping screws", "Fasvicna M1.7-M3, 750-piece assortment; use 4 x M2.3 x 5 mm and 22 x M3 x 5 mm", "Use four M2.3 x 5 mm screws for the Raspberry Pi. The 22 M3 x 5 mm screws mount the four motor drivers, PCA9685 servo board and IMU, and include four corner screws fastening the top plate to the bottom plate", "selected", "https://www.amazon.com/dp/B0H8CK9QVW", "/static/fasvicna-self-tapping-screws.png"),
+                _part("1 assortment", "Self-tapping screws", "Fasvicna M1.7-M3, 750-piece assortment; use 4 x M2.3 x 5 mm and 22 x M3 x 5 mm", "Use four M2.3 x 5 mm screws for the Raspberry Pi. The 22 M3 x 5 mm screws mount the four motor drivers, PCA9685 servo board and IMU, and include four corner screws fastening the top plate to the bottom plate", "selected", "https://www.amazon.com/dp/B0H8CK9QVW"),
             ],
             "note": "The controller and power boards run MotionModule. The Pi-connected IMU is recommended for heading assist and autonomous turns; manual driving remains available without it. Only MPU6500 identity 0x70 is supported. The linked reference board has been sold under an MPU9255 title; verify the actual chip identity.",
         },
