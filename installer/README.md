@@ -12,8 +12,9 @@ fixes that, so skip 0.12.0 and install 0.12.1 or later:
   on the Pi, and the service log says so. `module.giga(imus=...)` is accepted
   and ignored; Arduino IMUs are no longer read and report no heading. No other
   IMU driver came back.
-- Untouched copies of every Mecanum sample ever shipped are recognised and
-  updated automatically; edited robot folders are kept exactly as they are.
+- Current installs keep every existing robot folder, including untouched
+  samples, and save a pre-update code snapshot. Updating the bundled sample
+  in an existing project is an explicit Code-page action.
 - If a robot project still cannot load, the dashboard opens in **recovery
   mode** instead of failing. It shows the real error, stops every output,
   turns the servo outputs off and refuses driving, motor, servo and autonomous
@@ -145,10 +146,11 @@ lets that user flash the GIGA's firmware with `motionmodule giga flash`
 without sudo. Reboot once after the first install so the groups apply.
 
 Bundled examples are copied into `~/MotionModule/robots` on the first install.
-A later install replaces one of those folders only while every file in it is
-still a copy MotionModule shipped, so a fix to a sample reaches the robot; the
-folder it replaces is kept under `~/MotionModule/backups`, and a folder with
-any file of its own is never overwritten. The `active` symlink selects the
+Later installs keep every existing folder and its files, including unedited
+samples, and snapshot robot code under `~/MotionModule/backups`. New sample code
+is installed into an existing folder only with the explicit Code-page action.
+The recognized retired pin map is still migrated to the locked wiring, with its
+old file and a pre-update snapshot kept. The `active` symlink selects the
 project loaded by the dashboard. A project may include its own data-only `hardware.py`;
 otherwise the installed `~/.config/motionmodule/hardware.py` supplies the pins
 and names. Installs made before that file existed keep using their
@@ -201,10 +203,9 @@ branch when one is kept; switching branches is always `motionmodule install`.
 ### Default Mecanum modes
 
 Fresh installs select Mecanum with teleop, Pi IMU support, and the four-turn
-IMU autonomous routine. On upgrades, a customized `robots/Mecanum` folder
-gets `autonomous.py` if it is missing. Every existing file, including its
-hardware map and any existing autonomous routine, is preserved. The added
-routine supports older teleop projects through the confirmed Mecanum mixer.
+IMU autonomous routine. On upgrades, existing `robots/Mecanum` folders and the active project are
+preserved; no missing file is added to an existing project. Use the explicit
+Code-page sample action if you want the latest bundled example.
 Select Autonomous, confirm the area is clear, Enable, then Start to run it;
 installing or starting the service never starts motion.
 
@@ -216,6 +217,14 @@ sixteen servo outputs and Pi-connected MPU6500. A fresh checkout can use
 `bash install.sh --version testing --variant mini`. The installed module choice
 is kept in `~/.config/motionmodule/variant` and survives updates.
 
-Changing module selects its Mecanum sample and keeps previous robot folders.
-Mini rejects project maps containing motor channels 5–8. See the
+Changing module keeps the same active robot project and every file. Each update
+saves a code snapshot under `~/MotionModule/backups`. Mini exposes only channels
+1–4 from the existing map in memory, without rewriting it. Code requesting motors
+5–8 may need changes on Mini; the files are preserved even if it cannot run. See the
 [Mini build guide](../MotionModuleMini/README.md) for its parts and pinout.
+
+The current `motionmodule install` command snapshots robot files before handing
+control to the destination branch's bootstrap. This keeps code recoverable even
+when deliberately installing a release older than this preservation policy;
+older installers may still refresh bundled samples. The current installer keeps
+the same active project and all existing project code in place.

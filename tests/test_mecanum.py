@@ -157,8 +157,7 @@ class MecanumSensorTests(unittest.TestCase):
             self.assertIsNone(drive.sensors.heading())
             self.assertFalse(drive.sensors.reading().connected)
             names = [control["name"] for control in drive.controls()]
-            for name in ("zero_heading", "recalibrate_gyro", "turn_left_90", "turn_right_90", "heading_hold"):
-                self.assertIn(name, names)
+            self.assertEqual(names, [])
             # Without an IMU there is nothing to zero or snap by: say so.
             with self.assertRaisesRegex(ValueError, "not ready"):
                 drive.control("zero_heading", 1)

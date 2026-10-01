@@ -5,7 +5,7 @@ VCC -> physical 17, GND -> 6, AD0 -> 20, SDA -> 11, SCL -> 12.
 Enable dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18 and reboot.
 The Pi reads the independent bus; no Arduino is part of this setup.
 
-Zeroing happens only when you press Zero IMU in the Driver Station. It makes
+Zeroing happens only when robot code explicitly calls zero_heading(). It makes
 the way the robot faces read 0° and its present tilt read level, and nothing
 else resets it. The level is saved beside this file and survives a reboot;
 the heading cannot (the MPU6500 has no compass), so after a power-off it
@@ -28,7 +28,7 @@ from motion_module.telemetry import IMUReading
 IMU = IMUConfig("Main IMU", address=0x68)
 
 # Where Zero IMU keeps the level. A name starting with "." is ignored when
-# MotionModule checks whether this folder is still an untouched sample.
+# This runtime calibration file is preserved with the robot project.
 LEVEL_FILE = Path(__file__).with_name(".imu-level.json")
 
 
@@ -56,7 +56,7 @@ class RobotSensors:
     def zero_heading(self):
         """Zero IMU: the way the robot faces reads 0° and its tilt reads level.
 
-        Only a person pressing Zero IMU calls this. Returns False if the IMU
+        Call this explicitly from custom robot code. Returns False if the IMU
         is not ready yet.
         """
         if self.imu is None or self.imu.heading() is None:

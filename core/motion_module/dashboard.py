@@ -1011,6 +1011,14 @@ def create_app(
         except Exception:
             app.logger.exception("The robot project's controls() call failed")
             return []
+        # Older installed default samples are kept byte-for-byte on updates.
+        # Hide their retired test controls without editing the owner's code.
+        legacy_names = {"spin_test", "creep", "zero_heading", "recalibrate_gyro",
+                        "turn_left_90", "turn_right_90", "heading_hold"}
+        names = {item.get("name") for item in declared if isinstance(item, dict) and isinstance(item.get("name"), str)} if isinstance(declared, (list, tuple)) else set()
+        if (type(active_drive).__name__ == "MecanumDrive"
+                and {"spin_test", "creep"}.issubset(names) and names <= legacy_names):
+            return []
         controls = []
         for item in declared if isinstance(declared, (list, tuple)) else []:
             if not isinstance(item, dict) or not isinstance(item.get("name"), str):
@@ -1086,6 +1094,11 @@ def create_app(
                     "error": f"dashboard.py could not read telemetry: {error}",
                     **payload,
                 }), 503
+        # Retained older dashboard.py files must not advertise removed controls.
+        allowed_controls = {control["name"] for control in drive_controls()}
+        for field in ("control_keys", "control_buttons"):
+            payload[field] = {name: binding for name, binding in payload[field].items()
+                              if name in allowed_controls}
         # dashboard.py may not declare cameras at all, or may only name one
         # without a URL. Either way, the Driver Station still gets a live
         # camera tile: MotionModule streams a USB camera automatically,
@@ -1541,7 +1554,7 @@ def load_project_hooks(module, project_path: Path | None = None):
         return drive, dashboard_telemetry, ""
     except Exception as error:
         traceback.print_exc()
-        reason = project_load_error(error, project_path)
+        reason = project_load_error(error, project_path) + " Your robot code is preserved in its project folder; this runtime or module may need compatible code."
     for partial in (dashboard_telemetry, drive):
         for name in ("stop", "close"):
             hook = getattr(partial, name, None)
@@ -1643,7 +1656,7 @@ def open_module(project_path: Path | None):
         traceback.print_exc()
         recovery_error = (
             f"MotionModule could not start the robot's hardware: "
-            f"{project_load_error(error, project_path)}. No pins are being driven."
+            f"{project_load_error(error, project_path)}. No pins are being driven. Your robot project files are preserved."
         )
         try:
             config = load_config(project=folder)

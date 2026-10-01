@@ -1045,7 +1045,7 @@
       </div>
 
       <div class="notice page-notice" id="simulationNotice" hidden><strong>Simulation mode.</strong> Explore the dashboard without moving hardware. Device responses below are simulated.</div>
-      <div class="notice danger page-notice" id="recoveryNotice" role="alert" hidden><strong>Recovery mode: the robot will not move.</strong> The robot project could not be loaded, so every output is stopped and driving, motor, servo and autonomous commands are refused. Logs, diagnostics, Code &rarr; Deploy and Update still work. <span id="recoveryText"></span></div>
+      <div class="notice danger page-notice" id="recoveryNotice" role="alert" hidden><strong>Recovery mode: the robot will not move.</strong> The robot project could not be loaded, so every output is stopped and driving, motor, servo and autonomous commands are refused. Your robot files are still in their project folder. Code may need changes for this runtime or module. Logs, diagnostics, Code &rarr; Deploy and Update still work. <span id="recoveryText"></span></div>
       <div class="notice danger page-notice" id="connectionNotice" role="alert" hidden><strong>Connection lost.</strong> Live values are unavailable. Controls are disabled until you reconnect and enable them again.</div>
 
       <div class="stats">
@@ -1554,7 +1554,7 @@ heading = imu.heading() if imu is not None else None
               <button class="button{% if not is_mini %} primary{% endif %}" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><strong>MotionModule</strong><small>8 motors · 4 driver boards</small></button>
               <button class="button{% if is_mini %} primary{% endif %}" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><strong>MotionModule Mini</strong><small>4 motors · 2 driver boards</small></button>
             </div>
-            <p class="small muted">Choose the module, then install main or testing below. Changing module selects its Mecanum sample; your existing robot folders are kept. Match the selected module to your hardware.</p>
+            <p class="small muted">Choose the module, then install main or testing below. Every update keeps your active robot project and its files, and saves a pre-update copy in <code>~/MotionModule/backups</code>. Channels 1–4, servos and IMU use the same wiring on both modules. Code that needs motors 5–8 or an incompatible API may need changes to run; your code is still kept. Match the selected module to your hardware.</p>
             <div class="update-lines" id="updateLines">
               <p class="muted">Looking for this Pi's version&hellip;</p>
             </div>
@@ -1959,8 +1959,7 @@ heading = imu.heading() if imu is not None else None
                 <a class="button" href="/api/projects/sample" download>Download Mecanum sample</a>
               </div>
               <div class="panel-body stack">
-                <div class="notice">An update never overwrites a robot folder
-                  someone edited, so a newer sample does not reach it by itself.
+                <div class="notice">An update keeps every existing robot folder, including unedited samples. A newer sample is installed only when you choose it.
                   <strong>Use this sample on the robot</strong> replaces
                   <code>robots/Mecanum</code> with the sample this release ships,
                   keeps the old folder under <code>backups</code>, and restarts.
@@ -3454,8 +3453,8 @@ async function installUpdate(line) {
   line = {...line, variant: selectedModuleVariant};
   const moduleLabel = line.variant === 'mini' ? 'MotionModule Mini (4 motors)' : 'MotionModule (8 motors)';
   const question = line.current
-    ? `Install ${moduleLabel} from the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. A module change selects its Mecanum sample.`
-    : `Install ${moduleLabel} from the ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. A module change selects its Mecanum sample.`;
+    ? `Install ${moduleLabel} from the newest ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. The same robot project stays active. Code may need compatibility changes, but your files and a pre-update backup are kept.`
+    : `Install ${moduleLabel} from the ${line.label.toLowerCase()}? Motors stop, the Pi reboots automatically, and your robot folders are kept. The same robot project stays active. Code may need compatibility changes, but your files and a pre-update backup are kept.`;
   if (!confirm(question)) return;
   await requestUpdate(line);
 }

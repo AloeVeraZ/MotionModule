@@ -1,11 +1,7 @@
-"""An install gives a robot folder nobody edited the sample this release ships.
+"""Legacy explicit sample-refresh utility; installers now preserve all projects.
 
-A Pi keeps its robot folders through every install, so the copy of a sample it
-was first given stayed on it: a fix to the sample, such as a motor's
-`inverted` value, never reached the robot. A folder whose files are all copies
-MotionModule shipped holds nobody's work, so the install now replaces it and
-keeps the old folder under backups. core/motion_module/shipped_samples.py
-explains.
+The utility remains available for older tooling. Installer regression coverage
+ensures runtime updates snapshot code and never invoke this replacement step.
 """
 
 import io
@@ -223,25 +219,14 @@ class ShippedSampleTests(unittest.TestCase):
             )
         self.assertEqual(len(output.getvalue().splitlines()), 1)
 
-    def test_installer_updates_the_samples_before_the_new_release_starts(self):
+    def test_installer_snapshots_code_before_migration_or_startup(self):
         script = INSTALLER.read_text(encoding="utf-8")
-        command = '-m motion_module.shipped_samples \\\n    "$ROBOT_DIR" "$PROJECT_DIR/backups"'
-
-        self.assertIn(command, script)
-        # The robot folders exist by then, the retired-wiring move can still
-        # correct a folder this step left alone, and the service has not yet
-        # restarted on the new release.
-        self.assertLess(script.index('say "Created robot project'), script.index(command))
-        self.assertLess(script.index(command), script.index("-m motion_module.retired_wiring"))
-        self.assertLess(
-            script.index(command), script.index("if ! sudo systemctl restart motionmodule.service;")
-        )
-
-    def test_the_install_passes_the_samples_of_the_release_it_replaces(self):
-        script = INSTALLER.read_text(encoding="utf-8")
-
-        self.assertIn('released_with=(--released-with "$(readlink -f "$CURRENT_LINK")/examples")', script)
-        self.assertIn('"${released_with[@]}"', script)
+        call = "-m motion_module.project_preservation"
+        self.assertLess(script.index(call), script.index("-m motion_module.retired_wiring"))
+        self.assertLess(script.index(call), script.index("if ! sudo systemctl restart motionmodule.service;"))
+        self.assertNotIn("-m motion_module.shipped_samples", script)
+        self.assertNotIn("-m motion_module.mecanum_hardware", script)
+        self.assertNotIn("VARIANT_EXPLICIT", script)
 
 
 if __name__ == "__main__":

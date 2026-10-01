@@ -12,11 +12,10 @@ What it does: turn left to 90, 180, 270 and 360 degrees from the starting
 direction, settling within two degrees at each stop. It never translates.
 Change PLAN to make your own. The IMU heading loop (see
 motion_module/heading.py) and shares its tuning, HEADING in robot.py, with
-the Driver Station's snap turns.
+teleop heading hold.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
-faces when Start Autonomous is pressed, so line the robot up first; press Zero IMU in
-the Driver Station only when you want to set 0° yourself.
+faces when Start Autonomous is pressed, so line the robot up first.
 
 The robot has no wheel encoders, so a "drive" step goes for a set time, not
 a set distance. Without a working IMU the routine does not move at all.

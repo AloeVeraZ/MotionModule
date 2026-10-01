@@ -16,9 +16,8 @@ so nothing here needs to know which one is driving.
 Driving assist, from the IMU (see motion_module/heading.py):
     heading hold   while you drive or strafe without turning, the robot keeps
                    the direction it faces instead of drifting
-    snap turns     Z / C (or the controller's bumpers, set in dashboard.py)
-                   turn exactly 90° left / right; press again for the next 90°
-Both switch off by themselves if the IMU is not ready.
+Heading hold switches off by itself if the IMU is not ready.
+Extra test and mechanism controls are not declared by this default robot.
 
 MotionModule calls `create_drive(module)` once at startup, then calls
 `drive(...)` on the object it returns every time a control command arrives.
@@ -113,32 +112,9 @@ class MecanumDrive:
 
         self.module.set_motors({name: 0 for name in self.wheels})
 
-    # ---- optional: extra buttons and sliders in the Driver Station ----------
-
     def controls(self):
-        """Describe Driver Station controls. Delete this if you want none."""
-
-        controls = [
-            {"name": "spin_test", "label": "Spin in place", "kind": "hold",
-             "detail": "Turns at half power for as long as you hold it"},
-            {"name": "creep", "label": "Creep forward", "kind": "slider",
-             "minimum": -0.3, "maximum": 0.3, "step": 0.05,
-             "detail": "Fine positioning without touching the sticks"},
-        ]
-        if self.sensors is not None:
-            controls += [
-                {"name": "zero_heading", "label": "Zero IMU", "kind": "button",
-                 "detail": "The way the robot faces becomes 0° and its tilt level, until you zero again"},
-                {"name": "recalibrate_gyro", "label": "Recalibrate gyro", "kind": "button",
-                 "detail": "Keep the robot still for a second; the zero is kept"},
-                {"name": "turn_left_90", "label": "Snap left 90°", "kind": "button",
-                 "detail": "Turn to the next 90° on the left (Z)"},
-                {"name": "turn_right_90", "label": "Snap right 90°", "kind": "button",
-                 "detail": "Turn to the next 90° on the right (C)"},
-                {"name": "heading_hold", "label": "Heading hold on/off", "kind": "button",
-                 "detail": "Keeps the robot straight while driving; on at start-up"},
-            ]
-        return controls
+        """The default four-wheel robot has no extra mechanism controls."""
+        return []
 
     def control(self, name, value):
         """Handle one Driver Station control. `value` is a number."""

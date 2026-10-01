@@ -128,21 +128,12 @@ Heading increases turning left, like `rotate`. Missing hardware is shown as
 offline. The Pi uses gyro and accelerometer readings; the DMP is not used.
 Mount +Y forward and +Z upward.
 
-The Driver Station's IMU buttons:
-
-- **Zero IMU** makes the way the robot faces 0° and its present tilt level.
-  Nothing else re-zeroes it. The level is saved and survives a reboot; the
-  heading starts at 0° after every power-on, facing wherever the robot faces,
-  because the MPU6500 has no compass. Relative yaw drifts slowly, so zero
-  before a run.
-- **Recalibrate gyro** measures the gyro at rest again (keep the robot still
-  for a second). The zero is kept. This also happens once at every start-up.
-- **Snap left / right 90°** (keys Z and C, controller bumpers) turn to the next
-  multiple of 90°. Press again for another 90°; moving the turning stick cancels.
-- **Heading hold on/off**: on at start-up. While you drive or strafe without
-  turning, the robot keeps the direction it faces instead of drifting. It
-  switches itself off, and says why under the IMU, if the heading ever runs
-  away from its correction.
+The default sample declares no mechanism controls: driving uses the normal
+keyboard, gamepad or touch inputs. Mecanum and MecanumMini use identical robot,
+test, sensor and dashboard code; only their hardware maps differ in capacity.
+Heading hold starts enabled and keeps the direction while driving or strafing.
+The IMU panel still provides gyroscope calibration. Custom robot code can use
+`Sensors.zero_heading()` or the heading helper directly when needed.
 
 Tuning lives in `HEADING` at the top of `robot.py`; see
 [heading control](../../docs/CODING.md#heading-control-motion_moduleheading).

@@ -97,8 +97,7 @@ Both builds share the same runtime, dashboard and robot API. Mini keeps channels
 the hardware profile, parts list and two-driver wiring diagram. On the Pi, run
 `motionmodule install testing --variant mini` to try Mini, or select the module
 in the dashboard Updates section. The installer preserves that choice across
-updates. Change back with `--variant standard`; changing module selects its
-Mecanum sample and keeps existing robot folders. Mini is on testing pending review.
+updates. Change back with `--variant standard`; changing module keeps the same active robot project and every existing file. Mini is on testing pending review.
 
 ### Download the CAD
 
@@ -413,9 +412,9 @@ AD0 on 20. Use the single [IMU wiring plan](docs/PINOUT.md#optional-mpu6500-six-
 The Pi installer enables this bus for its next reboot. No extra sensors are declared.
 The robot can still drive without an IMU; heading stays unavailable, the
 driving assist switches off, and the sample autonomous routine does not move.
-With the IMU, the Driver Station holds the robot's heading while it drives,
-Z / C (or the bumpers) snap-turn exactly 90°, and the sample autonomous drives
-an IMU-guided square. The IMU is zeroed only by its Zero IMU button.
+With the IMU, the default robot holds its heading while it drives. Its optional
+autonomous routine performs four IMU-guided turns. The default Mecanum and
+MecanumMini code is identical and declares no extra mechanism controls.
 
 An **Arduino GIGA R1 WiFi** can optionally connect by USB for additional GPIO
 inputs. The repository includes USB auto-detection, bridge firmware and a Python
@@ -540,10 +539,18 @@ MotionModule dashboard + active Python project
 The service loads `~/MotionModule/active/robot.py`. `active` points to one
 folder under `~/MotionModule/robots`; browser uploads preserve previous copies
 under `~/MotionModule/backups`. Runtime releases live separately, so installing
-or rolling back MotionModule does not overwrite the work in a robot project. A
-folder whose files are all copies MotionModule shipped holds no such work, so
-an install gives it that release's sample and keeps the replaced folder under
-`~/MotionModule/backups`.
+or rolling back MotionModule keeps every existing robot project, including
+unedited samples. Each install snapshots robot code under `~/MotionModule/backups`
+before it changes the runtime. Changing module or branch keeps the active project.
+Both modules share channels 1–4, all servo outputs and the IMU; Mini omits channels
+5–8 in memory without rewriting hardware.py. Code using unavailable outputs or an
+incompatible API may need changes, but its files remain available in recovery mode.
+Before a branch or version handoff, the current CLI also saves a snapshot so
+code remains recoverable if you deliberately install an older release whose
+installer predates this policy. Such an older installer may refresh bundled
+samples; your original copy remains in `~/MotionModule/backups`.
+The one legacy exception is the recognized retired pin map: it is migrated to the
+locked wiring, keeping the old hardware file and the pre-update snapshot.
 
 The network service tries saved Wi-Fi for 30 seconds and creates the fallback
 hotspot only when none connects. Nginx provides the same port-80 page in either

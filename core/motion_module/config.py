@@ -484,7 +484,7 @@ def load_config(
     selected = resolve_config_path(path, project=project)
     if selected.suffix.casefold() == ".py":
         config = load_hardware_file(selected)
-        return _validate(replace(config, variant="mini")) if installed_variant() == "mini" else config
+        return apply_installed_variant(config)
     try:
         data = tomllib.loads(selected.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
@@ -494,7 +494,17 @@ def load_config(
     except (OSError, UnicodeError) as error:
         raise ConfigurationError(f"Cannot read configuration file {selected}: {error}") from error
     config = _config_from_mapping(data, selected)
-    return _validate(replace(config, variant="mini")) if installed_variant() == "mini" else config
+    return apply_installed_variant(config)
+
+
+def apply_installed_variant(config: ModuleConfig) -> ModuleConfig:
+    """Limit available outputs in memory; never rewrite a robot's hardware.py."""
+    if installed_variant() != "mini":
+        return replace(config, variant="standard")
+    motors = tuple(motor for motor in config.motors if motor.channel <= 4)
+    if not motors:
+        raise ConfigurationError("MotionModule Mini has no configured channels 1-4 in this robot's hardware.py. Your robot files are preserved; adjust the project to use Drivers 1 and 2.")
+    return _validate(replace(config, variant="mini", motors=motors))
 
 
 def hardware_source(config: ModuleConfig) -> str:

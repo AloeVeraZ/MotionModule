@@ -34,8 +34,8 @@ robot folders are kept. For custom code, copy the Mini hardware definition into
 your robot folder, retain channels 1–4 and rename outputs for your mechanisms.
 Motor direction is changed with `inverted`, never by moving pins.
 
-The installed Mini limit persists across updates and project changes. A robot
-map containing channels 5–8 is rejected before GPIO is opened. Debug and the
+The installed Mini limit persists across updates and project changes. The existing hardware file is preserved; channels 5–8 are omitted from the
+runtime map on Mini. Code requesting those motors gets an unavailable-output error. Debug and the
 motor activity display show four outputs; servo and IMU behavior stays the same.
 
 To run the simulated Mini dashboard on Windows:
@@ -55,8 +55,8 @@ MOTIONMODULE_VARIANT=mini python -m motion_module.demo --no-browser
 
 Updates shows both the installed module and its main/testing branch. Choose
 MotionModule or MotionModule Mini, then install the desired branch. A module
-change selects that module's Mecanum sample, preserves previous project folders,
-and reboots using the selected hardware limit. The current Mini implementation
+change keeps the same active robot project and files, saves a pre-update code
+snapshot in `~/MotionModule/backups`, and reboots using the selected hardware limit. The current Mini implementation
 is on testing; main gains it only after review and merge.
 
 The full module's enclosure STEP model and 22-M3-screw count describe the full

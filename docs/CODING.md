@@ -247,8 +247,9 @@ the front and +Z upward to match the pitch/roll convention.
 
 On an existing robot folder that you have customized, update its own
 `sensors.py` declaration to `IMUConfig("Main IMU", address=0x68)`.
-The installer preserves customized robot folders; untouched shipped samples
-receive the new declaration automatically.
+The installer preserves every existing robot folder, including untouched
+samples, and saves a pre-update snapshot. Use the explicit Code-page sample
+installation action if you want the current bundled declaration.
 
 The only built-in IMU is MPU6500, with WHO_AM_I `0x70`. Unknown identities,
 including MPU9255 `0x73`, are rejected before configuration writes. There is

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from motion_module.config import (DEFAULT_HARDWARE_PATH, MINI_HARDWARE_PATH,
                                   hardware_source, load_config, load_hardware_file)
 from motion_module.controller import MotionModule
-from motion_module.dashboard import IdleDrive, create_app
+from motion_module.dashboard import IdleDrive, create_app, load_drive
 from motion_module.errors import ConfigurationError
 from motion_module.gpio import MockGPIO
 from motion_module.hardware_guide import hardware_guide
@@ -42,8 +42,9 @@ class MiniTests(unittest.TestCase):
 
     def test_installed_limit_cannot_be_bypassed_by_a_full_project(self):
         with patch.dict(os.environ, {'MOTIONMODULE_VARIANT': 'mini'}):
-            with self.assertRaisesRegex(ConfigurationError, 'channels 1-4'):
-                load_config(project=ROOT / 'examples/Mecanum')
+            config = load_config(project=ROOT / 'examples/Mecanum')
+            self.assertEqual(config.motors, load_hardware_file(ROOT / 'examples/Mecanum/hardware.py').motors[:4])
+            self.assertEqual(config.motor_capacity, 4)
             config = load_config(project=ROOT / 'examples/MecanumMini')
             self.assertEqual(len(config.motors), 4)
             self.assertEqual(len(config.servos.channels), 16)
@@ -76,6 +77,56 @@ class MiniTests(unittest.TestCase):
         for file in (ROOT / 'examples/Mecanum').glob('*.py'):
             if file.name != 'hardware.py':
                 self.assertEqual(file.read_bytes(), (ROOT / 'examples/MecanumMini' / file.name).read_bytes())
+
+    def test_same_project_drives_on_both_modules_without_changing_any_files(self):
+        project = ROOT / 'examples/Mecanum'
+        before = {p.name: p.read_bytes() for p in project.glob('*.py')}
+        powers = []
+        for variant, capacity in (('mini', 4), ('standard', 8)):
+            with patch.dict(os.environ, {'MOTIONMODULE_VARIANT': variant}):
+                config = load_config(project=project)
+                self.assertEqual(config.motor_capacity, capacity)
+                module = MotionModule(config, gpio=MockGPIO())
+                try:
+                    drive = load_drive(module, project / 'robot.py')
+                    drive.drive(0.5, 0.2, 0.1, speed=0.5)
+                    powers.append({key: value for key, value in module.snapshot()['motors'].items()
+                                   if key in (1, 2, 3, 4)})
+                    self.assertTrue(any(powers[-1].values()))
+                    module.servo(15).set_angle(90)
+                    self.assertIsNotNone(drive.sensors.reading())
+                    self.assertEqual(drive.controls(), [])
+                    if variant == 'mini':
+                        with self.assertRaises(ValueError):
+                            module.motor(5)
+                    drive.stop()
+                finally:
+                    module.close()
+        self.assertEqual(powers[0], powers[1])
+        self.assertEqual(before, {p.name: p.read_bytes() for p in project.glob('*.py')})
+
+    def test_legacy_default_controls_are_hidden_but_custom_controls_still_work(self):
+        class MecanumDrive(IdleDrive):
+            def controls(self):
+                return [{'name': name} for name in ('spin_test', 'creep', 'zero_heading', 'recalibrate_gyro')]
+        module = MotionModule(self.mini, gpio=MockGPIO())
+        self.addCleanup(module.close)
+        drive = MecanumDrive(module)
+        class Dashboard:
+            def snapshot(self):
+                return {'driver_bindings': {'zero_heading': 'z'},
+                        'gamepad_buttons': {'left_bumper': 'recalibrate_gyro'}}
+        app = create_app(module, drive, dashboard_telemetry=Dashboard())
+        client = app.test_client()
+        telemetry = client.get('/api/drive/telemetry').get_json()
+        self.assertEqual(telemetry['control_keys'], {})
+        self.assertEqual(telemetry['control_buttons'], {})
+        page = client.get('/driver-station').data.decode()
+        self.assertIn('Competition console', page)
+        self.assertIn('data-no-controls="true" hidden', page)
+        self.assertEqual(client.get('/api/drive/controls').get_json()['controls'], [])
+        drive.controls = lambda: [{'name': 'intake', 'label': 'Intake', 'kind': 'hold'}]
+        self.assertEqual(client.get('/api/drive/controls').get_json()['controls'][0]['name'], 'intake')
 
     def test_mini_diagram_has_two_drivers_and_ships_offline(self):
         svg = (ROOT / 'docs/images/motionmodule-mini-complete-wiring.svg').read_text(encoding='utf-8')

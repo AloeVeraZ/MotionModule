@@ -668,7 +668,7 @@ async function run(scenario) {
     assert.match(app.$('#touchLegend').textContent, /^Left stick drives, the Turn buttons turn\./);
     // touch_panels(): the IMU and mechanisms join robot control, sticks and cameras.
     assert.equal(app.$('[data-touch-panel="imu"]').hidden, false);
-    assert.equal(app.$('[data-touch-panel="mechanisms"]').hidden, false);
+    assert.equal(app.$('[data-touch-panel="mechanisms"]').hidden, true, 'A panel with no controls stays hidden even when the touch layout requests it');
     assert.equal(app.$('[data-touch-panel="pi_inputs"]').hidden, true);
     assert.equal(app.$('[data-touch-panel="status"]').hidden, true);
     assert.equal(app.$('.right-column').hidden, false, 'The IMU keeps its column');

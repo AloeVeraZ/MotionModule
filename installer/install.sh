@@ -9,8 +9,6 @@ REBOOT_SYSTEM=true
 ROBOT_PROJECT="${MOTIONMODULE_ROBOT_PROJECT:-Mecanum}"
 ROBOT_EXPLICIT=false
 MODULE_VARIANT="${MOTIONMODULE_VARIANT:-}"
-VARIANT_EXPLICIT=false
-if [ -n "${MOTIONMODULE_VARIANT:-}" ]; then VARIANT_EXPLICIT=true; fi
 
 if [ -n "${MOTIONMODULE_ROBOT_PROJECT:-}" ]; then
     ROBOT_EXPLICIT=true
@@ -20,7 +18,6 @@ while [ "$#" -gt 0 ]; do
     case "$1" in
         --variant)
             MODULE_VARIANT="$2"
-            VARIANT_EXPLICIT=true
             shift 2
             ;;
         --source)
@@ -106,10 +103,6 @@ if [ "$MODULE_VARIANT" = mini ]; then
     CONFIG_FILE="$CONFIG_DIR/mini-hardware.py"
     LEGACY_CONFIG_FILE="$CONFIG_DIR/mini-config.toml"
     if [ "$ROBOT_EXPLICIT" != true ]; then ROBOT_PROJECT="MecanumMini"; fi
-fi
-if [ "$VARIANT_EXPLICIT" = true ] && [ "$MODULE_VARIANT" != "$PREVIOUS_VARIANT" ] && [ "$ROBOT_EXPLICIT" != true ]; then
-    # Selecting a different module selects its sample; existing robot folders stay intact.
-    ROBOT_EXPLICIT=true
 fi
 [ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
 [ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/hardware.py" ] || fail "Robot example $ROBOT_PROJECT is missing hardware.py."
@@ -232,6 +225,9 @@ touch "$release_dir/.complete"
 
 say "Creating the persistent student workspace and robot projects..."
 mkdir -p "$PROJECT_DIR" "$ROBOT_DIR" "$CONFIG_DIR"
+# Keep a second copy before any legacy wiring migration or project relocation.
+"$release_dir/.venv/bin/python" -m motion_module.project_preservation \
+    "$ROBOT_DIR" "$PROJECT_DIR/backups" "robot-code-$release_id" --legacy-workspace "$PROJECT_DIR"
 
 # Version 0.3 stored projects directly in ~/MotionModule. Move those folders
 # into the dedicated robots workspace while preserving the active project name.
@@ -263,20 +259,9 @@ for robot_file in "$release_dir"/examples/*/robot.py; do
     fi
 done
 
-# A robot folder nobody has edited still holds the sample an earlier release
-# put there, so fixes to a sample never reached the robot. Give those folders
-# the sample this release ships, keeping the copy replaced under backups. A
-# folder with its own work keeps every existing file; a missing Mecanum
-# autonomous.py is added so both default modes are available. The module
-# core/motion_module/shipped_samples.py explains how it tells them apart.
-released_with=()
-if [ -L "$CURRENT_LINK" ] && [ -d "$CURRENT_LINK/examples" ]; then
-    released_with=(--released-with "$(readlink -f "$CURRENT_LINK")/examples")
-fi
-while IFS= read -r message; do
-    say "$message"
-done < <("$release_dir/.venv/bin/python" -m motion_module.shipped_samples \
-    "$ROBOT_DIR" "$PROJECT_DIR/backups" "${released_with[@]}")
+# Existing robot code stays byte-for-byte as supplied, including old samples.
+# Only the recognized retired pin map is migrated below, with the old map kept.
+# New samples are offered through Code, where replacing one is an explicit action.
 
 [ -f "$ROBOT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
 
@@ -334,10 +319,8 @@ while IFS= read -r message; do
     say "$message"
 done < <("$release_dir/.venv/bin/python" -m motion_module.retired_wiring "$ROBOT_DIR" "$CONFIG_FILE")
 
-# Legacy Mecanum code can still use the installed map because its folder has
-# no hardware.py. Preserve that code and copy its settings with only 1B/2B
-# inverted; otherwise sample changes never reach either motor-control path.
-"$release_dir/.venv/bin/python" -m motion_module.mecanum_hardware "$active_target" "$CONFIG_FILE"
+# Keep legacy robot behavior too: do not add a new project hardware.py or
+# change inversion while installing a runtime update.
 
 if [ ! -f "$PROJECT_DIR/README.md" ] || grep -q '^# MotionModule student workspace$' "$PROJECT_DIR/README.md"; then
 cat > "$PROJECT_DIR/README.md" <<EOF
@@ -536,9 +519,8 @@ if [ -n "$TARGET_HOSTNAME" ]; then
 fi
 
 say "Activating the new release..."
-# Check the selected robot against the new module limit before activation.
-MOTIONMODULE_VARIANT="$MODULE_VARIANT" MOTIONMODULE_CONFIG="$CONFIG_FILE" \
-    "$release_dir/.venv/bin/python" -c 'import sys; from motion_module.config import load_config; load_config(project=sys.argv[1])' "$active_target"
+# A project incompatible with this runtime opens recovery mode; it is never
+# replaced with a sample just to make the updated runtime start.
 printf '%s\n' "$MODULE_VARIANT" > "$VARIANT_FILE"
 old_target=""
 if [ -L "$CURRENT_LINK" ] && [ -e "$CURRENT_LINK/.complete" ]; then

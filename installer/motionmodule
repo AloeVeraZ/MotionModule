@@ -102,6 +102,13 @@ case "$command" in
             bootstrap="$(curl -fsSL "$RAW_BASE/main/install.sh")" \
                 || fail "Could not download the MotionModule installer. Check the Pi's internet connection."
         fi
+        # Snapshot with the current runtime before handing control to another
+        # branch's installer. Older releases may not have preservation support.
+        if [ -x "$CURRENT_LINK/.venv/bin/python" ]; then
+            "$(runtime_python)" -m motion_module.project_preservation \
+                "$ROBOT_DIR" "$BACKUP_DIR" "robot-code-before-install-$(date +%Y%m%d%H%M%S)-$$" \
+                --legacy-workspace "$PROJECT_DIR"
+        fi
         printf '%s\n' "$bootstrap" | bash -s -- --version "$ref" "$@"
         ;;
     deploy)

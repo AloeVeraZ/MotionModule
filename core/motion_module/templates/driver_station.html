@@ -723,7 +723,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
       </div>
     </section>
 
-    <section class="panel" data-touch-panel="mechanisms">
+    <section class="panel" data-touch-panel="mechanisms" data-no-controls="true" hidden>
       <div class="panel-head"><h2>Mechanism controls</h2><span id="controlSummary">Checking project</span></div>
       <div class="panel-body control-list" id="controlList"><p class="empty-copy">Project controls will appear here.</p></div>
     </section>
@@ -1294,7 +1294,7 @@ function applyStickLayout(data) {
    panels touch_panels() names. A computer shows everything. */
 function applyTouchPanels() {
   const touch = inputMode === 'touch';
-  $$('[data-touch-panel]').forEach(node => { node.hidden = touch && !touchPanels.includes(node.dataset.touchPanel); });
+  $$('[data-touch-panel]').forEach(node => { node.hidden = node.dataset.noControls === 'true' || (touch && !touchPanels.includes(node.dataset.touchPanel)); });
   const right = $('.right-column');
   right.hidden = [...right.querySelectorAll('[data-touch-panel]')].every(node => node.hidden);
   $('.station-grid').classList.toggle('no-right', right.hidden);
@@ -1540,6 +1540,9 @@ async function refreshTelemetry() {
 async function loadControls() {
   try {
     const data = await jsonFetch('/api/drive/controls'); const controls = data.controls || []; $('#controlSummary').textContent = controls.length ? `${controls.length} from ${data.project}` : 'None declared';
+    const panel = document.querySelector('[data-touch-panel="mechanisms"]');
+    panel.dataset.noControls = String(!controls.length);
+    panel.hidden = !controls.length || (inputMode === 'touch' && !touchPanels.includes('mechanisms'));
     if (!controls.length) { replaceWith($('#controlList'), [element('p','empty-copy','No project controls declared. Driving remains available.')]); return; }
     replaceWith($('#controlList'), controls.map(control => {
       const row=element('div','control-row'); const copy=element('div','control-copy'); copy.append(element('strong',null,control.label),element('small',null,control.detail||control.name)); row.append(copy);

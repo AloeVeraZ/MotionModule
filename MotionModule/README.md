@@ -27,5 +27,4 @@ bash install.sh --version testing --variant standard
 ```
 
 The dashboard Updates page shows the installed module and branch. Its module
-selector can install either build; changing module selects the corresponding
-Mecanum sample while keeping your previous robot folders.
+selector can install either build; changing module keeps your active robot project and its files.

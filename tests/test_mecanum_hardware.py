@@ -91,8 +91,7 @@ class LegacyMecanumHardwareTests(unittest.TestCase):
         self.assertIn("wiring differs", provision_mecanum_hardware(self.project, self.installed))
         self.assertFalse((self.project / "hardware.py").exists())
 
-    def test_installer_runs_repair_on_the_active_project_before_restarting(self):
+    def test_installer_preserves_existing_project_hardware(self):
         script = (Path(__file__).resolve().parents[1] / "installer" / "install.sh").read_text(encoding="utf-8")
-        call = '-m motion_module.mecanum_hardware "$active_target" "$CONFIG_FILE"'
-        self.assertLess(script.index("-m motion_module.retired_wiring"), script.index(call))
-        self.assertLess(script.index(call), script.index("if ! sudo systemctl restart motionmodule.service;"))
+        self.assertNotIn('-m motion_module.mecanum_hardware', script)
+        self.assertIn('-m motion_module.project_preservation', script)

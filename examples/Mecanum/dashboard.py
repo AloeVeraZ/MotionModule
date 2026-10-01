@@ -36,8 +36,7 @@ class MecanumDashboard(TelemetryDashboard):
         Return only what you want to move. Anything left out keeps its default:
         W/S drive, A/D strafe, Q/E turn, space disables and stops.
 
-        A key can also press one of robot.py's controls() buttons by its name:
-        here Z and C snap-turn 90° left and right.
+        Custom projects can also bind their own controls() buttons by name.
         """
 
         return {
@@ -48,8 +47,6 @@ class MecanumDashboard(TelemetryDashboard):
             "turn_left": "q",
             "turn_right": "e",
             "stop": " ",
-            "turn_left_90": "z",
-            "turn_right_90": "c",
         }
 
     def gamepad_sticks(self):
@@ -80,14 +77,12 @@ class MecanumDashboard(TelemetryDashboard):
         "stop"/"estop" to disable the robot instantly. This sample keeps the
         defaults explicit: the D-pad's down button stops the robot and the
         right trigger is the emergency stop. A button can also press one of
-        robot.py's controls() buttons by name: the bumpers snap-turn 90°.
+        robot.py's controls() buttons by name in a custom project.
         """
 
         return {
             "dpad_down": "stop",
             "right_trigger": "estop",
-            "left_bumper": "turn_left_90",
-            "right_bumper": "turn_right_90",
         }
 
     def touch_sticks(self):
