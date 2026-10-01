@@ -546,6 +546,7 @@
 .parts-table td { padding: .875rem 1.125rem; border-top: 1px solid var(--line-soft); font-size: .8125rem; vertical-align: top; }
 .parts-table td:first-child { width: 6rem; font: 700 1.0625rem/1.15 var(--font-display); }
 .parts-table strong { display: block; font-size: .875rem; font-weight: 650; }
+.parts-table .part-image { display: block; width: 15rem; max-width: 100%; height: auto; margin-top: .75rem; border-radius: .5rem; }
 .parts-table p { max-width: 70ch; margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .parts-table a { display: inline-block; margin-top: .375rem; font-size: .75rem; font-weight: 650; text-decoration: none; }
 .part-status {
@@ -3209,6 +3210,11 @@ function renderHardwareGuide(guide) {
       row.dataset.search = `${part.name} ${part.selection} ${part.purpose}`.toLowerCase();
       const copy = element('td');
       copy.append(element('strong', null, part.name), element('p', null, part.selection), element('p', null, part.purpose));
+      if (part.image) {
+        const image = element('img', 'part-image');
+        image.src = part.image; image.alt = part.selection;
+        image.loading = 'lazy'; copy.append(image);
+      }
       if (part.url) {
         const link = element('a', null, part.url.endsWith('.step') ? 'Download STEP CAD ↗' : 'View selected product ↗');
         link.href = part.url; link.target = '_blank'; link.rel = 'noreferrer'; copy.append(link);

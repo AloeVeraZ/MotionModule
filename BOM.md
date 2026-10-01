@@ -26,6 +26,24 @@ servos, wire — is a recommendation, not a requirement.
 | 4 | Dual H-bridge motor driver | [GODIYMODULES DC 3–18 V, dual H-bridge PWM driver](https://www.amazon.com/dp/B0FKH352D2) | Two brushed motors per board; eight channels total |
 | 1 | 16-channel servo controller | [AITRIP PCA9685](https://www.amazon.com/dp/B07WS5XY63) at address `0x40`, all pads open | Sixteen servo PWM channels over I²C |
 | 1 set | Controller mounting CAD | [motion-module.step](cad/motion-module.step) | Printable mounts holding the Pi, drivers and servo board together |
+| 1 assortment | Self-tapping screws | [Fasvicna M1.7–M3, 750-piece assortment](https://www.amazon.com/dp/B0H8CK9QVW); use 4 × M2.3 × 5 mm and 22 × M3 × 5 mm | Mounts the Pi, motor drivers, servo board and IMU, and secures the motion-module enclosure plates |
+
+### Motion-module mounting screws
+
+![Fasvicna self-tapping screw assortment](docs/images/fasvicna-self-tapping-screws.png)
+
+Use the self-tapping screws from the assortment for the supplied enclosure:
+
+The complete assembly needs **4 M2.3 × 5 mm screws and 22 M3 × 5 mm screws**
+in total, including the IMU and the four enclosure corner screws.
+
+| Mounting location | Screw size | Quantity |
+| --- | --- | --- |
+| Raspberry Pi | M2.3 × 5 mm | 4 |
+| Four motor-driver boards | M3 × 5 mm | One per board mounting hole |
+| PCA9685 servo board | M3 × 5 mm | One per board mounting hole |
+| IMU | M3 × 5 mm | One per board mounting hole |
+| Top plate to bottom plate | M3 × 5 mm | 4, one at each corner |
 
 The PCA9685 confirms over I²C that its logic is present, but it cannot report
 whether an individual servo is plugged into an output. The H-bridge inputs have

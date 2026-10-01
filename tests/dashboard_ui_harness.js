@@ -252,6 +252,10 @@ async function run(scenario) {
     assert(cad.every(link => link.textContent === 'Download STEP CAD ↗'));
     assert(links.filter(link => !link.href.startsWith('/api/cad/'))
       .every(link => link.textContent === 'View selected product ↗'));
+    const productImage = app.$('#partsGroups').querySelector('img');
+    assert(productImage, 'Parts list should show the screw assortment image');
+    assert.equal(productImage.src, '/static/fasvicna-self-tapping-screws.png');
+    assert(productImage.alt.includes('Fasvicna'));
   } else if (scenario === 'custom-servo') {
     vm.runInContext(`configData = {servos: {profiles: [{id: 'custom_position', label: 'Custom', kind: 'position', step: 0.1, unit: '°', minimum_pulse_us: 500, maximum_pulse_us: 2500}]}}`, app.context);
     app.$('#servoProfile').value = 'custom_position';

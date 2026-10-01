@@ -87,6 +87,8 @@ compartment to keep the wiring cleaner.
 
 ### Download the CAD
 
+![Current motion-module enclosure CAD preview](cad/motion-module.png)
+
 | STEP model | What it contains |
 | --- | --- |
 | [Motion module](cad/motion-module.step) | Controller enclosure and mounting assembly |
