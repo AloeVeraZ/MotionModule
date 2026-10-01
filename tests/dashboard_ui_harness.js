@@ -242,7 +242,17 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'custom-servo') {
+  if (scenario === 'cad-downloads') {
+    vm.runInContext(`renderHardwareGuide(${JSON.stringify(fixture.guide)})`, app.context);
+    const links = app.$('#partsGroups').querySelectorAll('a');
+    const cad = links.filter(link => link.href.startsWith('/api/cad/'));
+    assert.equal(cad.length, 2);
+    assert.deepEqual(cad.map(link => link.href).sort(),
+      ['/api/cad/electronics-box.step', '/api/cad/motion-module.step']);
+    assert(cad.every(link => link.textContent === 'Download STEP CAD ↗'));
+    assert(links.filter(link => !link.href.startsWith('/api/cad/'))
+      .every(link => link.textContent === 'View selected product ↗'));
+  } else if (scenario === 'custom-servo') {
     vm.runInContext(`configData = {servos: {profiles: [{id: 'custom_position', label: 'Custom', kind: 'position', step: 0.1, unit: '°', minimum_pulse_us: 500, maximum_pulse_us: 2500}]}}`, app.context);
     app.$('#servoProfile').value = 'custom_position';
     await app.$('#servoProfile').fire('change');

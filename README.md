@@ -1,19 +1,26 @@
 # MotionModule
 
-MotionModule is a Raspberry Pi robot controller for eight brushed motors and
-PCA9685 servo boards. It is an independent, FTC-style system inspired by the
-idea of combining a Control Hub and Expansion Hub, but it does not use or
-depend on that hardware or software.
+MotionModule is an open-source Raspberry Pi robot controller for eight brushed
+DC motors, a PCA9685 servo board with sixteen outputs, and a Pi-connected IMU.
+The idea is to bring the controller and expansion functions of a REV Robotics
+Control Hub and Expansion Hub together in one buildable, open-source project.
+Anyone can build it using the supplied code, wiring guide, bill of materials
+and enclosure CAD. It is an independent robotics project with no connection
+to FIRST Tech Challenge (FTC).
 
 The reusable runtime owns GPIO, I2C, safety, networking, diagnostics, and the
 browser dashboard. Each robot is one separate Python folder containing its own
 behavior and an optional hardware map, so the same installation can run a Mecanum, tank,
 walking, or other robot.
 
-> [!CAUTION]
-> MotionModule is developmental lab hardware, not an approved competition
-> controller. Fuse every power branch, keep a physical motor-power cutoff in
-> reach, and raise the wheels for initial tests.
+**Build it, wire it correctly, and run it from `main`.** The main branch is the
+ready-to-use version for the documented hardware. Changes are developed and
+tested on `testing` before they are merged into `main`; `testing` is the
+development branch and can contain unfinished changes. The branches may match
+immediately after a merge, then diverge as development continues.
+
+Keep a physical motor-power cutoff within reach and raise the wheels when
+checking a newly assembled robot. Follow the [wiring and power guide](docs/PINOUT.md).
 
 ## Wiring at a glance
 
@@ -71,6 +78,8 @@ compartment to keep the wiring cleaner.
 | [Motion module](cad/motion-module.step) | Controller enclosure and mounting assembly |
 | [Electronics box](cad/electronics-box.step) | Battery/switch section and hollow power-wiring compartment |
 
+The dashboard also offers both files under **Debug → Parts list**, with direct
+**Download STEP CAD** links that work on the robot hotspot without internet.
 Import these STEP files into your CAD application. See the [CAD notes](cad/README.md)
 for the assembly descriptions and the photos above for the installed examples.
 

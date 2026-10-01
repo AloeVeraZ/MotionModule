@@ -395,6 +395,23 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(script.status_code, 200)
         self.assertIn(b"function createTouchStick", body)
 
+    def test_bom_cad_downloads_return_supplied_models_as_attachments(self):
+        guide = self.client.get("/api/hardware-guide").get_json()
+        parts = [part for group in guide["parts_groups"] for part in group["items"]
+                 if part["name"].endswith("CAD")]
+        self.assertEqual(len(parts), 2)
+        for part in parts:
+            with self.subTest(part=part["name"]):
+                response = self.client.get(part["url"])
+                self.addCleanup(response.close)
+                filename = part["url"].rsplit("/", 1)[1]
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("attachment;", response.headers["Content-Disposition"])
+                self.assertIn(filename, response.headers["Content-Disposition"])
+                self.assertEqual(response.mimetype, "application/octet-stream")
+                self.assertEqual(response.data, EXAMPLE_DIR.parents[1].joinpath("cad", filename).read_bytes())
+        self.assertEqual(self.client.get("/api/cad/unknown.step").status_code, 404)
+
     def test_static_assets_are_cacheable_but_downloads_are_not(self):
         response = self.client.get("/static/motionmodule.js")
         response.close()

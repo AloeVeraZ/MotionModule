@@ -161,8 +161,9 @@ class HardwareGuideTests(unittest.TestCase):
             with self.subTest(part=part["name"]):
                 self.assertEqual(part["status"], "selected")
                 self.assertTrue(part["url"].startswith(
-                    "https://github.com/AloeVeraZ/MotionModule/blob/main/cad/"))
+                    "/api/cad/"))
                 model = root / "cad" / part["url"].rsplit("/", 1)[1]
+                self.assertEqual(model.read_bytes(), (root / "core/motion_module/static/cad" / model.name).read_bytes())
                 data = model.read_bytes().strip()
                 self.assertTrue(data.startswith(b"ISO-10303-21;"))
                 self.assertTrue(data.endswith(b"END-ISO-10303-21;"))

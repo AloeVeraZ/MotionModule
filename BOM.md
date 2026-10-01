@@ -6,7 +6,9 @@ that 12 V directly, the Raspberry Pi gets 5 V from a USB-C converter, and the
 servos get their own regulated rail.
 
 The same list is built into the dashboard under **Debug → Parts list**, so it
-works on the robot hotspot with no internet connection.
+works on the robot hotspot with no internet connection. Both enclosure CAD
+entries have **Download STEP CAD** links; the STEP files ship with the controller
+and download directly from it, without a GitHub redirect.
 
 **The first two sections are the robot.** Buy those and MotionModule boots,
 serves its dashboard and drives outputs. Everything after them — motors,

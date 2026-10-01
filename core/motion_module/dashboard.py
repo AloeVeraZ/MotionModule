@@ -573,6 +573,17 @@ def create_app(
             download_name=PROJECT_CONFIG_NAME,
         )
 
+    @app.get("/api/cad/<filename>")
+    def cad_file(filename):
+        if filename not in {"motion-module.step", "electronics-box.step"}:
+            return jsonify({"ok": False, "error": "Unknown CAD model"}), 404
+        return send_file(
+            STATIC_DIRECTORY / "cad" / filename,
+            mimetype="application/octet-stream",
+            as_attachment=True,
+            download_name=filename,
+        )
+
     @app.get("/api/hardware-guide")
     def guide():
         return jsonify({"ok": True, **hardware_guide(module.config)})

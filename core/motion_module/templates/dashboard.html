@@ -1413,7 +1413,7 @@ heading = imu.heading() if imu is not None else None
 
       <!-- ----------------------------------------------------- parts -->
       <div data-panel="parts" hidden>
-        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>The parts behind your robot.</h2><p>The repository’s bill of materials, available here without leaving the dashboard. Reference parts are not a live inventory.</p></div><span class="pill">8 MOTORS · 16 SERVOS</span></div>
+        <div class="section-heading"><div><p class="eyebrow">Reference build</p><h2>Bill of materials</h2><p>Browse the reference parts and download the motion-module and electronics-box STEP files below. The parts list and both CAD downloads work offline on the robot hotspot. Reference parts are not a live inventory.</p></div><span class="pill">8 MOTORS · 16 SERVOS</span></div>
         <div class="parts-toolbar"><label class="field">Find a part<input id="partsSearch" type="search" placeholder="Search parts, wiring, or power…"></label><a class="button" href="#wiring">See how it connects &rarr;</a></div>
         <div id="partsGroups" class="stack"></div>
         <p id="partsEmpty" class="notice" hidden>No matching parts. Try “servo”, “fuse”, or “wire”.</p>
@@ -3210,7 +3210,7 @@ function renderHardwareGuide(guide) {
       const copy = element('td');
       copy.append(element('strong', null, part.name), element('p', null, part.selection), element('p', null, part.purpose));
       if (part.url) {
-        const link = element('a', null, 'View selected product ↗');
+        const link = element('a', null, part.url.endsWith('.step') ? 'Download STEP CAD ↗' : 'View selected product ↗');
         link.href = part.url; link.target = '_blank'; link.rel = 'noreferrer'; copy.append(link);
       }
       const status = element('td');

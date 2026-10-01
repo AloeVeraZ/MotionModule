@@ -35,4 +35,5 @@ motion_module = [
   "static/*.svg",
   "static/*.png",
   "static/fonts/*",
+  "static/cad/*.step",
 ]

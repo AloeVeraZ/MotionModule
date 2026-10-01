@@ -96,6 +96,14 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_parts_list_renders_cad_download_links(self):
+        from motion_module.config import default_config
+        from motion_module.hardware_guide import hardware_guide
+
+        self.run_behavior("cad-downloads", {
+            **self.fixture, "guide": hardware_guide(default_config()),
+        })
+
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")
 
