@@ -68,7 +68,8 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         # connection failures are deterministic. All production handlers run.
         script = script[:script.index("/* ------------------------------------------------------------ startup */")]
         hold_script = (ROOT / "core/motion_module/static/hold-controls.js").read_text(encoding="utf-8")
-        script = hold_script + "\n" + script
+        requests_script = (ROOT / "core/motion_module/static/requests.js").read_text(encoding="utf-8")
+        script = requests_script + "\n" + hold_script + "\n" + script
         cls.fixture = {"nodes": dom.nodes, "script": script}
 
         station_template = ROOT / "core" / "motion_module" / "templates" / "driver_station.html"
@@ -81,7 +82,7 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         station_script = re.search(r"<script>(.*?)</script>", station_rendered, re.DOTALL).group(1)
         station_script = station_script[:station_script.rfind("renderKeys();")]
         sticks_script = (ROOT / "core/motion_module/static/touch-sticks.js").read_text(encoding="utf-8")
-        station_script = hold_script + "\n" + sticks_script + "\n" + station_script
+        station_script = requests_script + "\n" + hold_script + "\n" + sticks_script + "\n" + station_script
         cls.station_fixture = {"nodes": station_dom.nodes, "script": station_script, "kind": "station"}
 
     def run_behavior(self, scenario, fixture=None):
@@ -121,6 +122,16 @@ class DashboardUIBehaviorTests(unittest.TestCase):
 
     def test_doctor_refreshes_every_five_minutes_and_manual_refresh_still_works(self):
         self.run_behavior("doctor-polling")
+
+    def test_slow_status_and_telemetry_requests_do_not_overlap(self):
+        for fixture in (self.fixture, self.station_fixture):
+            self.run_behavior("slow-polling", fixture)
+
+    def test_json_transport_times_out_and_keeps_structured_errors(self):
+        result = subprocess.run([NODE, str(ROOT / 'tests/requests_harness.js'),
+                                 str(ROOT / 'core/motion_module/static/requests.js')],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_leaving_drive_page_disarms_and_stops_keyboard_commands(self):
         self.run_behavior("tab-disarm")

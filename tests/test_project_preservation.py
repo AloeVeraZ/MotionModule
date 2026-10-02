@@ -104,3 +104,10 @@ class ProjectPreservationTests(unittest.TestCase):
         command = '"$(runtime_python)" -m motion_module.project_preservation'
         self.assertIn(command, script)
         self.assertLess(script.index(command), script.index('"$bootstrap" | bash'))
+
+    def test_installer_never_refreshes_existing_robot_code_or_inserts_hardware_files(self):
+        script = (Path(__file__).resolve().parents[1] / 'installer/install.sh').read_text(encoding='utf-8')
+        self.assertNotIn('-m motion_module.shipped_samples', script)
+        self.assertNotIn('-m motion_module.mecanum_hardware', script)
+        self.assertLess(script.index('-m motion_module.project_preservation'),
+                        script.index('-m motion_module.retired_wiring'))

@@ -28,7 +28,6 @@ include = ["motion_module*"]
 
 [tool.setuptools.package-data]
 motion_module = [
-  "shipped_samples.json",
   "templates/*.html",
   "static/*.css",
   "static/*.js",

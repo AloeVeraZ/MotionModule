@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="/static/wiring-palette.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
 <script src="/static/hold-controls.js?v={{ asset_version }}"></script>
+<script src="/static/requests.js?v={{ asset_version }}"></script>
 <style>
 /* ==========================================================================
    MotionModule dashboard
@@ -1577,6 +1578,8 @@ heading = imu.heading() if imu is not None else None
             <p class="lead">These checks never intentionally move a motor or
               servo. Run them again after changing wiring or code.</p>
             <div class="panel-body check-list" id="doctorChecks"></div>
+            <div class="panel-body button-row"><button class="button" id="downloadDiagnostics" type="button">Download diagnostic report</button></div>
+            <p class="parts-note">Save check results, module type, wiring and live status for troubleshooting. The report excludes robot source, service logs and Wi-Fi credentials.</p>
             <p class="parts-note">Checks refresh automatically every five minutes while Debug is open.</p>
           </article>
 
@@ -1956,6 +1959,14 @@ heading = imu.heading() if imu is not None else None
 
           <div class="stack">
             <article class="card">
+              <div class="panel-head"><h2>Keep a copy of your robot</h2></div>
+              <div class="panel-body stack">
+                <p>Download the active project as a ZIP before you edit or update. It includes your saved code, hardware.py and calibration data.</p>
+                <p class="small muted">Runtime pipes, linked files, caches and installed dependencies are excluded. Downloads support up to 32 MiB of saved files.</p>
+                <div class="button-row"><button class="button" id="downloadProject" type="button">Download active robot</button></div>
+              </div>
+            </article>
+            <article class="card">
               <div class="panel-head">
                 <h2>What goes in the folder</h2>
                 <a class="button" href="/api/projects/sample" download>Download Mecanum sample</a>
@@ -2201,18 +2212,37 @@ function toast(message, isError = false) {
   toast.timer = setTimeout(() => { box.hidden = true; }, 4500);
 }
 
-async function jsonFetch(url, options = {}) {
-  const response = await fetch(url, { cache: 'no-store', ...options });
-  const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-  if (!response.ok) {
-    /* The reply stays on the error, for callers that act on more than the message. */
-    const error = new Error(data.error || `Request failed (${response.status})`);
-    error.status = response.status;
-    error.data = data;
-    throw error;
+const jsonFetch = createJSONClient();
+
+async function downloadArtifact(url, fallbackName, button) {
+  if (button.disabled) return;
+  button.disabled = true;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetch(url, {cache: 'no-store', headers: apiHeaders, signal: controller.signal});
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `Download failed (${response.status})`);
+    }
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = response.headers.get('Content-Disposition')?.match(/filename="?([^";]+)"?/)?.[1] || fallbackName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    toast('Download ready.');
+  } catch (error) {
+    toast(error.name === 'AbortError' ? 'Download timed out. Try again when the connection is stable.' : error.message, true);
+  } finally {
+    clearTimeout(timer);
+    button.disabled = false;
   }
-  return data;
 }
+$('#downloadProject').addEventListener('click', event => downloadArtifact('/api/projects/download', 'robot-project.zip', event.currentTarget));
+$('#downloadDiagnostics').addEventListener('click', event => downloadArtifact('/api/diagnostics/download', 'motionmodule-diagnostics.json', event.currentTarget));
 
 function formatUptime(seconds) {
   if (seconds == null) return '—';
@@ -2531,7 +2561,10 @@ function renderImuActivity(imu, unavailable = false) {
     : responding ? (imu.calibrated ? 'Responding' : 'Responding · calibrating') : 'Not responding', responding)]);
 }
 
+let refreshStatusPending = false;
 async function refreshStatus() {
+  if (refreshStatusPending) return;
+  refreshStatusPending = true;
   try {
     const data = await jsonFetch('/api/status');
     const robot = data.robot;
@@ -2571,16 +2604,6 @@ async function refreshStatus() {
     renderServos(robot);
     renderImuActivity(robot.imu);
     renderHealth(robot, system);
-    if (!connected) {
-      connected = true;
-      document.body.classList.remove('stale');
-      const notice = $('#connectionNotice');
-      if (notice) notice.hidden = true;
-      for (const id of ['driveEnable', 'motorSafe', 'servoSafe']) {
-        const box = $(`#${id}`);
-        if (box) box.disabled = Boolean(data.recovery?.active);
-      }
-    }
     setDriverSignal('#signalComms', 'good', 'Connected');
     setDriverSignal('#driveSignalLink', 'good', 'Connected');
     setDriverSignal('#driveSignalOutputs', outputsActive ? 'bad' : 'good', outputsActive ? 'Moving' : 'Idle');
@@ -2589,7 +2612,7 @@ async function refreshStatus() {
     setDriverSignal('#signalOutputs', outputsActive ? 'bad' : 'good', outputsActive ? 'Active' : 'Idle');
   } catch (error) {
     markDisconnected();
-  }
+  } finally { refreshStatusPending = false; }
 }
 
 /* Connection loss is a safety event, not just a stale reading: the robot may
@@ -4166,7 +4189,7 @@ async function refreshDoctor() {
   if (doctorRefreshing) return;
   doctorRefreshing = true;
   try {
-    const data = await jsonFetch('/api/diagnostics');
+    const data = await jsonFetch('/api/diagnostics', {timeoutMs: 30000});
     let warnings = 0;
     replaceWith($('#doctorChecks'), data.checks.map(check => {
       if (check.level === 'warn') warnings++;
@@ -4247,14 +4270,17 @@ function renderNetwork(data) {
   setDriverSignal('#signalNetwork', online ? 'good' : 'bad', online ? networkName : 'Offline');
 }
 
+let refreshNetworkPending = false;
 async function refreshNetwork(silent = false) {
+  if (refreshNetworkPending) return;
+  refreshNetworkPending = true;
   try {
-    renderNetwork(await jsonFetch('/api/network/status'));
+    renderNetwork(await jsonFetch('/api/network/status', {timeoutMs: 12000}));
   } catch (error) {
     if (!silent) toast(error.message, true);
     if ($('#networkMode')) $('#networkMode').textContent = 'UNAVAILABLE';
     setDriverSignal('#signalNetwork', 'bad', 'Unavailable');
-  }
+  } finally { refreshNetworkPending = false; }
 }
 
 async function scanNetworks() {
@@ -4262,7 +4288,7 @@ async function scanNetworks() {
   button.disabled = true;
   button.textContent = 'Scanning…';
   try {
-    const data = await jsonFetch('/api/network/scan');
+    const data = await jsonFetch('/api/network/scan', {timeoutMs: 35000});
     if (!data.networks.length) {
       replaceWith($('#networkList'), [element('p', 'muted', 'No networks found. Move closer and scan again.')]);
       return;
@@ -4394,10 +4420,13 @@ $('#calibrateImu').addEventListener('click', async () => {
 });
 
 
+let refreshTestImuPending = false;
 async function refreshTestImu() {
   if (document.querySelector('[data-panel="tests"]').hidden) return;
+  if (refreshTestImuPending) return;
+  refreshTestImuPending = true;
   try { renderImu((await jsonFetch('/api/drive/telemetry')).imu); }
-  catch (_) { renderImu(null); }
+  catch (_) { renderImu(null); } finally { refreshTestImuPending = false; }
 }
 setInterval(refreshTestImu, 500);
 refreshTestImu();

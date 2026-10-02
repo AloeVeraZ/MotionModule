@@ -27,8 +27,7 @@ from motion_module.telemetry import IMUReading
 # The built-in IMU is MPU6500 on the independent Pi I2C bus.
 IMU = IMUConfig("Main IMU", address=0x68)
 
-# Where Zero IMU keeps the level. A name starting with "." is ignored when
-# This runtime calibration file is preserved with the robot project.
+# Explicit IMU zeroing saves its level here; updates preserve this calibration.
 LEVEL_FILE = Path(__file__).with_name(".imu-level.json")
 
 

@@ -243,7 +243,31 @@ async function run(scenario) {
   await app.forward();
   assert(app.driveRequests().some(item => item.payload.forward === 1), 'Fixture must first demonstrate enabled motor control');
 
-  if (scenario === 'doctor-polling') {
+  if (scenario === 'slow-polling') {
+    const originalFetch = app.context.fetch;
+    const polls = [['refreshStatus', '/api/status']];
+    if (fixture.kind === 'station') polls.push(['refreshTelemetry', '/api/drive/telemetry']);
+    for (const [fn, endpoint] of polls) {
+      let release, started = 0, blocked = true;
+      app.context.fetch = (url, options) => {
+        if (url === endpoint && blocked) {
+          started++;
+          return new Promise(resolve => { release = () => resolve(originalFetch(url, options)); });
+        }
+        return originalFetch(url, options);
+      };
+      const pending = app.context.dashboard[fn]();
+      await app.settle();
+      await app.context.dashboard[fn]();
+      assert.equal(started, 1, 'Only one request is sent while the Pi is slow');
+      blocked = false;
+      release();
+      await pending;
+      const count = app.requests.filter(request => request.url === endpoint).length;
+      await app.context.dashboard[fn]();
+      assert.equal(app.requests.filter(request => request.url === endpoint).length, count + 1, 'Polling resumes after the reply');
+    }
+  } else if (scenario === 'doctor-polling') {
     const checks = () => app.requests.filter(item => item.url === '/api/diagnostics');
     vm.runInContext('startDoctorPolling()', app.context);
     await app.settle();

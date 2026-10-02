@@ -6,6 +6,7 @@ import argparse
 import getpass
 import hashlib
 import io
+import json
 import math
 import os
 import re
@@ -19,6 +20,7 @@ import time
 import traceback
 import zipfile
 from contextlib import ExitStack, contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request, send_file
@@ -52,6 +54,7 @@ from .input import available_input_gpios
 from .mecanum import MecanumTestDrive
 from .network import NetworkClient
 from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
+from .project_export import project_archive
 from .runner import load_project
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
@@ -606,6 +609,33 @@ def create_app(
         module.refresh_servo_boards()
         return jsonify({"ok": True, "checks": dashboard_checks(module)})
 
+    @app.get("/api/diagnostics/download")
+    def diagnostic_download():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        live = status().get_json()
+        report = {
+            "format_version": 1,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "version": __version__,
+            "release": installed_release(),
+            "module": {"variant": module.config.variant, "motor_ports": module.config.motor_capacity,
+                       "driver_boards": module.config.motor_capacity // 2},
+            "active_project": project_name,
+            # Recovery tracebacks may contain source lines and local paths.
+            "recovery": {"active": live["recovery"]["active"]},
+            "checks": dashboard_checks(module),
+            "robot": live["robot"],
+            "system": {key: live["system"].get(key) for key in
+                       ("uptime_seconds", "load_1m", "temperature_c", "cooling", "memory", "disk")},
+            "wiring": {"motors": motor_rows(module.config), "servos": servo_rows(module.config)},
+        }
+        response = send_file(io.BytesIO(json.dumps(report, indent=2).encode("utf-8")),
+                             mimetype="application/json", as_attachment=True,
+                             download_name=f"MotionModule-{module.config.variant}-diagnostics.json")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/api/usb")
     def usb_inventory():
         return jsonify({"ok": True, **usb_devices()})
@@ -735,6 +765,27 @@ def create_app(
             active = project_name
         return jsonify({"ok": True, "available": True, "active": active, "projects": projects})
 
+    @app.get("/api/projects/download")
+    def project_download():
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        source = Path(project_path).parent if project_path is not None else (workspace / "active" if workspace else None)
+        if source is None:
+            return jsonify({"ok": False, "error": "No active robot project is available to download."}), 404
+        if not deployment_lock.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "Wait for the current deployment to finish, then download again."}), 409
+        try:
+            source = source.resolve(strict=True)
+            archive = project_archive(source)
+        except (OSError, MotionModuleError) as error:
+            return jsonify({"ok": False, "error": f"Could not download the robot project: {error}"}), 400
+        finally:
+            deployment_lock.release()
+        response = send_file(archive, mimetype="application/zip", as_attachment=True,
+                             download_name=f"{source.name}-robot-backup.zip")
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     def sample_files() -> list[tuple[str, bytes]]:
         """The Mecanum sample this release ships, as (Mecanum/path, contents)."""
 
@@ -788,7 +839,7 @@ def create_app(
     def project_sample_install():
         """Replace the robot's Mecanum folder with the sample this release ships.
 
-        An update keeps a robot folder anyone edited, so a newer sample never
+        An update keeps every existing robot folder, so a newer sample never
         reaches it by itself. This is the one-click way to take it, keeping the
         old folder under backups.
         """

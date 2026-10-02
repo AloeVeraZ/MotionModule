@@ -559,6 +559,25 @@ The network service tries saved Wi-Fi for 30 seconds and creates the fallback
 hotspot only when none connects. Nginx provides the same port-80 page in either
 mode.
 
+## Keep a copy and share diagnostics
+
+**Code → Deploy → Download active robot** saves the active project's code,
+original hardware.py and calibration data as a ZIP. It works in recovery mode
+and does not activate a different project or change outputs. Runtime pipes,
+symlinks, caches and dependency folders are excluded; the limit is 32 MiB and
+2,000 files. Keep the ZIP on your computer and extract it before editing or
+uploading the project folder again.
+
+**Debug → Checks & logs → Download diagnostic report** saves a timestamped JSON
+report with the installed module, branch and commit, motor/servo wiring, system
+status and check results. It omits robot source, recovery tracebacks, service
+logs and Wi-Fi credentials. Both downloads require the dashboard's current session.
+
+The dashboard and Driver Station allow only one pending status or telemetry
+poll at a time. Stalled requests time out and recover on later polls; slower
+Wi-Fi scans have their own longer timeout. Command delivery and the motor
+watchdog keep their existing timing.
+
 ## Debugging and terminal
 
 Use this order:

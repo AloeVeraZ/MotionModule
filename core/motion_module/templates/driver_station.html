@@ -21,6 +21,7 @@
 <link rel="stylesheet" href="/static/motionmodule.css?v={{ asset_version }}">
 <script src="/static/motionmodule.js?v={{ asset_version }}" defer></script>
 <script src="/static/hold-controls.js?v={{ asset_version }}"></script>
+<script src="/static/requests.js?v={{ asset_version }}"></script>
 <script src="/static/touch-sticks.js?v={{ asset_version }}"></script>
 <style>
 /* ==========================================================================
@@ -888,12 +889,7 @@ function applyControlBindings(data) {
 }
 const controlForKey = key => Object.keys(controlKeys).find(name => controlKeys[name] === key);
 
-async function jsonFetch(url, options = {}) {
-  const response = await fetch(url, {cache: 'no-store', ...options});
-  const data = await response.json().catch(() => ({error: `HTTP ${response.status}`}));
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
-}
+const jsonFetch = createJSONClient();
 
 function setSignal(id, state, text) {
   const signal = $(id);
@@ -962,7 +958,10 @@ function renderAutoStatus() {
     : autoState.configured ? 'Live commands appear when the routine reports progress.' : '';
 }
 
+let refreshAutonomousPending = false;
 async function refreshAutonomous() {
+  if (refreshAutonomousPending) return;
+  refreshAutonomousPending = true;
   try {
     const data = await jsonFetch('/api/autonomous');
     const wasRunning = autoState.state === 'running';
@@ -972,7 +971,7 @@ async function refreshAutonomous() {
     if (wasRunning && data.state !== 'running' && mode === 'autonomous' && armed) setArmed(false);
     renderAutoStatus();
     updateEnableButton();
-  } catch (_) { /* the connection banner already says the link is down */ }
+  } catch (_) { /* the connection banner already says the link is down */ } finally { refreshAutonomousPending = false; }
 }
 
 async function startAutonomous() {
@@ -1348,7 +1347,10 @@ function markDisconnected() {
   updateEnableButton();
 }
 
+let refreshStatusPending = false;
 async function refreshStatus() {
+  if (refreshStatusPending) return;
+  refreshStatusPending = true;
   try {
     const data = await jsonFetch('/api/status');
     const robot = data.robot || {};
@@ -1364,7 +1366,7 @@ async function refreshStatus() {
   } catch (_) {
     if (armed) setArmed(false);
     markDisconnected();
-  }
+  } finally { refreshStatusPending = false; }
 }
 
 function cameraPlaceholder(title, detail) {
@@ -1532,9 +1534,12 @@ function renderSensors(data) {
   }));
 }
 
+let refreshTelemetryPending = false;
 async function refreshTelemetry() {
+  if (refreshTelemetryPending) return;
+  refreshTelemetryPending = true;
   try { const data = await jsonFetch('/api/drive/telemetry'); applyBindings(data.driver_bindings); applyControlBindings(data); applyStickLayout(data); renderCameras(data); renderImu(data.imu); renderSensors(data); }
-  catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; }
+  catch (error) { $('#piSensorSummary').textContent = 'Unavailable'; $('#usbControllerSummary').textContent = 'Unavailable'; } finally { refreshTelemetryPending = false; }
 }
 
 async function loadControls() {
