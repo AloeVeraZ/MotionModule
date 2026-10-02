@@ -110,6 +110,15 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         guide = hardware_guide(load_hardware_file(MINI_HARDWARE_PATH))
         self.run_behavior("mini-hardware", {**self.fixture, "guide": guide})
 
+    def test_full_module_renders_four_drivers_after_switching_from_mini_project(self):
+        import os
+        from unittest.mock import patch
+        from motion_module.config import load_config
+        from motion_module.hardware_guide import hardware_guide
+        with patch.dict(os.environ, {'MOTIONMODULE_VARIANT': 'standard'}):
+            guide = hardware_guide(load_config(project=ROOT / 'examples/MecanumMini'))
+        self.run_behavior("full-hardware", {**self.fixture, "guide": guide})
+
     def test_doctor_refreshes_every_five_minutes_and_manual_refresh_still_works(self):
         self.run_behavior("doctor-polling")
 

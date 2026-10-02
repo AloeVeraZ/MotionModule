@@ -11,6 +11,7 @@ from motion_module.config import (DEFAULT_HARDWARE_PATH, MINI_HARDWARE_PATH,
 from motion_module.controller import MotionModule
 from motion_module.dashboard import IdleDrive, create_app, load_drive
 from motion_module.errors import ConfigurationError
+from motion_module.diagnostics import dashboard_checks
 from motion_module.gpio import MockGPIO
 from motion_module.hardware_guide import hardware_guide
 from motion_module.pinout import header_rows
@@ -77,6 +78,76 @@ class MiniTests(unittest.TestCase):
         for file in (ROOT / 'examples/Mecanum').glob('*.py'):
             if file.name != 'hardware.py':
                 self.assertEqual(file.read_bytes(), (ROOT / 'examples/MecanumMini' / file.name).read_bytes())
+
+    def test_switching_either_mecanum_project_restores_full_ports_and_debug_wiring(self):
+        for name in ('Mecanum', 'MecanumMini'):
+            project = ROOT / 'examples' / name
+            before = {p.name: p.read_bytes() for p in project.glob('*.py')}
+            source = load_hardware_file(project / 'hardware.py')
+            for variant, count in (('standard', 8), ('mini', 4), ('standard', 8)):
+                with self.subTest(project=name, variant=variant), patch.dict(os.environ, {'MOTIONMODULE_VARIANT': variant}):
+                    config = load_config(project=project)
+                    self.assertEqual(len(config.motors), count)
+                    self.assertEqual(config.motors[:4], source.motors[:4])
+                    self.assertEqual(config.servos, source.servos)
+                    if count == 8:
+                        self.assertEqual(config.motors[4:], self.standard.motors[4:])
+                    module = MotionModule(config, gpio=MockGPIO())
+                    try:
+                        drive = load_drive(module, project / 'robot.py')
+                        drive.drive(0.5, 0, 0, speed=0.25)
+                        self.assertTrue(any(module.snapshot()['motors'].values()))
+                        drive.stop()
+                        app = create_app(module, drive)
+                        client = app.test_client()
+                        payload = client.get('/api/config').get_json()
+                        self.assertEqual(len(payload['motors']), count)
+                        self.assertEqual(len(payload['bench_motors']), count)
+                        guide = payload['hardware_guide']
+                        self.assertEqual({m['driver'] for m in guide['wiring']['motor_connections']}, set(range(1, count // 2 + 1)))
+                        header = {pin['physical']: pin for pin in payload['header']}
+                        for pin in (13, 15, 16, 18, 21, 23, 24, 26):
+                            self.assertEqual(header[pin]['category'] == 'unused', count == 4)
+                        for pin, driver in ((14, 4), (25, 3)):
+                            self.assertEqual(f'Driver {driver}' in header[pin]['role'], count == 8)
+                        self.assertEqual(len(client.get('/api/status').get_json()['robot']['motors']), count)
+                        checks = {c['id']: c for c in dashboard_checks(module)}
+                        self.assertIn(f'{count // 2} drivers', checks['motor-map']['detail'])
+                        self.assertIn(f'{count} motor ports', checks['module-variant']['detail'])
+                        page = client.get('/').data.decode()
+                        self.assertIn(f'0 / {count}</div>', page)
+                        self.assertIn(('Two' if count == 4 else 'Four') + ' dual H-bridge drivers</h2>', page)
+                        self.assertIn(('Four' if count == 4 else 'Eight') + ' outputs. Your names.', page)
+                        self.assertIn(f'{count} motors · {count // 2} driver boards', page)
+                        expected_image = 'motionmodule-mini-complete-wiring.png' if count == 4 else 'motionmodule-complete-wiring.png'
+                        self.assertIn(expected_image, page)
+                        headers = {'X-MotionModule-Token': app.config['DASHBOARD_TOKEN']}
+                        reply = client.post('/api/motors/test', headers=headers,
+                                            json={'channel': 8, 'power': 0.2, 'confirmed': True})
+                        self.assertEqual(reply.status_code, 200 if count == 8 else 400)
+                        if count == 8:
+                            self.assertEqual(module.motor(8).value, 0.2)
+                    finally:
+                        module.close()
+            self.assertEqual(before, {p.name: p.read_bytes() for p in project.glob('*.py')})
+
+    def test_full_module_does_not_expand_a_different_custom_harness(self):
+        custom = replace(self.mini, motors=(replace(self.mini.motors[0], forward_gpio=5), *self.mini.motors[1:]))
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, {'MOTIONMODULE_VARIANT': 'standard'}):
+            path = Path(folder) / 'hardware.py'
+            path.write_text(hardware_source(custom), encoding='utf-8')
+            loaded = load_config(path)
+            self.assertEqual(loaded.motors, custom.motors)
+
+    def test_mini_checks_do_not_report_driver_three_spi_conflicts(self):
+        for config, expected in ((self.mini, 'pass'), (self.standard, 'warn')):
+            module = MotionModule(config, gpio=MockGPIO())
+            try:
+                with patch.object(Path, 'glob', return_value=iter([Path('/dev/spidev0.0')])):
+                    checks = {check['id']: check for check in dashboard_checks(module)}
+                self.assertEqual(checks['spi']['level'], expected)
+            finally:
+                module.close()
 
     def test_same_project_drives_on_both_modules_without_changing_any_files(self):
         project = ROOT / 'examples/Mecanum'

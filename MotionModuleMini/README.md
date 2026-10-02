@@ -37,6 +37,10 @@ Motor direction is changed with `inverted`, never by moving pins.
 The installed Mini limit persists across updates and project changes. The existing hardware file is preserved; channels 5–8 are omitted from the
 runtime map on Mini. Code requesting those motors gets an unavailable-output error. Debug and the
 motor activity display show four outputs; servo and IMU behavior stays the same.
+Switching back to full MotionModule restores ports 5–8 on their locked pins in
+memory, even when the active project is MecanumMini. Debug, the 40-pin header,
+and individual motor tests then show all eight ports on four drivers. The four
+wheel names, inversion settings, servo configuration and robot files are kept.
 
 To run the simulated Mini dashboard on Windows:
 

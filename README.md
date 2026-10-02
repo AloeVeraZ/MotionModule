@@ -543,7 +543,10 @@ or rolling back MotionModule keeps every existing robot project, including
 unedited samples. Each install snapshots robot code under `~/MotionModule/backups`
 before it changes the runtime. Changing module or branch keeps the active project.
 Both modules share channels 1–4, all servo outputs and the IMU; Mini omits channels
-5–8 in memory without rewriting hardware.py. Code using unavailable outputs or an
+5–8 in memory without rewriting hardware.py. Switching to full MotionModule
+restores omitted ports 5–8 on the locked reference wiring, including when keeping
+the MecanumMini project. Debug and motor tests follow that installed capacity.
+Code using unavailable outputs or an
 incompatible API may need changes, but its files remain available in recovery mode.
 Before a branch or version handoff, the current CLI also saves a snapshot so
 code remains recoverable if you deliberately install an older release whose

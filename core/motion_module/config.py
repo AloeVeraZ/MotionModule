@@ -498,9 +498,21 @@ def load_config(
 
 
 def apply_installed_variant(config: ModuleConfig) -> ModuleConfig:
-    """Limit available outputs in memory; never rewrite a robot's hardware.py."""
+    """Apply installed capacity to the reference harness without rewriting code."""
     if installed_variant() != "mini":
-        return replace(config, variant="standard")
+        reference = load_hardware_file(DEFAULT_HARDWARE_PATH)
+        by_channel = {motor.channel: motor for motor in config.motors}
+        # A retained Mini/older Mecanum project names only the four wheels.
+        # The full module still owns all eight reference ports. Keep its wheel
+        # names and inversion, and restore omitted ports on their locked pins.
+        # A genuinely different custom harness remains explicitly configured.
+        reference_harness = {1, 2, 3, 4} <= by_channel.keys() and all(
+            (motor.forward_gpio, motor.reverse_gpio) ==
+            (reference.motor(motor.channel).forward_gpio, reference.motor(motor.channel).reverse_gpio)
+            for motor in config.motors
+        )
+        motors = tuple(by_channel.get(motor.channel, motor) for motor in reference.motors) if reference_harness else config.motors
+        return _validate(replace(config, variant="standard", motors=motors))
     motors = tuple(motor for motor in config.motors if motor.channel <= 4)
     if not motors:
         raise ConfigurationError("MotionModule Mini has no configured channels 1-4 in this robot's hardware.py. Your robot files are preserved; adjust the project to use Drivers 1 and 2.")

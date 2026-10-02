@@ -183,7 +183,16 @@ def cooling_check(status: dict | None = None) -> dict:
 
 def dashboard_checks(module) -> list[dict]:
     snapshot = module.snapshot()
+    motor_map = motor_rows(module.config)
+    driver_count = len({row["driver"] for row in motor_map})
+    module_name = "MotionModule Mini" if module.config.variant == "mini" else "MotionModule"
     checks = [
+        {
+            "id": "module-variant",
+            "level": "info",
+            "title": f"Installed module: {module_name}",
+            "detail": f"{module.config.motor_capacity} motor ports on {module.config.motor_capacity // 2} driver boards. Switch module type in the Updates controls above; the same four-wheel robot code works on both.",
+        },
         {
             "id": "configuration",
             "level": "pass",
@@ -210,7 +219,7 @@ def dashboard_checks(module) -> list[dict]:
             "id": "motor-map",
             "level": "pass",
             "title": "Motor signal map",
-            "detail": f"{len(motor_rows(module.config))} channels use unique GPIO pairs across four drivers.",
+            "detail": f"{len(motor_map)} channels use unique GPIO pairs across {driver_count} drivers.",
         },
     ]
     checks.extend(_pin_map_conflicts(module))
@@ -218,15 +227,16 @@ def dashboard_checks(module) -> list[dict]:
     if snapshot.get("hardware"):
         checks.append(cooling_check())
     spi_active = any(Path("/dev").glob("spidev*"))
+    spi_motor_pins = {pin for motor in module.config.motors for pin in (motor.forward_gpio, motor.reverse_gpio)} & {7, 8, 9, 10, 11}
     checks.append(
         {
             "id": "spi",
-            "level": "warn" if spi_active else "pass",
+            "level": "warn" if spi_active and spi_motor_pins else "pass",
             "title": "SPI pin conflict",
             "detail": (
-                "SPI is active and conflicts with Driver 3 GPIO7, GPIO8, GPIO9, and GPIO11. Disable SPI before motor power."
-                if spi_active
-                else "No active SPI device conflicts with Driver 3."
+                f"SPI is active and conflicts with motor pins {', '.join('GPIO' + str(pin) for pin in sorted(spi_motor_pins))}. Disable SPI before motor power."
+                if spi_active and spi_motor_pins
+                else "No active SPI device conflicts with the configured motor drivers."
             ),
         }
     )

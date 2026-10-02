@@ -257,18 +257,23 @@ async function run(scenario) {
     await app.$('#refreshDoctor').fire('click');
     await app.settle();
     assert.equal(checks().length, 3, 'The manual button still refreshes checks');
-  } else if (scenario === 'mini-hardware') {
+  } else if (scenario === 'mini-hardware' || scenario === 'full-hardware') {
     const guide = fixture.guide;
     vm.runInContext(`renderDrivers(${JSON.stringify(guide.wiring.motor_connections)}, ${guide.capacity.motors / 2}); renderMotorTests(${JSON.stringify(guide.wiring.motor_connections)}); renderHardwareGuide(${JSON.stringify(guide)})`, app.context);
     const cards = app.$('#driverGrid').children;
-    assert.equal(cards.length, 2);
-    assert.deepEqual(cards.map(card => card.dataset.driver), [1, 2]);
-    assert.equal(app.$('#motorTests').children.length, 4);
+    const capacity = guide.capacity.motors;
+    assert.equal(cards.length, capacity / 2);
+    assert.deepEqual(cards.map(card => card.dataset.driver), Array.from({length: capacity / 2}, (_, index) => index + 1));
+    assert.equal(app.$('#motorTests').children.length, capacity);
+    vm.runInContext(`renderUpdates(${JSON.stringify({module_variant: capacity === 4 ? 'mini' : 'standard', module_name: capacity === 4 ? 'MotionModule Mini' : 'MotionModule', installed: {ref:'testing'}, lines:[], job:{state:'idle', log:[]}})})`, app.context);
+    assert.match(app.$('#installedModuleLine').textContent, new RegExp(`${capacity} motors.*${capacity / 2} driver boards`));
     const miniChoice = app.$('[data-module-variant="mini"]');
     const fullChoice = app.$('[data-module-variant="standard"]');
     await miniChoice.fire('click');
     assert.equal(miniChoice.attrs['aria-pressed'], 'true');
     assert(miniChoice.classList.contains('primary'));
+    assert.match(app.$('#moduleInstallHint').textContent, /Mini.*4 motors/);
+    assert.equal(app.$('[data-installed-variant="mini"]').hidden, capacity !== 4, 'Choosing a target does not change the installed module');
     assert.equal(fullChoice.attrs['aria-pressed'], 'false');
     await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
     await app.settle();
@@ -277,6 +282,7 @@ async function run(scenario) {
     await fullChoice.fire('click');
     assert.equal(fullChoice.attrs['aria-pressed'], 'true');
     assert.equal(miniChoice.attrs['aria-pressed'], 'false');
+    assert.match(app.$('#moduleInstallHint').textContent, /8 motors.*4 driver boards/);
     await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
     assert.deepEqual(app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST').at(-1).payload,
       {ref: 'testing', variant: 'standard'});
