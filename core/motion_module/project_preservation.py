@@ -7,6 +7,8 @@ import shutil
 import stat
 from pathlib import Path
 
+from .programs import program_folders
+
 
 def snapshot_projects(robots: Path, backups: Path, name: str, *, legacy_workspace: Path | None = None) -> Path | None:
     if not name or Path(name).name != name or name in {".", ".."} or "/" in name or "\\" in name:
@@ -18,7 +20,7 @@ def snapshot_projects(robots: Path, backups: Path, name: str, *, legacy_workspac
         if folder is None or not folder.is_dir():
             continue
         for project in sorted(folder.iterdir()):
-            if project.name != "active" and project.is_dir() and (project / "robot.py").is_file():
+            if project.name not in ({"active", "robots", "backups"} if label == "legacy" else {"active"}) and project.is_dir() and ((project / "robot.py").is_file() or program_folders(project)):
                 projects.append((label, project))
     if not projects:
         return None

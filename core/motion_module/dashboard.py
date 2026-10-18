@@ -56,7 +56,7 @@ from .network import NetworkClient
 from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .project_export import project_archive
 from .runner import load_project
-from .programs import default_program, list_programs, program_folders, program_mode, resolve_program, workspace_for
+from .programs import default_program, list_programs, program_folders, program_mode, resolve_program, source_mode, workspace_for
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
 from .telemetry import empty_snapshot, merge_cameras, merge_usb_controllers, normalize_snapshot
@@ -282,6 +282,8 @@ def load_drive(module, project_path: Path | None = None):
             drive = factory(module)
         elif callable(legacy_drive):
             drive = legacy_drive(module)
+        elif program_mode(project_path.parent) == "autonomous":
+            drive = IdleDrive(module)
         else:
             raise RuntimeError(
                 f"{project_path} must define create_drive(module) returning a drive object"
@@ -760,13 +762,10 @@ def create_app(
                 "projects": [project_name] if project_name != "No project" else [],
             })
         robots = workspace / "robots"
-        projects = sorted(
-            path.name for path in robots.iterdir()
-            if path.is_dir() and ((path / "robot.py").is_file() or program_folders(path))
-        ) if robots.is_dir() else []
+        projects = sorted(entry["id"] for mode in ("teleop", "autonomous") for entry in list_programs(robots, mode))
         try:
             active_folder = (workspace / "active").resolve(strict=True)
-            active = active_folder.relative_to(robots).parts[0]
+            active = active_folder.relative_to(robots).as_posix()
         except (OSError, ValueError, IndexError):
             active = project_name
         return jsonify({"ok": True, "available": True, "active": active, "projects": projects})
@@ -805,7 +804,7 @@ def create_app(
             if folder.is_relative_to(workspace / "robots"):
                 active = folder.relative_to(workspace / "robots").as_posix()
         return jsonify({"ok": True, "available": workspace is not None and restart_callback is not None,
-                        "programs": entries, "active": active, "mode": mode})
+                        "programs": entries, "active": active, "mode": mode, "loading": selection_pending})
 
     @app.post("/api/programs/select")
     def select_program():
@@ -820,7 +819,7 @@ def create_app(
             body = request.get_json(silent=True) or {}
             folder = resolve_program(workspace / "robots", body.get("program"), body.get("mode"))
             from .deploy import _check_python
-            _check_python(folder, strict=True)
+            _check_python(folder, strict=True, mode=body.get("mode"))
             with command_lock:
                 selection_pending = True
                 stop_outputs()
@@ -869,7 +868,12 @@ def create_app(
 
         active_drive.stop()
         module.stop_all()
-        result = deploy_project_files(entries, workspace / "robots", workspace / "backups", name)
+        root_name = name or entries[0][0].replace("\\", "/").split("/")[0]
+        source = next((content for path, content in entries if path.replace("\\", "/") == f"{root_name}/robot.py"), None)
+        library = workspace / "robots"
+        if source is not None:
+            library = library / source_mode(source.decode("utf-8-sig"), root_name)
+        result = deploy_project_files(entries, library, workspace / "backups", name)
         activate_project(default_program(Path(result["target"])), workspace / "active")
         return result
 

@@ -102,8 +102,8 @@ if [ "$MODULE_VARIANT" = mini ]; then
     DEFAULT_HARDWARE="hardware_mini.py"
     CONFIG_FILE="$CONFIG_DIR/mini-hardware.py"
     LEGACY_CONFIG_FILE="$CONFIG_DIR/mini-config.toml"
-    if [ "$ROBOT_EXPLICIT" != true ]; then ROBOT_PROJECT="MecanumMini"; fi
 fi
+if [ "$ROBOT_PROJECT" = "MecanumMini" ]; then ROBOT_PROJECT="Mecanum"; fi
 [ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/robot.py" ] || fail "Robot example $ROBOT_PROJECT is missing robot.py."
 [ -f "$SOURCE_DIR/examples/$ROBOT_PROJECT/hardware.py" ] || fail "Robot example $ROBOT_PROJECT is missing hardware.py."
 
@@ -249,21 +249,12 @@ for old_robot_file in "$PROJECT_DIR"/*/robot.py; do
     fi
 done
 
-for robot_file in "$release_dir"/examples/*/robot.py; do
-    [ -f "$robot_file" ] || continue
-    robot_template="$(dirname "$robot_file")"
-    robot_name="$(basename "$robot_template")"
-    if [ ! -e "$ROBOT_DIR/$robot_name" ]; then
-        cp -a "$robot_template" "$ROBOT_DIR/$robot_name"
-        say "Created robot project $ROBOT_DIR/$robot_name. Future installs keep the work you do in it."
-    fi
-done
-
-# Existing robot code stays byte-for-byte as supplied, including old samples.
-# Only the recognized retired pin map is migrated below, with the old map kept.
-# New samples are offered through Code, where replacing one is an explicit action.
-
-[ -f "$ROBOT_DIR/$ROBOT_PROJECT/robot.py" ] || fail "Selected robot project was not created: $ROBOT_PROJECT"
+# One shared four-wheel teleop works on either installed module variant.
+"$release_dir/.venv/bin/python" -m motion_module.programs \
+    "$ROBOT_DIR" "$PROJECT_DIR/backups" "$release_dir/examples/Mecanum" \
+    --previous-examples "$CURRENT_LINK/examples"
+DEFAULT_PROGRAM="$ROBOT_DIR/teleop/Mecanum"
+[ -f "$DEFAULT_PROGRAM/robot.py" ] || fail "The default Mecanum teleop was not created"
 
 ACTIVE_LINK="$PROJECT_DIR/active"
 old_active_target="$(readlink -f "$ACTIVE_LINK" 2>/dev/null || true)"
@@ -283,7 +274,7 @@ if [ "$ROBOT_EXPLICIT" != true ] && [ "$active_is_valid" != true ] && [ -n "$pre
     ROBOT_PROJECT="$previous_active_name"
 fi
 if [ "$ROBOT_EXPLICIT" = true ] || [ "$active_is_valid" != true ]; then
-    ln -s "$ROBOT_DIR/$ROBOT_PROJECT" "$PROJECT_DIR/active.new.$$"
+    ln -s "$DEFAULT_PROGRAM" "$PROJECT_DIR/active.new.$$"
     mv -Tf "$PROJECT_DIR/active.new.$$" "$ACTIVE_LINK"
 fi
 active_target="$(readlink -f "$ACTIVE_LINK")"

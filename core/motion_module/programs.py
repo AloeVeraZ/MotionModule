@@ -1,35 +1,62 @@
-"""Discover named teleop and autonomous folders without executing robot code."""
+"""Separate teleop and autonomous program folders, inspected without execution."""
 
+import argparse
+import ast
+import os
+import shutil
+import uuid
 from pathlib import Path
 
 from .errors import MotionModuleError
 
+MODES = {"teleop", "autonomous"}
 
-def program_mode(folder: Path) -> str | None:
-    name = folder.name.casefold()
-    if name.endswith("_tele"):
-        return "teleop"
-    if name.endswith("_auto"):
+
+def source_mode(source: str, name: str = "") -> str:
+    """Classify a standalone program; an old drive plus autonomous.py is teleop."""
+    if name.casefold().endswith("_auto"):
         return "autonomous"
-    return None
+    if name.casefold().endswith("_tele"):
+        return "teleop"
+    try:
+        nodes = ast.parse(source).body
+    except (SyntaxError, ValueError):
+        return "teleop"  # Validation reports the actual error when selected.
+    for node in nodes:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "PROGRAM_MODE" for t in node.targets):
+            if isinstance(node.value, ast.Constant) and node.value.value in MODES:
+                return node.value.value
+    names = {node.name for node in nodes if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+    if {"create_drive", "MecanumDrive"} & names:
+        return "teleop"
+    return "autonomous" if {"create_autonomous", "run"} & names else "teleop"
+
+
+def program_mode(folder: Path) -> str:
+    if folder.parent.name in MODES:
+        return folder.parent.name
+    try:
+        source = (folder / "robot.py").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeError):
+        source = ""
+    return source_mode(source, folder.name)
 
 
 def program_folders(project: Path) -> list[Path]:
     if not project.is_dir():
         return []
-    return sorted(
-        (child for child in project.iterdir()
-         if child.is_dir() and not child.is_symlink() and program_mode(child)
-         and (child / "robot.py").is_file()),
-        key=lambda child: child.name.casefold(),
-    )
+    return sorted((child.parent for child in project.rglob("robot.py")
+                   if child.parent != project and not any(part.startswith(".") or part == "__pycache__"
+                   for part in child.relative_to(project).parts)
+                   and not any(parent.is_symlink() for parent in child.parents if parent != project)
+                   and not child.is_symlink()), key=lambda folder: folder.as_posix().casefold())
 
 
 def default_program(project: Path) -> Path:
+    if (project / "robot.py").is_file():
+        return project
     programs = program_folders(project)
-    if programs:
-        return next((folder for folder in programs if program_mode(folder) == "teleop"), programs[0])
-    return project
+    return next((folder for folder in programs if program_mode(folder) == "teleop"), programs[0] if programs else project)
 
 
 def workspace_for(project: Path) -> Path | None:
@@ -40,35 +67,70 @@ def workspace_for(project: Path) -> Path | None:
 
 
 def list_programs(robots: Path, mode: str) -> list[dict]:
-    if not isinstance(mode, str) or mode not in {"teleop", "autonomous"}:
+    if not isinstance(mode, str) or mode not in MODES:
         raise MotionModuleError("Choose teleop or autonomous")
-    entries = []
     if not robots.is_dir():
-        return entries
+        return []
+    entries = []
     root = robots.resolve()
-    for project in sorted(robots.iterdir(), key=lambda path: path.name.casefold()):
-        if not project.is_dir() or project.is_symlink() or project.name.startswith("."):
+    for folder in program_folders(robots):
+        if program_mode(folder) != mode or not (folder / "robot.py").resolve().is_relative_to(root):
             continue
-        folders = program_folders(project)
-        for folder in folders or [project]:
-            if not (folder / "robot.py").is_file():
-                continue
-            if program_mode(folder) and program_mode(folder) != mode:
-                continue
-            if mode == "autonomous" and not (folder / "autonomous.py").is_file():
-                continue
-            # Do not follow an entry point or folder outside the robot library.
-            if not (folder / "robot.py").resolve().is_relative_to(root):
-                continue
-            entries.append({"id": folder.relative_to(robots).as_posix(),
-                            "name": folder.name, "project": project.name, "mode": mode})
+        # A legacy bundle containing nested programs is a library, not a second program.
+        if program_folders(folder):
+            continue
+        entries.append({"id": folder.relative_to(robots).as_posix(), "name": folder.name,
+                        "project": folder.name, "mode": mode})
     return entries
 
 
 def resolve_program(robots: Path, identifier: str, mode: str) -> Path:
     if not isinstance(identifier, str):
         raise MotionModuleError("Choose an installed program folder")
-    entry = next((entry for entry in list_programs(robots, mode) if entry["id"] == identifier), None)
-    if entry is None:
+    if not any(entry["id"] == identifier for entry in list_programs(robots, mode)):
         raise MotionModuleError("Choose an installed program folder for this mode")
-    return robots / entry["id"]
+    return robots / identifier
+
+
+def _contents(folder: Path) -> dict[str, bytes]:
+    return {path.relative_to(folder).as_posix(): path.read_bytes().replace(b"\r\n", b"\n")
+            for path in folder.rglob("*") if path.is_file() and not path.is_symlink()
+            and not any(part.startswith(".") or part == "__pycache__" for part in path.relative_to(folder).parts)
+            and path.suffix not in {".pyc", ".pyo"}}
+
+
+def initialize_library(robots: Path, backups: Path, sample: Path, previous_examples: Path | None = None) -> Path:
+    """Install the one shared teleop sample; archive only unchanged retired bundles."""
+    robots.mkdir(parents=True, exist_ok=True)
+    backups.mkdir(parents=True, exist_ok=True)
+    if backups.resolve().is_relative_to(robots.resolve()):
+        raise MotionModuleError("Program backups must be outside the robot library")
+    for name in ("Mecanum", "MecanumMini"):
+        old = robots / name
+        reference = previous_examples / name if previous_examples else None
+        if old.is_dir() and not old.is_symlink() and reference and reference.is_dir() and _contents(old) == _contents(reference):
+            # Paths are fixed children of the robot library; retain the entire old folder.
+            if old.resolve().parent != robots.resolve():
+                raise MotionModuleError("The old program is outside the robot library")
+            os.replace(old, backups / f"retired-{name}-{uuid.uuid4().hex[:8]}")
+    (robots / "autonomous").mkdir(exist_ok=True)
+    target = robots / "teleop" / "Mecanum"
+    if not target.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(sample, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    return target
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("robots", type=Path)
+    parser.add_argument("backups", type=Path)
+    parser.add_argument("sample", type=Path)
+    parser.add_argument("--previous-examples", type=Path)
+    args = parser.parse_args(argv)
+    print(initialize_library(args.robots, args.backups, args.sample, args.previous_examples))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

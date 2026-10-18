@@ -46,7 +46,7 @@ class MiniTests(unittest.TestCase):
             config = load_config(project=ROOT / 'examples/Mecanum')
             self.assertEqual(config.motors, load_hardware_file(ROOT / 'examples/Mecanum/hardware.py').motors[:4])
             self.assertEqual(config.motor_capacity, 4)
-            config = load_config(project=ROOT / 'examples/MecanumMini')
+            config = load_config(project=ROOT / 'examples/Mecanum')
             self.assertEqual(len(config.motors), 4)
             self.assertEqual(len(config.servos.channels), 16)
 
@@ -74,13 +74,13 @@ class MiniTests(unittest.TestCase):
             self.assertEqual(header[pin]['category'], 'unused')
         self.assertIn('MPU6500', header[11]['role'])
 
-    def test_robot_code_is_identical_between_mecanum_samples(self):
-        for file in (ROOT / 'examples/Mecanum').glob('*.py'):
-            if file.name != 'hardware.py':
-                self.assertEqual(file.read_bytes(), (ROOT / 'examples/MecanumMini' / file.name).read_bytes())
+    def test_only_one_teleop_sample_is_shipped(self):
+        samples = [folder.name for folder in (ROOT / 'examples').iterdir() if folder.is_dir() and (folder / 'robot.py').is_file()]
+        self.assertEqual(samples, ['Mecanum'])
+        self.assertFalse((ROOT / 'examples/Mecanum/autonomous.py').exists())
 
     def test_switching_either_mecanum_project_restores_full_ports_and_debug_wiring(self):
-        for name in ('Mecanum', 'MecanumMini'):
+        for name in ('Mecanum',):
             project = ROOT / 'examples' / name
             before = {p.name: p.read_bytes() for p in project.glob('*.py')}
             source = load_hardware_file(project / 'hardware.py')

@@ -43,10 +43,10 @@ class DemoTests(unittest.TestCase):
         motors = self.client.get("/api/status").get_json()["robot"]["motors"]
         self.assertFalse(any(motors.values()))
 
-    def test_example_robot_brings_its_controls_and_autonomous_routine(self):
+    def test_example_robot_is_teleop_only(self):
         controls = self.client.get("/api/drive/controls").get_json()["controls"]
         self.assertEqual(controls, [])
-        self.assertTrue(self.client.get("/api/autonomous").get_json()["configured"])
+        self.assertFalse(self.client.get("/api/autonomous").get_json()["configured"])
 
     def test_driver_station_simulates_pi_imu_without_extra_sensors(self):
         data = self.client.get("/api/drive/telemetry").get_json()

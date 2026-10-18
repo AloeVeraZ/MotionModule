@@ -658,7 +658,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 <button type="button" class="stop-button station-mobile-stop" id="mobileStop">Stop all outputs</button>
 <dialog id="programPicker" class="program-picker" aria-labelledby="programPickerTitle">
   <div class="panel-head"><h2 id="programPickerTitle">Choose a program</h2><button class="button" id="closeProgramPicker" type="button">Close</button></div>
-  <div class="panel-body stack"><p class="empty-copy" id="programPickerHelp">Double-click a folder to select it. Enable runs the selected code.</p><div class="program-folders" id="programFolders"></div></div>
+  <div class="panel-body stack"><p class="empty-copy" id="programPickerHelp">Click a folder to select it. Enable runs the selected code.</p><div class="program-folders" id="programFolders"></div></div>
 </dialog>
 <main class="station-grid">
   <aside class="column left-column">
@@ -916,25 +916,26 @@ async function refreshPrograms() {
 async function openProgramPicker() {
   await refreshPrograms();
   if (!programAvailable || armed || programLoading) return;
-  $('#programPickerTitle').textContent = mode === 'autonomous' ? 'Autonomous folders · _auto' : 'Teleop folders · _tele';
+  $('#programPickerTitle').textContent = mode === 'autonomous' ? 'Autonomous programs' : 'Teleop programs';
   const rows = programEntries.map(entry => {
     const button = element('button', 'program-folder');
     button.type = 'button';
     button.append(element('strong', null, `▸ ${entry.name}`), element('small', null, entry.id));
-    button.addEventListener('dblclick', () => selectProgram(entry));
+    button.addEventListener('click', () => selectProgram(entry));
     button.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); selectProgram(entry); } });
     return button;
   });
-  replaceWith($('#programFolders'), rows.length ? rows : [element('p', 'empty-copy', `No ${mode === 'teleop' ? '_tele' : '_auto'} program folders installed. Upload your robot folder from Code.`)]);
+  replaceWith($('#programFolders'), rows.length ? rows : [element('p', 'empty-copy', `No ${mode} programs installed. Add a separate program folder under robots/${mode}/.`)]);
   $('#programPicker').showModal();
 }
 
 async function selectProgram(entry) {
   if (armed || programLoading) return;
-  if (entry.id === programActive) { $('#programPicker').close(); return; }
   programLoading = true;
   $('#programPicker').close();
   updateEnableButton();
+  $('#selectedProgram').textContent = entry.name;
+  $('#programModeLabel').textContent = mode === 'autonomous' ? 'Autonomous program' : 'Teleop program';
   $('#programMessage').textContent = `Loading ${entry.name}…`;
   try {
     await jsonFetch('/api/programs/select', {method: 'POST', headers: apiHeaders, body: JSON.stringify({program: entry.id, mode})});
@@ -943,7 +944,7 @@ async function selectProgram(entry) {
     const reconnect = async () => {
       try {
         const status = await jsonFetch(`/api/programs?mode=${mode}`);
-        if (status.active === entry.id) { location.reload(); return; }
+        if (status.active === entry.id && !status.loading) { location.reload(); return; }
       } catch (_) { /* The service is restarting. */ }
       if (++attempts < 60) setTimeout(reconnect, 1000);
       else { $('#programMessage').textContent = 'The program is taking longer to load. Reload to reconnect.'; }
@@ -1034,7 +1035,7 @@ function renderAutoStatus() {
     : title;
   $('#autoDetail').textContent = autoState.configured
     ? (autoState.error || detail)
-    : (autoState.load_error || 'The active robot folder has no autonomous.py. Open Code to deploy your routine or install the Mecanum sample, then reload.');
+    : (autoState.load_error || 'The active robot folder has no autonomous.py. Add your own separate program under robots/autonomous/, then select it.');
   const progress = autoState.progress;
   $('#autoPlanHelp').textContent = !autoState.configured ? $('#autoDetail').textContent
     : 'Enable to run autonomous.py. Angles count from the starting direction.';

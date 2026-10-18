@@ -589,10 +589,12 @@ another copy of its wheel equations. It returns normalized powers keyed by
 channels 1–4; motor polarity remains in `hardware.py`.
 
 The **Driver Station** runs the selected program's `drive()` method from the
-keyboard, a game controller, or touch sticks. Choose a `_tele` folder for teleop
-or an `_auto` folder for autonomous, double-click it, then press Enable.
+keyboard, a game controller, or touch sticks. Choose a program in `robots/teleop/` or `robots/autonomous/`, click it once,
+then press Enable. Each folder belongs to one mode.
 Each program folder contains its own `robot.py`, optional `hardware.py`,
-`dashboard.py`, and sensors. Autonomous folders also contain `autonomous.py`.
+`dashboard.py`, and sensors. Autonomous folders define `run(module, stop)` or `create_autonomous(module, drive)`
+in their own `robot.py`; a separate `autonomous.py` in that folder is also supported.
+Only the Mecanum teleop is bundled, shared by the full module and Mini.
 The sample keeps keyboard and controller bindings and trigger speed limits in
 `robot.py`; its `dashboard.py` exposes them through telemetry.
 

@@ -141,7 +141,8 @@ class InstallerFinishTests(unittest.TestCase):
 
     def test_robot_projects_are_discovered_and_selected_through_active_symlink(self):
         self.assertIn('--robot)', self.script)
-        self.assertIn('for robot_file in "$release_dir"/examples/*/robot.py', self.script)
+        self.assertIn("-m motion_module.programs", self.script)
+        self.assertIn('DEFAULT_PROGRAM="$ROBOT_DIR/teleop/Mecanum"', self.script)
         self.assertIn('ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"', self.script)
         self.assertIn('mv "$old_robot_template" "$ROBOT_DIR/$old_robot_name"', self.script)
         self.assertIn('ACTIVE_LINK="$PROJECT_DIR/active"', self.script)

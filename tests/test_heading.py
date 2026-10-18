@@ -19,7 +19,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-import autonomous as sample_autonomous  # noqa: E402
+sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
+import mecanum_autonomous as sample_autonomous  # noqa: E402
 from robot import HEADING, MecanumDrive  # noqa: E402
 
 

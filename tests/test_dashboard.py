@@ -520,10 +520,10 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Mecanum/hardware.py", names)
         self.assertIn("Mecanum/sensors.py", names)
         self.assertIn("Mecanum/dashboard.py", names)
-        self.assertIn("Mecanum/autonomous.py", names)
+        self.assertNotIn("Mecanum/autonomous.py", names)
         self.assertIn("Mecanum/README.md", names)
-        self.assertIn("Mecanum/Drive_tele/robot.py", names)
-        self.assertIn("Mecanum/Heading_auto/autonomous.py", names)
+        self.assertFalse(any("Drive_tele" in name for name in names))
+        self.assertFalse(any("Heading_auto" in name for name in names))
         # The GIGA firmware installs from the Pi, so projects no longer carry it.
         self.assertFalse(any(name.endswith(".ino") for name in names))
 
@@ -880,12 +880,12 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(accepted.status_code, 202)
                 self.assertTrue(restarted.wait(1))
             self.assertTrue(self.module.stopped)
-            self.assertTrue((Path(directory) / "robots" / "TestBot" / "hardware.py").is_file())
+            self.assertTrue((Path(directory) / "robots" / "teleop" / "TestBot" / "hardware.py").is_file())
             activate.assert_called_once()
 
     def test_use_this_sample_replaces_an_edited_folder_and_keeps_a_backup(self):
         with tempfile.TemporaryDirectory() as directory:
-            robot = Path(directory) / "robots" / "Mecanum"
+            robot = Path(directory) / "robots" / "teleop" / "Mecanum"
             robot.mkdir(parents=True)
             (robot / "robot.py").write_text("# someone's own robot\n", encoding="utf-8")
             restarted = threading.Event()
@@ -907,7 +907,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertTrue(restarted.wait(1))
             activate.assert_called_once()
             self.assertTrue(self.module.stopped)
-            for name in ("robot.py", "sensors.py", "dashboard.py", "autonomous.py", "hardware.py"):
+            for name in ("robot.py", "sensors.py", "dashboard.py", "hardware.py"):
                 self.assertEqual((robot / name).read_bytes(), (EXAMPLE_DIR / name).read_bytes(), name)
             backups = list((Path(directory) / "backups").iterdir())
             self.assertEqual(len(backups), 1)

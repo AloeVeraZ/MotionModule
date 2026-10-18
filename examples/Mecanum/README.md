@@ -68,7 +68,7 @@ claw.release()
 ## Driving
 
 After deploying, open **Driver Station**, choose **Teleoperated**, open
-**Choose program folder**, and double-click `Drive_tele`. Press **Enable**.
+**Choose program folder**, and click `Mecanum` once. Press **Enable**.
 W/S drive, A/D strafe, Q/E rotate, and Space stops. The controller's left stick
 drives and strafes; its right stick turns. Normal drive is 100%, left trigger
 limits power to 50%, and right trigger to 30%. Both held uses 30%. D-pad down
@@ -90,19 +90,29 @@ by the default **Debug → Drive Test**. Forward, strafe, rotation, and combined
 therefore have one implementation. `hardware.py` still supplies the names,
 locked pins, and per-motor polarity; no extra inversion is applied in `robot.py`.
 
-The sample provides two independent program folders:
+Mecanum is the only bundled robot program, and it is teleop only. The same
+four-wheel Python code runs on MotionModule and MotionModule Mini. The installed
+module type controls available spare channels without changing the wheel wiring.
 
 ```text
-Mecanum/
-  Drive_tele/       # teleop: robot.py, hardware.py, dashboard.py, sensors.py, test.py
-  Heading_auto/    # autonomous: those files plus autonomous.py
+robots/
+  teleop/
+    Mecanum/
+      robot.py
+      hardware.py
+      dashboard.py
+      sensors.py
+      test.py
+  autonomous/
+    YourProgram/    # your own separate autonomous robot.py and supporting files
 ```
 
-Double-click a folder to select its code. Selection stops outputs and reloads
-the service; Enable remains off until you press it. Each folder owns its files.
-Root-level Python files remain for compatibility with existing flat projects.
-The `_tele` and `_auto` suffixes tell MotionModule which picker lists a folder.
-An `_auto` folder needs `autonomous.py` with `create_autonomous()` or `run()`.
+Choose Teleoperated and click Mecanum once in the program picker. The selected
+folder's name appears in Robot control; Enable runs it. Autonomous lists only
+separate autonomous folders. No autonomous routine is supplied. An autonomous
+program can define `run(module, stop)` directly in its own `robot.py`, without a
+teleop `create_drive()` factory. Folder suffixes `_tele` and `_auto` continue to
+identify older separate programs.
 
 ## Customize Drive Test
 
@@ -117,68 +127,22 @@ construction, and do not start background loops. Redeploy the folder to reload.
 See [the hook contract](../../docs/CODING.md#optional-debug-drive-test-mapping).
 The full Driver Station's `robot.py` behavior is independent of this file.
 
-## Autonomous
+## Autonomous programs
 
-`autonomous.py` is optional and is found automatically beside `robot.py`. With
-it there, the Driver Station's mode switch offers **AUTONOMOUS** next to
-**TELEOPERATED**; pick it, tick the safety box, and **RUN AUTO** starts the
-routine. The sample drives forward, turns, then strafes, and stops itself.
+Autonomous programs are separate from this teleop sample. Create
+`robots/autonomous/YourProgram/robot.py` with `run(module, stop)` and check
+`stop.is_set()` during every loop. Keep that program's hardware, dashboard and
+sensor files beside it. Choose Autonomous, click its folder once, then Enable.
+Disabling stops outputs and signals the routine to finish. No autonomous program
+is installed by default.
 
-Every step is a loop that keeps sending drive commands, because the motor
-watchdog stops the robot as soon as commands stop arriving. Each loop checks
-`stop.is_set()` so DISABLE ends the routine promptly — and MotionModule stops
-the outputs immediately either way. `duration_seconds` cuts off a routine that
-never returns. While it runs, manual driving is refused, so the driver and the
-routine cannot fight over the motors.
+## Autonomous programs
 
-## Sensors: the Pi-connected MPU6500
-
-`sensors.py` reads one MPU6500 directly from the Pi, shared by `robot.py`,
-`autonomous.py` and `dashboard.py`. Follow [the reference IMU wiring](../../docs/PINOUT.md#optional-mpu6500-six-axis-imu):
-VCC to physical pin 17, GND to 6 and AD0 to 20, SDA to 11 and SCL to 12.
-The Pi installer enables the `i2c-gpio` overlay for its next reboot. The module
-discovers the bus and MPU6500 address, then closes its reader on shutdown.
-Motors and servos keep their Pi wiring.
-
-Heading increases turning left, like `rotate`. Missing hardware is shown as
-offline. The Pi uses gyro and accelerometer readings; the DMP is not used.
-Mount +Y forward and +Z upward.
-
-The default sample declares no mechanism controls: driving uses the normal
-keyboard, gamepad or touch inputs. Mecanum and MecanumMini use identical robot,
-test, sensor and dashboard code; only their hardware maps differ in capacity.
-Heading hold starts enabled and keeps the direction while driving or strafing.
-The IMU panel still provides gyroscope calibration. Custom robot code can use
-`Sensors.zero_heading()` or the heading helper directly when needed.
-
-Tuning lives in `HEADING` at the top of `robot.py`; see
-[heading control](../../docs/CODING.md#heading-control-motion_moduleheading).
-
-`autonomous.py` turns in place to 90°, 180°, 270°, then 360° (back to the
-starting direction). Each turn uses the confirmed teleop Mecanum mixer and
-PD heading correction, settling within 2° before continuing. A turn that
-cannot settle within 6 seconds fails and stops the routine. It never drives
-forward or strafes. Angles count from the heading when Enable is pressed.
-
-Choose Autonomous, double-click `Heading_auto` in the program picker, then Enable.
-The driver-input panel becomes the command list with live target, heading,
-and error. After completion, press Enable again to repeat. Edit `PLAN`
-to change the routine. Deploy this folder first; updating MotionModule keeps
-owner-edited robot folders, so an old folder may have no autonomous.py.
-
-Calibrate gyroscope beside the IMU display (also in Debug → Test outputs)
-stops outputs, measures gyro bias, and sets the current heading, pitch and
-roll to zero. Keep the robot stationary. Rate should read near zero at rest;
-it is a measurement and will still show sensor noise. This calibration does
-not tune the heading controller. Adjust `HEADING` in robot.py from observed
-turns: lower kp or raise kd for overshoot; raise minimum turn power if stalled.
-The default PD gains are simulation-tested, not physically tuned for your floor.
-
-
-No extra sensors are declared. An Arduino **GIGA R1 WiFi** can provide optional
-USB GPIO inputs for future additions using the existing auto-detection and
-bridge API. This experimental feature may need troubleshooting; it is not
-required for the Mecanum robot. See [the opt-in API](../../docs/CODING.md#optional-usb-gpio-expansion).
+No autonomous program is bundled. Put your own independent program in
+`robots/autonomous/YourProgram/robot.py`. Define `run(module, stop)` or
+`create_autonomous(module, drive)` there and keep its supporting files beside it.
+The Autonomous picker shows only autonomous folders. Click one once to select
+it, then Enable to run. Teleop folders never appear in that picker.
 
 ## Full Driver Station: cameras, IMU, and sensors
 

@@ -442,13 +442,30 @@ async function run(scenario) {
     const folders = app.$('#programFolders').querySelectorAll('button');
     assert.equal(folders.length, 2);
     await folders[1].fire('click');
-    assert.equal(app.requests.filter(r => r.url === '/api/programs/select').length, 0, 'A single click must not select or run a program');
-    await folders[1].fire('dblclick');
     const selection = app.requests.find(r => r.url === '/api/programs/select');
     assert.deepEqual(selection.payload, {program: other.id, mode: 'teleop'});
     assert.equal(app.$('#enableButton').disabled, true, 'Enable stays blocked during the restart');
     assert.equal(app.$('#programPicker').open, false);
     assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Selecting a folder never starts autonomous');
+    assert.equal(app.$('#selectedProgram').textContent, other.name, 'One click updates the program name');
+    const autoApp = browser();
+    await autoApp.context.dashboard.refreshStatus();
+    const auto = {id: 'autonomous/Mecanum', name: 'Mecanum', mode: 'autonomous'};
+    autoApp.setPrograms({available: true, active: 'teleop/Mecanum', programs: [auto]});
+    await autoApp.$('#modeAuto').fire('click');
+    await autoApp.$('#chooseProgram').fire('click');
+    await autoApp.$('#programFolders').querySelector('button').fire('click');
+    assert.equal(autoApp.$('#selectedProgram').textContent, 'Mecanum');
+    assert.equal(autoApp.$('#programModeLabel').textContent, 'Autonomous program');
+    assert.deepEqual(autoApp.requests.find(r => r.url === '/api/programs/select').payload,
+      {program: 'autonomous/Mecanum', mode: 'autonomous'});
+    const sameApp = browser();
+    await sameApp.context.dashboard.refreshStatus();
+    sameApp.setPrograms({available: true, active: active.id, programs: [active]});
+    await sameApp.$('#chooseProgram').fire('click');
+    await sameApp.$('#programFolders').querySelector('button').fire('click');
+    assert.equal(sameApp.requests.filter(r => r.url === '/api/programs/select').length, 1,
+      'Selecting the active folder must validate and reload it, not silently do nothing');
   } else if (scenario === 'station-trigger-speed') {
     await app.releaseForward();
     app.setTelemetry({drive_speed: {normal: 1, left_trigger: .5, right_trigger: .3}, gamepad_buttons: {dpad_down: 'stop'}});
@@ -603,7 +620,7 @@ async function run(scenario) {
     await app.$('#modeAuto').fire('click');
     assert.equal(app.$('#driverInputPanel').hidden, true);
     assert.equal(app.$('#autoPanel').hidden, false);
-    assert.match(app.$('#autoPlanHelp').textContent, /no autonomous.py/);
+    assert.match(app.$('#autoPlanHelp').textContent, /separate program/);
     assert.equal(app.$('#enableButton').disabled, true);
     vm.runInContext("autoState = {configured:true, state:'idle', progress:{steps:[['turn',90],['turn',180]]}}; renderAutoStatus(); updateEnableButton()", app.context);
     await app.context.dashboard.refreshPrograms();

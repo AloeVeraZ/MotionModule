@@ -16,6 +16,7 @@ from typing import Iterable
 
 from .config import PROJECT_CONFIG_NAME, load_project_config
 from .errors import ConfigurationError, MotionModuleError
+from .programs import source_mode
 
 
 PROJECT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -99,12 +100,11 @@ def _extract_archive(archive_path: Path, staging: Path) -> None:
         raise MotionModuleError(f"Uploaded project is not a valid archive: {error}") from error
 
 
-def _check_python(project: Path, *, strict: bool = False) -> None:
+def _check_python(project: Path, *, strict: bool = False, mode: str | None = None) -> None:
     """Check Python and pins; browser uploads also need a dashboard entry point."""
 
     from .programs import program_folders, program_mode
-    if program_mode(project) == "autonomous" and not (project / "autonomous.py").is_file():
-        raise MotionModuleError(f"{project.name} must contain autonomous.py")
+    mode = mode or program_mode(project)
     robot = project / "robot.py"
     if not robot.is_file():
         folders = program_folders(project)
@@ -126,11 +126,15 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
                 tree = ast.parse(source_file.read(), filename=str(robot))
         except (OSError, SyntaxError, UnicodeError) as error:
             raise MotionModuleError(f"Could not validate robot.py: {error}") from error
-        if not any(
-            isinstance(node, ast.FunctionDef) and node.name == "create_drive"
-            for node in tree.body
-        ):
-            raise MotionModuleError("robot.py must define create_drive(module)")
+        entrypoints = {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom):
+                entrypoints.update(alias.asname or alias.name for alias in node.names)
+        if mode == "autonomous":
+            if not (project / "autonomous.py").is_file() and not entrypoints & {"create_autonomous", "run"}:
+                raise MotionModuleError("Autonomous robot.py must define create_autonomous(module, drive) or run(module, stop), or provide autonomous.py")
+        elif not entrypoints & {"create_drive", "MecanumDrive"}:
+            raise MotionModuleError("Teleop robot.py must define create_drive(module) or a MecanumDrive class")
     drive_test = project / "test.py"
     if drive_test.is_file():
         with tokenize.open(drive_test) as source_file:
@@ -318,7 +322,8 @@ def deploy_project_files(
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(content)
             destination.chmod(0o644)
-        _check_python(staging, strict=True)
+        _check_python(staging, strict=True, mode=source_mode(
+            (staging / "robot.py").read_text(encoding="utf-8-sig"), name) if (staging / "robot.py").is_file() else None)
         backup = replace_project(staging, target, backups, name)
     except MotionModuleError:
         raise

@@ -117,7 +117,7 @@ class DashboardUIBehaviorTests(unittest.TestCase):
         from motion_module.config import load_config
         from motion_module.hardware_guide import hardware_guide
         with patch.dict(os.environ, {'MOTIONMODULE_VARIANT': 'standard'}):
-            guide = hardware_guide(load_config(project=ROOT / 'examples/MecanumMini'))
+            guide = hardware_guide(load_config(project=ROOT / 'examples/Mecanum'))
         self.run_behavior("full-hardware", {**self.fixture, "guide": guide})
 
     def test_doctor_refreshes_every_five_minutes_and_manual_refresh_still_works(self):
@@ -187,7 +187,7 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_full_station_uses_project_drive_without_checkboxes_or_speed_slider(self):
         self.run_behavior("station-drive-model", self.station_fixture)
 
-    def test_folder_picker_selects_on_double_click_and_waits_for_restart(self):
+    def test_folder_picker_selects_on_one_click_and_waits_for_restart(self):
         self.run_behavior("station-program-picker", self.station_fixture)
 
     def test_project_trigger_limits_and_keyboard_normal_power(self):

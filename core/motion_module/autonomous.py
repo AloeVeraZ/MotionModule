@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 from .runner import load_project
+from .programs import program_mode
 
 
 # Autonomous periods are bounded in every competition, and an unbounded routine
@@ -46,7 +47,9 @@ def load_autonomous(module, drive, project_path: Path | None = None):
         return None
     path = project_path.with_name("autonomous.py")
     if not path.is_file():
-        return None
+        if program_mode(project_path.parent) != "autonomous" or not project_path.is_file():
+            return None
+        path = project_path
     project = load_project(path)
 
     factory = getattr(project, "create_autonomous", None)

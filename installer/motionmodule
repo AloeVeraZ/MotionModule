@@ -114,7 +114,7 @@ case "$command" in
     deploy)
         [ "$#" -eq 2 ] || fail "Usage: motionmodule deploy PROJECT_NAME UPLOADED_ARCHIVE"
         project_name="$1"
-        printf '%s' "$project_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
+        printf '%s' "$project_name" | grep -Eq '^(teleop/|autonomous/)?[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
         [ "$project_name" != "active" ] || fail "The name active is reserved for the selected-project symlink"
         upload_dir="$PROJECT_DIR/.uploads"
         mkdir -p "$upload_dir" "$ROBOT_DIR" "$BACKUP_DIR"
@@ -145,20 +145,21 @@ case "$command" in
         if [ "$#" -eq 0 ] || [ "${1:-}" = "list" ]; then
             active="$(readlink -f "$PROJECT_DIR/active" 2>/dev/null || true)"
             printf 'Robot projects in %s:\n' "$ROBOT_DIR"
-            for robot_file in "$ROBOT_DIR"/*/robot.py; do
+            for robot_file in "$ROBOT_DIR"/*/robot.py "$ROBOT_DIR"/teleop/*/robot.py "$ROBOT_DIR"/autonomous/*/robot.py; do
                 [ -f "$robot_file" ] || continue
                 target="$(dirname "$robot_file")"
                 marker=" "
                 [ "$(readlink -f "$target")" = "$active" ] && marker="*"
-                printf '%s %s\n' "$marker" "$(basename "$target")"
+                printf '%s %s\n' "$marker" "${target#"$ROBOT_DIR"/}"
             done
             exit 0
         fi
         [ "$#" -eq 1 ] || fail "Usage: motionmodule project [list|PROJECT_NAME]"
         project_name="$1"
-        printf '%s' "$project_name" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
+        printf '%s' "$project_name" | grep -Eq '^(teleop/|autonomous/)?[A-Za-z0-9][A-Za-z0-9._-]{0,63}$' || fail "Invalid project name: $project_name"
         [ "$project_name" != "active" ] || fail "The name active is reserved for the selected-project symlink"
         target="$ROBOT_DIR/$project_name"
+        if [ ! -f "$target/robot.py" ] && [ -f "$ROBOT_DIR/teleop/$project_name/robot.py" ]; then target="$ROBOT_DIR/teleop/$project_name"; fi
         [ -f "$target/robot.py" ] || fail "$target must contain robot.py"
         case "$(readlink -f "$target")" in
             "$(readlink -f "$ROBOT_DIR")"/*) ;;

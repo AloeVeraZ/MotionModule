@@ -254,11 +254,11 @@ Three workspace pages plus the separate Driver Station:
   upright or on its side.
 
 The Driver Station runs the selected folder's own `robot.py`. Choose Teleoperated
-or Autonomous, open **Choose program folder**, and double-click a program. Folders
-ending in `_tele` appear in Teleop; `_auto` folders appear in Autonomous. Press
+or Autonomous, open **Choose program folder**, and click a program once. Folders in `robots/teleop/` appear in Teleop; separate folders in
+`robots/autonomous/` appear in Autonomous. Press
 **Enable** to drive or start the selected autonomous routine; **Disable** stops it.
-The sample includes `Mecanum/Drive_tele` and `Mecanum/Heading_auto`, each with its
-own Python files. Existing flat robot folders remain supported.
+Only `teleop/Mecanum` is bundled. Its four-wheel code supports both MotionModule
+and MotionModule Mini. No autonomous program is bundled. Existing flat robot folders remain supported.
 
 The sample's `robot.py` defines both keyboard and gamepad inputs: W/S drive,
 A/D strafe, Q/E turn, Space stops, and the controller sticks drive and turn.
@@ -421,7 +421,7 @@ The robot can still drive without an IMU; heading stays unavailable, the
 driving assist switches off, and the sample autonomous routine does not move.
 With the IMU, the default robot holds its heading while it drives. Its optional
 autonomous routine performs four IMU-guided turns. The default Mecanum and
-MecanumMini code is identical and declares no extra mechanism controls.
+The same Mecanum code works on the full module and Mini, without extra mechanism controls.
 
 An **Arduino GIGA R1 WiFi** can optionally connect by USB for additional GPIO
 inputs. The repository includes USB auto-detection, bridge firmware and a Python
@@ -552,7 +552,7 @@ before it changes the runtime. Changing module or branch keeps the active projec
 Both modules share channels 1–4, all servo outputs and the IMU; Mini omits channels
 5–8 in memory without rewriting hardware.py. Switching to full MotionModule
 restores omitted ports 5–8 on the locked reference wiring, including when keeping
-the MecanumMini project. Debug and motor tests follow that installed capacity.
+the same Mecanum teleop program. Debug and motor tests follow that installed capacity.
 Code using unavailable outputs or an
 incompatible API may need changes, but its files remain available in recovery mode.
 Before a branch or version handoff, the current CLI also saves a snapshot so

@@ -15,7 +15,8 @@ PROJECT_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-from autonomous import MecanumAutonomous  # noqa: E402
+sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
+from mecanum_autonomous import MecanumAutonomous  # noqa: E402
 from robot import MecanumDrive, create_drive, mix  # noqa: E402
 
 
@@ -215,7 +216,7 @@ class MecanumSensorTests(unittest.TestCase):
 
     def test_default_auto_supports_legacy_teleop_and_builtin_motor_names(self):
         from types import SimpleNamespace
-        from autonomous import create_autonomous
+        from mecanum_autonomous import create_autonomous
         from motion_module.config import default_config
         from motion_module.mecanum import mix as channel_mix
         with MotionModule(default_config(), gpio=MockGPIO()) as module:

@@ -167,7 +167,7 @@ def camera_svg(name: str) -> str:
 def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
     """Build the demo dashboard. Returns the Flask app and the simulated module."""
 
-    example_project = EXAMPLE_PROJECT.with_name("MecanumMini") if installed_variant() == "mini" else EXAMPLE_PROJECT
+    example_project = EXAMPLE_PROJECT
     project = example_project / "robot.py"
     have_example = project.is_file()
     config = load_config(project=example_project) if have_example else default_config()

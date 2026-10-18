@@ -1953,7 +1953,7 @@ heading = imu.heading() if imu is not None else None
                 <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt,.ino">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2h9A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M12 16.5v-5M9.5 14l2.5-2.5 2.5 2.5"/></svg>
                 <strong>Choose your robot folder</strong>
-                <span>Pick your robot folder, containing robot.py or _tele / _auto programs</span>
+                <span>Pick your program folder, containing robot.py</span>
               </label>
               <div class="kv-grid">
                 <div class="kv"><small>Selected project</small><strong id="selectedProject">None</strong></div>
@@ -1991,35 +1991,33 @@ heading = imu.heading() if imu is not None else None
               <div class="panel-body stack">
                 <div class="notice">An update keeps every existing robot folder, including unedited samples. A newer sample is installed only when you choose it.
                   <strong>Use this sample on the robot</strong> replaces
-                  <code>robots/Mecanum</code> with the sample this release ships,
+                  <code>robots/teleop/Mecanum</code> with the sample this release ships,
                   keeps the old folder under <code>backups</code>, and restarts.
                   <div class="button-row"><button class="button" id="installSample" type="button">Use this sample on the robot</button></div>
                   <p class="message" id="installSampleMessage" hidden></p>
                 </div>
-                <p>Name each program folder with <code>_tele</code> for teleop or <code>_auto</code> for autonomous. Keep its robot, hardware, dashboard, and sensor files together. Driver Station lists folders for the chosen mode; double-click to select, then Enable to run.</p>
-                <pre>MyRobot/
-  Drive_tele/
-    robot.py
-    hardware.py
-    dashboard.py
-    sensors.py
-  Square_auto/
-    robot.py
-    hardware.py
-    dashboard.py
-    sensors.py
-    autonomous.py</pre>
-                <p class="small muted">Autonomous programs also need <code>autonomous.py</code>, defining <code>create_autonomous(module, drive)</code> or <code>run(module, stop)</code>. Flat projects with <code>robot.py</code> at the top level still work.</p>
+                <p>Teleop and autonomous programs have separate folders. Click a program once in Driver Station to select it, then Enable to run its code. Mecanum is the only bundled program: teleop for either module type.</p>
+                <pre>robots/
+  teleop/
+    Mecanum/
+      robot.py
+      hardware.py
+      dashboard.py
+      sensors.py
+  autonomous/
+    YourProgram/
+      robot.py
+      hardware.py
+      dashboard.py</pre>
+                <p class="small muted">Write autonomous code in that program's <code>robot.py</code> with <code>run(module, stop)</code> or <code>create_autonomous(module, drive)</code>. A separate <code>autonomous.py</code> inside that autonomous folder also works. No autonomous program is bundled.</p>
                 <div class="format-file">
                   <span class="tag">Required</span>
-                  <code>MyRobot/Drive_tele/robot.py</code> or <code>MyRobot/Square_auto/robot.py</code>
-                  <p>The only file you must write. It defines
-                    <code>create_drive(module)</code> and returns your robot
-                    object.</p>
+                  <code>teleop/Mecanum/robot.py</code> or <code>autonomous/YourProgram/robot.py</code>
+                  <p>Teleop defines <code>create_drive(module)</code>. Autonomous defines <code>run(module, stop)</code> or <code>create_autonomous(module, drive)</code>.</p>
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/Drive_tele/hardware.py</code>
+                  <code>teleop/Mecanum/hardware.py</code>
                   <p>A copy of the pin file, with your own names. Leave it out
                     and the robot uses the names that ship with MotionModule
                     (<code>driver_1a</code>&hellip;<code>{{ "driver_2b" if is_mini else "driver_4b" }}</code>,
@@ -2027,14 +2025,14 @@ heading = imu.heading() if imu is not None else None
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/Drive_tele/dashboard.py</code>
+                  <code>teleop/Mecanum/dashboard.py</code>
                   <p>Declares up to two camera feeds, one gyro/IMU, and up to
                     20 analog, digital, or text sensor readings. MotionModule
                     discovers it automatically.</p>
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/Drive_tele/anything_else.py</code>
+                  <code>teleop/Mecanum/anything_else.py</code>
                   <p>More Python files for mechanisms, autonomous routines, and
                     helpers.</p>
                 </div>
@@ -3935,8 +3933,8 @@ function selectProjectFolder(event) {
   } else if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(selectedProjectName) || selectedProjectName === 'active') {
     message = 'Rename the folder: 1–64 letters, numbers, dots, dashes, or underscores.';
     isError = true;
-  } else if (!present.has('robot.py') && !relative.some(path => /^[^/]+_(tele|auto)\/robot\.py$/i.test(path))) {
-    message = 'The selected folder needs robot.py or program folders ending in _tele / _auto with their own robot.py.';
+  } else if (!present.has('robot.py') && !relative.some(path => /(?:^|\/)(?:teleop|autonomous)\/[^/]+\/robot\.py$/i.test(path) || /^[^/]+_(tele|auto)\/robot\.py$/i.test(path))) {
+    message = 'Choose a program folder containing robot.py, or separate teleop / autonomous folders containing programs.';
     isError = true;
   }
   if (isError) selectedProjectFiles = [];

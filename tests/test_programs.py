@@ -5,11 +5,11 @@ from unittest.mock import Mock, patch
 
 from motion_module.config import default_config
 from motion_module.controller import MotionModule
-from motion_module.dashboard import create_app
+from motion_module.dashboard import create_app, load_drive, load_autonomous_routine
 from motion_module.deploy import _check_python, deploy_project_files
 from motion_module.errors import MotionModuleError
 from motion_module.gpio import MockGPIO
-from motion_module.programs import default_program, list_programs, resolve_program, workspace_for
+from motion_module.programs import default_program, initialize_library, list_programs, resolve_program, workspace_for
 
 
 ROBOT = b'def create_drive(module):\n    return module\n'
@@ -22,21 +22,21 @@ class ProgramTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.workspace = Path(temporary.name)
         self.robots = self.workspace / "robots"
-        self.tele = self.robots / "MyRobot" / "Drive_tele"
-        self.auto = self.robots / "MyRobot" / "Square_auto"
+        self.tele = self.robots / "teleop" / "Mecanum"
+        self.auto = self.robots / "autonomous" / "Mecanum"
         for folder in (self.tele, self.auto):
             folder.mkdir(parents=True)
             (folder / "robot.py").write_bytes(ROBOT)
         (self.auto / "autonomous.py").write_bytes(AUTO)
 
     def test_modes_filter_programs_and_default_to_teleop(self):
-        self.assertEqual([row["id"] for row in list_programs(self.robots, "teleop")], ["MyRobot/Drive_tele"])
-        self.assertEqual([row["id"] for row in list_programs(self.robots, "autonomous")], ["MyRobot/Square_auto"])
-        self.assertEqual(default_program(self.tele.parent), self.tele)
+        self.assertEqual([row["id"] for row in list_programs(self.robots, "teleop")], ["teleop/Mecanum"])
+        self.assertEqual([row["id"] for row in list_programs(self.robots, "autonomous")], ["autonomous/Mecanum"])
+        self.assertEqual(default_program(self.robots), self.tele)
         self.assertEqual(workspace_for(self.tele / "robot.py"), self.workspace)
 
     def test_selection_rejects_other_modes_traversal_and_unknown_folders(self):
-        for identifier in ("../outside", str(self.auto), "MyRobot/Square_auto", "MyRobot/Missing_tele"):
+        for identifier in ("../outside", str(self.auto), "autonomous/Mecanum", "MyRobot/Missing_tele"):
             with self.subTest(identifier=identifier), self.assertRaises(MotionModuleError):
                 resolve_program(self.robots, identifier, "teleop")
         with self.assertRaises(MotionModuleError):
@@ -49,16 +49,67 @@ class ProgramTests(unittest.TestCase):
         self.assertIn("Legacy", [row["id"] for row in list_programs(self.robots, "teleop")])
         self.assertNotIn("Legacy", [row["id"] for row in list_programs(self.robots, "autonomous")])
         (legacy / "autonomous.py").write_bytes(AUTO)
-        self.assertIn("Legacy", [row["id"] for row in list_programs(self.robots, "autonomous")])
+        self.assertNotIn("Legacy", [row["id"] for row in list_programs(self.robots, "autonomous")])
+        self.assertIn("Legacy", [row["id"] for row in list_programs(self.robots, "teleop")])
 
-    def test_sample_programs_have_their_own_files_and_the_locked_hardware(self):
+    def test_default_install_has_only_mecanum_teleop_on_both_module_types(self):
+        import os
         sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
-        for name in ("Drive_tele", "Heading_auto"):
-            folder = sample / name
-            for filename in ("robot.py", "hardware.py", "dashboard.py", "sensors.py", "test.py"):
-                self.assertTrue((folder / filename).is_file())
-            self.assertEqual((folder / "hardware.py").read_bytes(), (sample / "hardware.py").read_bytes())
-            _check_python(folder, strict=True)
+        for variant in ("standard", "mini"):
+            library = self.workspace / variant / "robots"
+            target = initialize_library(library, self.workspace / variant / "backups", sample)
+            self.assertEqual([row["name"] for row in list_programs(library, "teleop")], ["Mecanum"])
+            self.assertEqual(list_programs(library, "autonomous"), [])
+            _check_python(target, strict=True)
+            from motion_module.config import load_config
+            with patch.dict(os.environ, {"MOTIONMODULE_VARIANT": variant}):
+                with MotionModule(load_config(project=target), gpio=MockGPIO()) as module:
+                    drive = load_drive(module, target / "robot.py")
+                    drive.drive(1, 0, 0)
+                    self.assertTrue(any(module.motor_values.values()))
+                    self.assertTrue(all(power == 0 for channel, power in module.motor_values.items() if channel > 4))
+                    self.assertIsNone(load_autonomous_routine(module, drive, target / "robot.py"))
+
+    def test_legacy_mecanum_class_is_valid_and_loads_without_a_factory(self):
+        (self.tele / "robot.py").write_text("class MecanumDrive:\n    def __init__(self, module): pass\n    def drive(self, *args): return {}\n    def stop(self): pass\n", encoding="utf-8")
+        _check_python(self.tele, strict=True)
+        drive = load_drive(object(), self.tele / "robot.py")
+        self.assertEqual(drive.drive(1, 0, 0), {})
+
+    def test_autonomous_robot_py_runs_without_a_teleop_factory(self):
+        (self.auto / "autonomous.py").unlink()
+        (self.auto / "robot.py").write_text("def run(module, stop):\n    module.called = True\n", encoding="utf-8")
+        _check_python(self.auto, strict=True)
+        module = Mock()
+        drive = load_drive(module, self.auto / "robot.py")
+        routine = load_autonomous_routine(module, drive, self.auto / "robot.py")
+        routine.run(Mock())
+        self.assertIs(module.called, True)
+
+    def test_retired_unmodified_bundles_are_kept_in_backups_and_removed_from_picker(self):
+        import shutil
+        sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        library = self.workspace / "old" / "robots"
+        previous = self.workspace / "old" / "examples"
+        for name in ("Mecanum", "MecanumMini"):
+            for base in (library, previous):
+                folder = base / name
+                folder.mkdir(parents=True)
+                (folder / "robot.py").write_bytes(ROBOT)
+                (folder / "autonomous.py").write_bytes(AUTO)
+        backups = self.workspace / "old" / "backups"
+        initialize_library(library, backups, sample, previous)
+        self.assertEqual([row["id"] for row in list_programs(library, "teleop")], ["teleop/Mecanum"])
+        self.assertEqual(list_programs(library, "autonomous"), [])
+        self.assertEqual(len(list(backups.iterdir())), 2)
+
+    def test_mode_groups_keep_same_named_programs_separate(self):
+        tele = list_programs(self.robots, "teleop")
+        auto = list_programs(self.robots, "autonomous")
+        self.assertEqual(tele[0]["name"], auto[0]["name"])
+        self.assertNotEqual(tele[0]["id"], auto[0]["id"])
+        self.assertEqual(resolve_program(self.robots, tele[0]["id"], "teleop"), self.tele)
+        self.assertEqual(resolve_program(self.robots, auto[0]["id"], "autonomous"), self.auto)
 
     def test_upload_accepts_nested_programs_and_validates_autonomous(self):
         result = deploy_project_files([
@@ -68,7 +119,7 @@ class ProgramTests(unittest.TestCase):
         ], self.robots, self.workspace / "backups")
         self.assertEqual(default_program(Path(result["target"])).name, "Drive_tele")
         (self.auto / "autonomous.py").unlink()
-        with self.assertRaisesRegex(MotionModuleError, "must contain autonomous.py"):
+        with self.assertRaisesRegex(MotionModuleError, "Autonomous robot.py"):
             _check_python(self.auto, strict=True)
 
     def test_selection_stops_blocks_commands_and_restarts_without_executing_new_code(self):
@@ -80,12 +131,12 @@ class ProgramTests(unittest.TestCase):
         client = app.test_client()
         headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
         status = client.get("/api/programs?mode=autonomous").get_json()
-        self.assertEqual(status["active"], "MyRobot/Drive_tele")
-        self.assertEqual(status["programs"][0]["id"], "MyRobot/Square_auto")
+        self.assertEqual(status["active"], "teleop/Mecanum")
+        self.assertEqual(status["programs"][0]["id"], "autonomous/Mecanum")
         self.assertEqual(client.post("/api/programs/select", json={}).status_code, 403)
         with patch("motion_module.dashboard.activate_project") as activate:
             response = client.post("/api/programs/select", headers=headers,
-                                   json={"program": "MyRobot/Square_auto", "mode": "autonomous"})
+                                   json={"program": "autonomous/Mecanum", "mode": "autonomous"})
         self.assertEqual(response.status_code, 202, response.get_json())
         activate.assert_called_once_with(self.auto, self.workspace / "active")
         self.assertTrue(all(power == 0 for power in module.motor_values.values()))
