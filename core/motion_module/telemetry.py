@@ -208,6 +208,16 @@ class TelemetryDashboard:
 
         return {}
 
+    def drive_speed(self):
+        """Drive power limits, from 0 to 1, chosen by the robot project.
+
+        ``normal`` defaults to full power. Optional ``left_trigger`` and
+        ``right_trigger`` limits apply while held; the lowest limit wins.
+        Unbind a trigger in gamepad_buttons() before using it for speed.
+        """
+
+        return {"normal": 1.0}
+
     def touch_sticks(self):
         """The on-screen sticks a phone or tablet drives with.
 
@@ -239,6 +249,7 @@ class TelemetryDashboard:
             "driver_bindings": self.driver_bindings(),
             "gamepad_sticks": self.gamepad_sticks(),
             "gamepad_buttons": self.gamepad_buttons(),
+            "drive_speed": self.drive_speed(),
             "touch_sticks": self.touch_sticks(),
             "touch_panels": self.touch_panels(),
             # Kept for projects and clients written for MotionModule 0.10.
@@ -255,6 +266,7 @@ def empty_snapshot() -> dict[str, Any]:
         "driver_bindings": dict(DEFAULT_DRIVER_BINDINGS),
         "gamepad_sticks": dict(DEFAULT_GAMEPAD_STICKS),
         "gamepad_buttons": dict(DEFAULT_GAMEPAD_BUTTONS),
+        "drive_speed": {"normal": 1.0},
         "control_keys": {},
         "control_buttons": {},
         "touch_sticks": dict(DEFAULT_TOUCH_STICKS),
@@ -548,6 +560,16 @@ def _gamepad_buttons(value: Any) -> dict[str, str]:
     return buttons
 
 
+def _drive_speed(value: Any) -> dict[str, float]:
+    chosen = _mapping(value) or {}
+    limits = {"normal": 1.0}
+    for name in ("normal", "left_trigger", "right_trigger"):
+        number = _number(chosen.get(name))
+        if number is not None:
+            limits[name] = min(1.0, max(0.0, number))
+    return limits
+
+
 def _sticks(value: Any, defaults: Mapping[str, Any], *, turn_buttons: bool = False) -> dict[str, Any]:
     """Fill in the defaults around the stick axes a project chose.
 
@@ -643,6 +665,7 @@ def normalize_snapshot(value: Any) -> dict[str, Any]:
         "control_keys": _control_keys(item.get("driver_bindings")),
         "gamepad_sticks": _sticks(item.get("gamepad_sticks"), DEFAULT_GAMEPAD_STICKS),
         "gamepad_buttons": _gamepad_buttons(item.get("gamepad_buttons")),
+        "drive_speed": _drive_speed(item.get("drive_speed")),
         "control_buttons": _control_buttons(item.get("gamepad_buttons")),
         "touch_sticks": _sticks(item.get("touch_sticks"), DEFAULT_TOUCH_STICKS, turn_buttons=True),
         "touch_panels": _touch_panels(item.get("touch_panels")),

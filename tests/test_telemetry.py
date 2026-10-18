@@ -19,6 +19,15 @@ from motion_module.telemetry import (
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_project_drive_speed_limits_are_finite_and_bounded(self):
+        self.assertEqual(normalize_snapshot({})["drive_speed"], {"normal": 1.0})
+        for bad in (None, [], "fast", {"normal": math.nan, "left_trigger": math.inf}):
+            with self.subTest(bad=bad):
+                self.assertEqual(normalize_snapshot({"drive_speed": bad})["drive_speed"], {"normal": 1.0})
+        self.assertEqual(normalize_snapshot({"drive_speed": {
+            "normal": 2, "left_trigger": -1, "right_trigger": .3,
+        }})["drive_speed"], {"normal": 1.0, "left_trigger": 0.0, "right_trigger": .3})
+
     def test_normalizer_caps_camera_and_sensor_counts(self):
         payload = normalize_snapshot({
             "cameras": [CameraFeed(f"Camera {index}", f"/camera/{index}") for index in range(5)],

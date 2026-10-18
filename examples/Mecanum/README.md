@@ -67,9 +67,17 @@ claw.release()
 
 ## Driving
 
-After deploying, open **Driver Station**, tick the enable box, then use W/S to
-drive, A/D to strafe, Q/E to rotate, and Space to stop. Start with the speed
-limit low.
+After deploying, open **Driver Station**, choose **Teleoperated**, open
+**Choose program folder**, and double-click `Drive_tele`. Press **Enable**.
+W/S drive, A/D strafe, Q/E rotate, and Space stops. The controller's left stick
+drives and strafes; its right stick turns. Normal drive is 100%, left trigger
+limits power to 50%, and right trigger to 30%. Both held uses 30%. D-pad down
+also stops. The console detects controllers without showing a keyboard grid.
+
+`robot.py` defines `KEYBOARD_INPUTS`, `CONTROLLER_STICKS`, `CONTROLLER_BUTTONS`
+and `DRIVE_SPEED`. Both keyboard and controller inputs control the same Python
+drive code; `dashboard.py` passes these settings to the console. Change the
+`stop` binding in `robot.py` to choose another stop key.
 
 On a phone or tablet the keys give way to two on-screen sticks: the left one
 drives and strafes all the way round, the right one turns left and right. Lift
@@ -82,11 +90,19 @@ by the default **Debug → Drive Test**. Forward, strafe, rotation, and combined
 therefore have one implementation. `hardware.py` still supplies the names,
 locked pins, and per-motor polarity; no extra inversion is applied in `robot.py`.
 
-For an existing project named `Mecanum`, the full Driver Station also defaults
-to **Use confirmed Mecanum mixer**. This lets older preserved `robot.py` files
-use the proven movement without being overwritten. Unchecking it uses that
-file's own drive method. Sensors and extra controls still come from the project;
-autonomous code is not overridden. Changing the selection stops and disables drive.
+The sample provides two independent program folders:
+
+```text
+Mecanum/
+  Drive_tele/       # teleop: robot.py, hardware.py, dashboard.py, sensors.py, test.py
+  Heading_auto/    # autonomous: those files plus autonomous.py
+```
+
+Double-click a folder to select its code. Selection stops outputs and reloads
+the service; Enable remains off until you press it. Each folder owns its files.
+Root-level Python files remain for compatibility with existing flat projects.
+The `_tele` and `_auto` suffixes tell MotionModule which picker lists a folder.
+An `_auto` folder needs `autonomous.py` with `create_autonomous()` or `run()`.
 
 ## Customize Drive Test
 
@@ -142,11 +158,11 @@ Tuning lives in `HEADING` at the top of `robot.py`; see
 starting direction). Each turn uses the confirmed teleop Mecanum mixer and
 PD heading correction, settling within 2° before continuing. A turn that
 cannot settle within 6 seconds fails and stops the routine. It never drives
-forward or strafes. Angles count from the heading when Start is pressed.
+forward or strafes. Angles count from the heading when Enable is pressed.
 
-Choose Autonomous, confirm the area is clear, Enable, then Start Autonomous.
+Choose Autonomous, double-click `Heading_auto` in the program picker, then Enable.
 The driver-input panel becomes the command list with live target, heading,
-and error. After completion, Enable and Start again to repeat. Edit `PLAN`
+and error. After completion, press Enable again to repeat. Edit `PLAN`
 to change the routine. Deploy this folder first; updating MotionModule keeps
 owner-edited robot folders, so an old folder may have no autonomous.py.
 

@@ -30,7 +30,7 @@ class MecanumDashboard(TelemetryDashboard):
         """Which keys the Driver Station listens for on this robot.
 
         This is the competition console's layout and belongs to the robot, so
-        it lives here rather than in a browser. It has nothing to do with the
+        its values live in robot.py rather than in a browser. It has nothing to do with the
         fixed bindings in Debug's Mecanum Test.
 
         Return only what you want to move. Anything left out keeps its default:
@@ -39,15 +39,7 @@ class MecanumDashboard(TelemetryDashboard):
         Custom projects can also bind their own controls() buttons by name.
         """
 
-        return {
-            "forward": "w",
-            "back": "s",
-            "left": "a",
-            "right": "d",
-            "turn_left": "q",
-            "turn_right": "e",
-            "stop": " ",
-        }
+        return self.drive.KEYBOARD_INPUTS
 
     def gamepad_sticks(self):
         """Which game-controller stick drives, strafes and turns.
@@ -60,13 +52,7 @@ class MecanumDashboard(TelemetryDashboard):
         to 3) gives finer control near the middle.
         """
 
-        return {
-            "forward": "left_y",
-            "strafe": "left_x",
-            "rotate": "right_x",
-            "deadzone": 0.12,
-            "curve": 1.0,
-        }
+        return self.drive.CONTROLLER_STICKS
 
     def gamepad_buttons(self):
         """Which game-controller buttons trigger an action on this robot.
@@ -74,16 +60,16 @@ class MecanumDashboard(TelemetryDashboard):
         Written the same way as driver_bindings: return only what you want to
         change; a face button ("a", "b", "x", "y"), a bumper, a trigger or a
         D-pad direction can take any of driver_bindings' six actions, or
-        "stop"/"estop" to disable the robot instantly. This sample keeps the
-        defaults explicit: the D-pad's down button stops the robot and the
-        right trigger is the emergency stop. A button can also press one of
+        "stop"/"estop" to disable the robot instantly. The D-pad's down button
+        stops the robot. Both triggers are reserved for drive speed.
+        A button can also press one of
         robot.py's controls() buttons by name in a custom project.
         """
 
-        return {
-            "dpad_down": "stop",
-            "right_trigger": "estop",
-        }
+        return self.drive.CONTROLLER_BUTTONS
+
+    def drive_speed(self):
+        return self.drive.DRIVE_SPEED
 
     def touch_sticks(self):
         """The two on-screen sticks a phone or tablet drives with.
@@ -94,13 +80,7 @@ class MecanumDashboard(TelemetryDashboard):
         swaps the turning stick for Turn left and Turn right buttons.
         """
 
-        return {
-            "forward": "left_y",
-            "strafe": "left_x",
-            "rotate": "right_x",
-            "deadzone": 0.1,
-            "curve": 1.0,
-        }
+        return self.drive.TOUCH_INPUTS
 
     def touch_panels(self):
         """Extra panels for a phone or tablet.

@@ -59,6 +59,44 @@ def mix(forward, strafe, rotate):
 class MecanumDrive:
     """Drives the four wheels named in hardware.py."""
 
+    # Both input sources drive this same Python program. MotionModule reads
+    # these bindings through dashboard.py; change keys, stop, sticks or buttons
+    # here. A browser or the Steam Deck controller app supplies the inputs.
+    KEYBOARD_INPUTS = {
+        "forward": "w",
+        "back": "s",
+        "left": "a",
+        "right": "d",
+        "turn_left": "q",
+        "turn_right": "e",
+        "stop": " ",
+    }
+
+    CONTROLLER_STICKS = {
+        "forward": "left_y",
+        "strafe": "left_x",
+        "rotate": "right_x",
+        "deadzone": 0.12,
+        "curve": 1.0,
+    }
+
+    CONTROLLER_BUTTONS = {
+        "dpad_down": "stop",
+        "left_trigger": None,
+        "right_trigger": None,
+    }
+
+    TOUCH_INPUTS = {
+        "forward": "left_y",
+        "strafe": "left_x",
+        "rotate": "right_x",
+        "deadzone": 0.1,
+        "curve": 1.0,
+    }
+
+    # Driver Station power limits. Both triggers held uses the lower limit.
+    DRIVE_SPEED = {"normal": 1.0, "left_trigger": 0.5, "right_trigger": 0.3}
+
     def __init__(self, module, wheels=WHEELS, sensors=None, heading=HEADING):
         self.module = module
         # autonomous.py and dashboard.py read the sensors from here.
@@ -69,7 +107,7 @@ class MecanumDrive:
         if len(self.wheels) != 4 or len(set(self.wheels)) != 4:
             raise ValueError("Choose four different motors in front-left, rear-left, front-right, rear-right order")
 
-    def drive(self, forward, strafe, rotate, speed=0.5):
+    def drive(self, forward, strafe, rotate, speed=1.0):
         """Called by the Driver Station. `speed` is the 0.0-1.0 power limit.
 
         Adds the driving assist: heading hold and snap turns. Code that steers
@@ -82,8 +120,7 @@ class MecanumDrive:
     def steer(self, forward, strafe, rotate, speed=0.5):
         """The driving assist: the driver's command with the IMU's turn added.
 
-        The Driver Station calls this too when "Use confirmed Mecanum mixer" is
-        ticked, so heading hold and snap turns work with either mixer.
+        Called by drive() before the project's wheel mixer applies power.
         """
 
         forward, strafe, rotate = clamp(forward), clamp(strafe), clamp(rotate)

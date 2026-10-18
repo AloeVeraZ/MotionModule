@@ -221,7 +221,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('no supported Pi IMU', response.get_json()['error'])
 
     def test_all_dashboard_pages_are_served_by_versioned_runtime(self):
-        for path in ("/", "/diagnostics", "/code"):
+        for path in ("/", "/diagnostics", "/code", "/update"):
             response = self.client.get(path)
             self.assertEqual(response.status_code, 200, path)
             self.assertIn(b"MotionModule", response.data)
@@ -289,7 +289,7 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn(b'id="cameraStage"', drive)   # telemetry belongs to the full station
         self.assertIn(b'id="headingDial"', drive)  # Test outputs shares the IMU display
         self.assertIn(b"gamepadconnected", drive)
-        self.assertIn(b'<a href="/driver-station">Open Driver Station', drive)
+        self.assertIn(b'<a href="/driver-station">Driver Station', drive)
         self.assertNotIn(b'data-page="drive"', drive)
         station = self.client.get("/driver-station").data
         self.assertIn(b"Competition console", station)
@@ -522,6 +522,8 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Mecanum/dashboard.py", names)
         self.assertIn("Mecanum/autonomous.py", names)
         self.assertIn("Mecanum/README.md", names)
+        self.assertIn("Mecanum/Drive_tele/robot.py", names)
+        self.assertIn("Mecanum/Heading_auto/autonomous.py", names)
         # The GIGA firmware installs from the Pi, so projects no longer carry it.
         self.assertFalse(any(name.endswith(".ino") for name in names))
 
@@ -783,6 +785,8 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(data["driver_bindings"], DEFAULT_DRIVER_BINDINGS)
                 self.assertEqual(data["control_keys"], {})
                 self.assertEqual(data["control_buttons"], {})
+                self.assertEqual(data["drive_speed"], {"normal": 1.0, "left_trigger": 0.5, "right_trigger": 0.3})
+                self.assertEqual(data["gamepad_buttons"], {"dpad_down": "stop"})
                 self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
                 self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
                 self.assertEqual(data["touch_panels"], [])
@@ -986,7 +990,7 @@ class DashboardTests(unittest.TestCase):
         client = app.test_client()
         headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
         station = client.get("/driver-station").data
-        self.assertIn(b'id="useMecanumDrive" type="checkbox" checked', station)
+        self.assertNotIn(b'id="useMecanumDrive"', station)
         response = client.post("/api/drive", headers=headers, json={
             "sequence": 1, "drive_model": "mecanum", "rotate": 1, "speed": 0.4,
         })

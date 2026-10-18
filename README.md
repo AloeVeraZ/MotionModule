@@ -202,7 +202,7 @@ approximately 75% PWM at 47 °C and 100% at 50 °C after installation and reboot
 
 The first install uses hostname `motionmodule`. Give multiple robots unique
 names with `--hostname motionmodule-01`. Updates are always explicit: the Pi
-checks GitHub for a newer version and says so under **Debug -> Checks & logs**,
+checks GitHub for a newer version and says so under **Update**,
 but nothing is ever installed until you press **Update now**.
 
 ## Connect to the robot UI
@@ -245,6 +245,7 @@ Three workspace pages plus the separate Driver Station:
   Mecanum mixer. See [custom Drive Test code](docs/CODING.md#optional-debug-drive-test-mapping).
 - **Code** — **Deploy** a local Python folder and open the time-limited
   **Terminal**.
+- **Update** — check release channels and install MotionModule updates.
 - **Open Driver Station** — launches the operator console, which runs the
   deployed project's own `drive()` and shows cameras, IMU, Pi inputs, USB
   sensor controllers, and the project's declared controls. A computer drives
@@ -252,13 +253,19 @@ Three workspace pages plus the separate Driver Station:
   on-screen sticks and shows only robot control, the sticks and the cameras,
   upright or on its side.
 
-For the `Mecanum` project, **Use confirmed Mecanum mixer** starts checked in
-the Driver Station. Manual movement then uses exactly the same mixer as
-the default **Debug → Drive Test**, even if the Pi has older custom robot code. Uncheck
-it to run the project's own `drive()` instead; changing it stops and disables
-drive. Sensors, extra controls, and autonomous routines remain project-owned.
-Other project names default to their own code. No saved project file is replaced.
-Custom `test.py` mappings affect only Debug, not the full Driver Station.
+The Driver Station runs the selected folder's own `robot.py`. Choose Teleoperated
+or Autonomous, open **Choose program folder**, and double-click a program. Folders
+ending in `_tele` appear in Teleop; `_auto` folders appear in Autonomous. Press
+**Enable** to drive or start the selected autonomous routine; **Disable** stops it.
+The sample includes `Mecanum/Drive_tele` and `Mecanum/Heading_auto`, each with its
+own Python files. Existing flat robot folders remain supported.
+
+The sample's `robot.py` defines both keyboard and gamepad inputs: W/S drive,
+A/D strafe, Q/E turn, Space stops, and the controller sticks drive and turn.
+Normal power is 100%; hold left trigger for 50% or right trigger for 30%.
+Both triggers together use 30%. D-pad down also stops. Controller detection
+shows the connected controller; the key grid is hidden from the console.
+`test.py` mappings affect only Debug's Drive Test.
 
 Updates preserve NetworkManager's saved Wi-Fi profiles and MotionModule's
 preferred-network setting. Updating while on the hotspot or disconnected does
@@ -623,7 +630,7 @@ Useful commands are also explained inside Debug:
 
 ## Updates and development
 
-Open **Debug -> Checks & logs** in the dashboard. A Pi with internet access
+Open **Update** in the dashboard. A Pi with internet access
 asks GitHub what each branch is on and shows a line per branch: green when
 this robot is running the newest version, red with **Update now** when one is
 waiting. A Pi on `testing` also sees the `main` line, so it can go back; a Pi

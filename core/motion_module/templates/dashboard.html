@@ -596,28 +596,31 @@
 .usb-meta { display: grid; grid-template-columns: auto 1fr; gap: .1875rem .75rem; font-size: .75rem; }
 .usb-meta b { color: var(--faint); font-weight: 650; }
 .usb-meta span { color: var(--muted); text-align: right; word-break: break-all; }
-.update-lines { display: grid; gap: .625rem; }
+.update-lines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .update-line {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
-  gap: .75rem;
-  padding: .875rem;
-  border: 1px solid var(--line-soft);
-  border-radius: var(--radius-sm);
-  background: var(--well);
+  display: flex; flex-direction: column; align-items: stretch; gap: 1.25rem;
+  padding: 1.5rem; border: 1px solid var(--line-soft);
+  border-radius: var(--radius); background: var(--well); min-width: 0;
 }
-.update-line.behind { border-color: var(--red-line); background: var(--red-soft); }
-.update-line.current-line.ready { border-color: var(--green-line); background: var(--green-soft); }
-.update-head { display: flex; align-items: center; gap: .625rem; flex-wrap: wrap; }
-.update-head strong { font-size: .9375rem; font-weight: 650; }
-.update-state { font: 700 .6875rem/1.1 var(--font-display); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
-.update-state.ready { color: var(--green); }
-.update-state.behind { color: var(--red); }
+.update-line.behind { border-color: var(--accent-line); }
+.update-line.current-line { border-color: var(--green-line); }
+.update-copy { flex: 1; }
+.update-head { display: flex; flex-direction: column; align-items: flex-start; gap: .625rem; margin-bottom: 1rem; }
+.update-head strong { font-size: 1.25rem; font-weight: 650; }
+.update-channel { display: flex; align-items: baseline; flex-wrap: wrap; gap: .625rem; }
+.update-current { color: var(--muted); font-size: .75rem; }
+.update-state { display: inline-flex; padding: .375rem .5rem; border-radius: var(--radius-sm); background: var(--control); font: 700 .6875rem/1.1 var(--font-display); letter-spacing: .06em; text-transform: uppercase; }
+.update-state.ready { color: var(--green); background: var(--green-soft); }
+.update-state.behind { color: var(--accent-text); background: var(--accent-soft); }
 .update-state.unknown { color: var(--amber); }
 .update-state.offline, .update-state.other { color: var(--faint); }
-.update-line p { margin: .25rem 0 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
-.update-line code { font-size: .6875rem; }
+.update-line p { margin: .25rem 0 0; color: var(--muted); font-size: .8125rem; line-height: 1.55; overflow-wrap: anywhere; }
+.update-versions { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line-soft); }
+.update-versions small { display: block; color: var(--faint); margin-bottom: .375rem; }
+.update-versions code { font-size: .8125rem; overflow-wrap: anywhere; }
+.update-line .button { width: 100%; }
 .update-log { max-height: 14rem; margin-top: .75rem; }
-@media (max-width: 640px) { .update-line { grid-template-columns: minmax(0, 1fr); } .update-line .button { justify-self: start; } }
+@media (max-width: 640px) { .update-lines { grid-template-columns: minmax(0, 1fr); } .update-line { padding: 1rem; } }
 /* The password sudo asks for during an update. A native modal <dialog>: the
    browser keeps focus inside it and closes it on Escape. */
 .password-dialog {
@@ -692,16 +695,22 @@
   white-space: pre-wrap; word-break: break-word;
 }
 
-.command-list { display: grid; gap: .375rem; }
+.checks-layout { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; align-items: start; }
+.checks-layout .command-list { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1100px) { .checks-layout { grid-template-columns: 1fr 1fr; } .commands-card { grid-column: 1 / -1; grid-row: 1; } .checks-layout .command-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .checks-layout { grid-template-columns: 1fr; } .checks-layout .command-list { grid-template-columns: 1fr; } }
+.command-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
 .command-row {
-  display: grid; grid-template-columns: minmax(12rem, auto) 1fr; align-items: baseline;
+  display: grid; align-content: start;
   gap: .25rem 1rem;
   padding: .5625rem .8125rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   background: var(--well);
 }
-.command-row code { color: var(--accent-text); }
+.command-row code { color: var(--accent-text); overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .command-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .command-list { grid-template-columns: minmax(0, 1fr); } }
 .command-row p { color: var(--muted); font-size: .8125rem; }
 
 /* ------------------------------------------------------------- network */
@@ -908,7 +917,8 @@
 
 /* Keep the mobile layout deliberate rather than a scaled-down desktop. */
 .hero-side, .panel-head, .button-row { flex-wrap: wrap; }
-.nav-panel { max-height: calc(100dvh - 6rem); overflow-y: auto; }
+@media (max-width: 1100px) { .nav-panel { max-height: calc(100dvh - 6rem); overflow-y: auto; } }
+@media (min-width: 1101px) and (max-width: 1280px) { .nav-links a { padding-inline: .625rem; } .topbar-inner, .nav-panel { gap: .625rem; } }
 .panel-head > *, .hero-side > *, .test-row > *, .kv, .usb-meta dd { min-width: 0; }
 .panel-body p, .hero p, .kv strong, .usb-meta dd, .notice { overflow-wrap: anywhere; }
 .snippet .copy { min-height: 44px; }
@@ -997,7 +1007,8 @@
         <a href="/" data-page="overview">Overview<small>Status &amp; activity</small></a>
         <a href="/diagnostics" data-page="diagnostics">Debug<small>Understand your hardware</small></a>
         <a href="/code" data-page="code">Code<small>Build &amp; control</small></a>
-        <a href="/driver-station">Open Driver Station<small>Drive your robot</small></a>
+        <a href="/update" data-page="update">Update<small>MotionModule releases</small></a>
+        <a href="/driver-station">Driver Station<small>Drive your robot</small></a>
       </nav>
       <div class="display-controls">
         <span class="display-label">Theme</span>
@@ -1355,7 +1366,7 @@
             <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. Heading is relative and may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Checks &amp; logs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU6500 identity 0x70 at 0x68 or 0x69. Only the MPU6500 gyroscope and accelerometer are supported. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Test outputs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU6500 identity 0x70 at 0x68 or 0x69. Only the MPU6500 gyroscope and accelerometer are supported. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
             <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
             <pre>from motion_module.imu import IMUConfig
 
@@ -1428,7 +1439,7 @@ heading = imu.heading() if imu is not None else None
       <!-- ----------------------------------------------------- tests -->
       <div data-panel="tests" hidden>
         <div class="notice danger page-notice">
-          <strong>Raise the robot first.</strong> Both tools below move real
+          <strong>Raise the robot first.</strong> The motor and servo tools below move real
           hardware. Every wheel must be off the ground, the mechanism path must
           be clear, and the physical cutoff must be within reach.
         </div>
@@ -1533,40 +1544,32 @@ heading = imu.heading() if imu is not None else None
             <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
           </div>
         </section>
+        <article class="card spaced">
+          <div class="panel-head">
+            <h2>USB ports &amp; devices</h2>
+            <div class="button-row">
+              <span class="hint" id="usbSummary">Scanning&hellip;</span>
+              <button class="button" id="refreshUsb" type="button">Refresh USB</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="usb-grid" id="usbDevices">
+              <p class="muted">Reading the Pi USB bus&hellip;</p>
+            </div>
+            <p class="muted small spaced">Root hubs are the Pi’s host infrastructure, not plugged-in devices. Port paths identify the bus and connection; USB 2 / USB 3 peers share a socket. Hubs show their downstream ports. USB devices identify
+              themselves, so MotionModule can list what is plugged in, its USB
+              ID, driver, port, and access. Basic GPIO motor drivers send
+              nothing back to the Pi and stay marked configured but unverified.
+              An Arduino GIGA R1 WiFi can add experimental USB GPIO inputs.
+              Install its firmware here, then declare your additional sensors in robot code.
+              The reference Mecanum IMU connects directly to the Pi.</p>
+          </div>
+        </article>
       </div>
 
       <!-- ---------------------------------------------------- checks -->
       <div data-panel="checks" hidden>
-        <article class="card">
-          <div class="panel-head">
-            <h2>MotionModule updates</h2>
-            <div class="button-row">
-              <span class="hint" id="updateSummary">Checking&hellip;</span>
-              <button class="button" id="refreshUpdates" type="button">Check now</button>
-            </div>
-          </div>
-          <p class="lead">The Pi asks GitHub what each branch is on. Updating
-            keeps your robot folders, <code>hardware.py</code> and Wi-Fi
-            settings, runs the tests before switching, and puts the old version
-            back if the new one will not start.</p>
-          <div class="panel-body">
-            <p class="installed-module spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ motor_capacity }} motors · {{ driver_count }} driver boards · {{ install_ref or 'local' }} branch</p>
-            <p class="spaced">Choose your module type</p>
-            <div class="module-choices" role="group" aria-label="Module for the next install">
-              <button class="button{% if not is_mini %} primary{% endif %}" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><strong>MotionModule</strong><small>8 motors · 4 driver boards</small><small data-installed-variant="standard"{% if is_mini %} hidden{% endif %}>Currently installed</small></button>
-              <button class="button{% if is_mini %} primary{% endif %}" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><strong>MotionModule Mini</strong><small>4 motors · 2 driver boards</small><small data-installed-variant="mini"{% if not is_mini %} hidden{% endif %}>Currently installed</small></button>
-            </div>
-            <p class="small spaced" id="moduleInstallHint" aria-live="polite">Selected for next install: {{ module_name }} · {{ motor_capacity }} motors. Choose the main or testing software branch below to install.</p>
-            <p class="small muted">Choose the module, then install main or testing below. Every update keeps your active robot project and its files, and saves a pre-update copy in <code>~/MotionModule/backups</code>. Channels 1–4, servos and IMU use the same wiring on both modules. Code that needs motors 5–8 or an incompatible API may need changes to run; your code is still kept. Match the selected module to your hardware.</p>
-            <div class="update-lines" id="updateLines">
-              <p class="muted">Looking for this Pi's version&hellip;</p>
-            </div>
-            <p class="muted small spaced" id="updateNote"></p>
-            <pre class="logs update-log" id="updateLog" hidden></pre>
-          </div>
-        </article>
-
-        <div class="grid equal spaced">
+        <div class="checks-layout">
           <article class="card">
             <div class="panel-head">
               <h2>MotionModule Doctor</h2>
@@ -1592,9 +1595,7 @@ heading = imu.heading() if imu is not None else None
               is in here.</p>
             <pre class="logs" id="serviceLogs">Loading service log&hellip;</pre>
           </article>
-        </div>
-
-        <article class="card spaced">
+        <article class="card commands-card">
           <div class="panel-head">
             <h2>Useful commands</h2>
             <span>Run from the web terminal or an admin SSH session</span>
@@ -1602,11 +1603,11 @@ heading = imu.heading() if imu is not None else None
           <div class="panel-body command-list">
             <div class="command-row">
               <code>motionmodule doctor</code>
-              <p>Checks the runtime, GPIO setup, I&sup2;C servo boards, and services without intentionally moving hardware.</p>
+              <p>Check runtime, GPIO, servo boards, and services.</p>
             </div>
             <div class="command-row">
               <code>motionmodule pinout</code>
-              <p>Prints every motor name with its physical pin and GPIO wiring in the terminal.</p>
+              <p>Show motor names and physical / GPIO wiring.</p>
             </div>
             <div class="command-row">
               <code>motionmodule restart</code>
@@ -1614,52 +1615,34 @@ heading = imu.heading() if imu is not None else None
             </div>
             <div class="command-row">
               <code>motionmodule logs</code>
-              <p>Follows the live service log so Python errors and startup messages are visible.</p>
+              <p>Follow startup messages and Python errors.</p>
             </div>
             <div class="command-row">
               <code>motionmodule project list</code>
-              <p>Lists every robot project on the Pi; the active project has an asterisk.</p>
+              <p>List robot projects; * marks the active one.</p>
             </div>
             <div class="command-row">
               <code>motionmodule project NAME</code>
-              <p>Activates another project folder and restarts MotionModule with that code.</p>
+              <p>Load a robot project and restart the service.</p>
             </div>
             <div class="command-row">
               <code>motionmodule versions</code>
-              <p>Lists installed MotionModule runtime versions without changing your robot code.</p>
+              <p>List installed runtime versions.</p>
             </div>
             <div class="command-row">
               <code>motionmodule rollback</code>
-              <p>Returns to the previous runtime release while preserving every robot project.</p>
+              <p>Restore the previous runtime; keep robot projects.</p>
             </div>
             <div class="command-row">
               <code>motionmodule giga flash</code>
-              <p>Installs firmware for optional Arduino GIGA R1 WiFi USB GPIO expansion. This experimental extra is separate from the Pi-connected Mecanum setup.</p>
+              <p>Install firmware for optional GIGA USB inputs.</p>
             </div>
           </div>
         </article>
+        </div>
 
-        <article class="card spaced">
-          <div class="panel-head">
-            <h2>USB ports &amp; devices</h2>
-            <div class="button-row">
-              <span class="hint" id="usbSummary">Scanning&hellip;</span>
-              <button class="button" id="refreshUsb" type="button">Refresh USB</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="usb-grid" id="usbDevices">
-              <p class="muted">Reading the Pi USB bus&hellip;</p>
-            </div>
-            <p class="muted small spaced">Root hubs are the Pi’s host infrastructure, not plugged-in devices. Port paths identify the bus and connection; USB 2 / USB 3 peers share a socket. Hubs show their downstream ports. USB devices identify
-              themselves, so MotionModule can list what is plugged in, its USB
-              ID, driver, port, and access. Basic GPIO motor drivers send
-              nothing back to the Pi and stay marked configured but unverified.
-              An Arduino GIGA R1 WiFi can add experimental USB GPIO inputs.
-              Install its firmware here, then declare your additional sensors in robot code.
-              The reference Mecanum IMU connects directly to the Pi.</p>
-          </div>
-        </article>
+
+
       </div>
 
       <!-- --------------------------------------------------- network -->
@@ -1888,6 +1871,40 @@ heading = imu.heading() if imu is not None else None
     <!-- =============================================================== -->
     <!-- CODE                                                            -->
     <!-- =============================================================== -->
+    <section class="view" data-view="update" hidden>
+      <div class="hero">
+        <div><p class="eyebrow">MotionModule</p><h1>Software updates</h1><p>Choose a release channel and keep your robot up to date.</p></div>
+      </div>
+        <article class="card">
+          <div class="panel-head">
+            <h2>MotionModule updates</h2>
+            <div class="button-row">
+              <span class="hint" id="updateSummary">Checking&hellip;</span>
+              <button class="button" id="refreshUpdates" type="button">Check now</button>
+            </div>
+          </div>
+          <p class="lead">Keep your robot folders, <code>hardware.py</code> and Wi-Fi settings.
+            Updates run tests before switching and restore the previous version if startup fails.
+            The Pi reboots automatically when installation finishes.</p>
+          <div class="panel-body">
+            <p class="installed-module spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ motor_capacity }} motors · {{ driver_count }} driver boards · {{ install_ref or 'local' }} branch</p>
+            <p class="spaced">Choose your module type</p>
+            <div class="module-choices" role="group" aria-label="Module for the next install">
+              <button class="button{% if not is_mini %} primary{% endif %}" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><strong>MotionModule</strong><small>8 motors · 4 driver boards</small><small data-installed-variant="standard"{% if is_mini %} hidden{% endif %}>Currently installed</small></button>
+              <button class="button{% if is_mini %} primary{% endif %}" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><strong>MotionModule Mini</strong><small>4 motors · 2 driver boards</small><small data-installed-variant="mini"{% if not is_mini %} hidden{% endif %}>Currently installed</small></button>
+            </div>
+            <p class="small spaced" id="moduleInstallHint" aria-live="polite">Selected for next install: {{ module_name }} · {{ motor_capacity }} motors. Choose the main or testing software branch below to install.</p>
+            <p class="small muted">Choose the module, then install main or testing below. Every update keeps your active robot project and its files, and saves a pre-update copy in <code>~/MotionModule/backups</code>. Channels 1–4, servos and IMU use the same wiring on both modules. Code that needs motors 5–8 or an incompatible API may need changes to run; your code is still kept. Match the selected module to your hardware.</p>
+            <div class="update-lines" id="updateLines">
+              <p class="muted">Looking for this Pi's version&hellip;</p>
+            </div>
+            <p class="muted small spaced" id="updateNote"></p>
+            <pre class="logs update-log" id="updateLog" hidden></pre>
+          </div>
+        </article>
+
+    </section>
+
     <section class="view" data-view="code" hidden>
       <div class="hero">
         <div>
@@ -1936,7 +1953,7 @@ heading = imu.heading() if imu is not None else None
                 <input id="projectFolder" type="file" webkitdirectory directory multiple accept=".py,.md,.txt,.ino">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2h9A1.5 1.5 0 0 1 21 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/><path d="M12 16.5v-5M9.5 14l2.5-2.5 2.5 2.5"/></svg>
                 <strong>Choose your robot folder</strong>
-                <span>Click here, then pick the folder that contains robot.py</span>
+                <span>Pick your robot folder, containing robot.py or _tele / _auto programs</span>
               </label>
               <div class="kv-grid">
                 <div class="kv"><small>Selected project</small><strong id="selectedProject">None</strong></div>
@@ -1979,16 +1996,30 @@ heading = imu.heading() if imu is not None else None
                   <div class="button-row"><button class="button" id="installSample" type="button">Use this sample on the robot</button></div>
                   <p class="message" id="installSampleMessage" hidden></p>
                 </div>
+                <p>Name each program folder with <code>_tele</code> for teleop or <code>_auto</code> for autonomous. Keep its robot, hardware, dashboard, and sensor files together. Driver Station lists folders for the chosen mode; double-click to select, then Enable to run.</p>
+                <pre>MyRobot/
+  Drive_tele/
+    robot.py
+    hardware.py
+    dashboard.py
+    sensors.py
+  Square_auto/
+    robot.py
+    hardware.py
+    dashboard.py
+    sensors.py
+    autonomous.py</pre>
+                <p class="small muted">Autonomous programs also need <code>autonomous.py</code>, defining <code>create_autonomous(module, drive)</code> or <code>run(module, stop)</code>. Flat projects with <code>robot.py</code> at the top level still work.</p>
                 <div class="format-file">
                   <span class="tag">Required</span>
-                  <code>MyRobot/robot.py</code>
+                  <code>MyRobot/Drive_tele/robot.py</code> or <code>MyRobot/Square_auto/robot.py</code>
                   <p>The only file you must write. It defines
                     <code>create_drive(module)</code> and returns your robot
                     object.</p>
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/hardware.py</code>
+                  <code>MyRobot/Drive_tele/hardware.py</code>
                   <p>A copy of the pin file, with your own names. Leave it out
                     and the robot uses the names that ship with MotionModule
                     (<code>driver_1a</code>&hellip;<code>{{ "driver_2b" if is_mini else "driver_4b" }}</code>,
@@ -1996,14 +2027,14 @@ heading = imu.heading() if imu is not None else None
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/dashboard.py</code>
+                  <code>MyRobot/Drive_tele/dashboard.py</code>
                   <p>Declares up to two camera feeds, one gyro/IMU, and up to
                     20 analog, digital, or text sensor readings. MotionModule
                     discovers it automatically.</p>
                 </div>
                 <div class="format-file">
                   <span class="tag">Optional</span>
-                  <code>MyRobot/anything_else.py</code>
+                  <code>MyRobot/Drive_tele/anything_else.py</code>
                   <p>More Python files for mechanisms, autonomous routines, and
                     helpers.</p>
                 </div>
@@ -3376,10 +3407,13 @@ document.querySelectorAll('[data-module-variant]').forEach(button => {
 function updateLineCard(line, data) {
   const state = UPDATE_STATES[line.status] || UPDATE_STATES.unknown;
   const row = element('div', `update-line ${state.tone}${line.current ? ' current-line' : ''}`);
-  const copy = element('div');
+  const copy = element('div', 'update-copy');
   const head = element('div', 'update-head');
+  const channel = element('div', 'update-channel');
+  channel.append(element('strong', null, line.label));
+  if (line.current) channel.append(element('span', 'update-current', 'Running on this robot'));
   head.append(
-    element('strong', null, line.label + (line.current ? ' · running now' : '')),
+    channel,
     element('span', `update-state ${state.tone}`, state.label),
   );
   copy.append(head);
@@ -3394,6 +3428,13 @@ function updateLineCard(line, data) {
   } else {
     copy.append(element('p', null, `${line.note} GitHub has ${line.latest}.`));
   }
+  const versions = element('div', 'update-versions');
+  for (const [label, value] of [['Installed', line.installed], ['Latest', line.latest]]) {
+    const version = element('div');
+    version.append(element('small', null, label), element('code', null, value || '—'));
+    versions.append(version);
+  }
+  copy.append(versions);
   const button = element('button', `button${line.status === 'update-available' ? ' primary' : ''}`, line.action);
   button.type = 'button';
   button.disabled = updateBusy || !data.installable || line.status === 'unreachable' || data.job.state === 'running';
@@ -3894,8 +3935,8 @@ function selectProjectFolder(event) {
   } else if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(selectedProjectName) || selectedProjectName === 'active') {
     message = 'Rename the folder: 1–64 letters, numbers, dots, dashes, or underscores.';
     isError = true;
-  } else if (!present.has('robot.py')) {
-    message = 'The selected folder needs robot.py at its top level. hardware.py is optional.';
+  } else if (!present.has('robot.py') && !relative.some(path => /^[^/]+_(tele|auto)\/robot\.py$/i.test(path))) {
+    message = 'The selected folder needs robot.py or program folders ending in _tele / _auto with their own robot.py.';
     isError = true;
   }
   if (isError) selectedProjectFiles = [];
@@ -4450,9 +4491,11 @@ if (activePage === 'diagnostics') {
   refreshLogs();
   refreshUsb();
   setInterval(refreshUsb, 5000);
+  updateSecurityFields();
+}
+if (activePage === 'update') {
   refreshUpdates();
   setInterval(() => refreshUpdates(), 60000);
-  updateSecurityFields();
 }
 </script>
 </body>

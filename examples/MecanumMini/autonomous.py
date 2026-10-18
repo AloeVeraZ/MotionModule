@@ -1,8 +1,8 @@
 """Optional autonomous routine for the Mecanum sample: four IMU-guided turns.
 
 This file is optional. Delete it and the robot still drives; the Driver
-Station explains that no routine is loaded. Choose Autonomous, Enable,
-then Start Autonomous to run what is written here.
+Station explains that no routine is loaded. Choose Autonomous, select this program folder,
+then press Enable to run what is written here.
 
 MotionModule calls `create_autonomous(module, drive)` once at startup, then
 calls `run(stop)` on the object it returns each time the operator starts
@@ -15,7 +15,7 @@ motion_module/heading.py) and shares its tuning, HEADING in robot.py, with
 teleop heading hold.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
-faces when Start Autonomous is pressed, so line the robot up first.
+faces when Enable is pressed, so line the robot up first.
 
 The robot has no wheel encoders, so a "drive" step goes for a set time, not
 a set distance. Without a working IMU the routine does not move at all.

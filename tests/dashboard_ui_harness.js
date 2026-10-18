@@ -156,6 +156,7 @@ function browser(now = 1700000000000) {
   const intervals = new Map();
   const currentStatus = statusData();
   const currentTelemetry = telemetryData();
+  let programData = {available: false, programs: [], active: ""};
   let timerId = 0;
   const context = vm.createContext({
     document, window, console, URLSearchParams, AbortController,
@@ -179,12 +180,14 @@ function browser(now = 1700000000000) {
       const data = url === '/api/status' ? currentStatus
         : url === '/api/drive/telemetry' ? currentTelemetry
         : url === '/api/diagnostics' ? {ok: true, checks: [{level: 'pass', title: 'Fan', detail: 'Healthy'}]}
+
+        : url.startsWith('/api/programs?') ? programData
         : {ok: true};
       return {ok: true, status: 200, json: async () => data};
     },
   });
   const exports = fixture.kind === 'station'
-    ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, sendDrive, stopAll, readPad};'
+    ? '\nglobalThis.dashboard = {refreshStatus, refreshTelemetry, refreshPrograms, sendDrive, stopAll, readPad};'
     : '\nglobalThis.dashboard = {selectTab, refreshStatus, sendDrive, stopAll, installUpdate, renderDriveTest};';
   vm.runInContext(fixture.script + exports, context);
   const $ = selector => document.querySelector(selector);
@@ -194,8 +197,7 @@ function browser(now = 1700000000000) {
   async function arm() {
     await context.dashboard.refreshStatus();
     if (fixture.kind === 'station') {
-      $('#armConfirm').checked = true;
-      await $('#armConfirm').fire('change');
+      await context.dashboard.refreshPrograms();
       await $('#enableButton').fire('click');
     } else {
       $('#driveEnable').checked = true;
@@ -234,7 +236,7 @@ function browser(now = 1700000000000) {
     };
   }
   const motion = payload => ({forward: payload.forward, strafe: payload.strafe, rotate: payload.rotate});
-  return {$, context, document, window, requests, failures, intervals, driveEndpoint, driveRequests, settle, arm, forward, releaseForward, setRobotStatus, setTelemetry, stick, motion};
+  return {$, context, document, window, requests, failures, intervals, driveEndpoint, driveRequests, settle, arm, forward, releaseForward, setRobotStatus, setTelemetry, setPrograms: data => { programData = data; }, stick, motion};
 }
 
 async function run(scenario) {
@@ -417,24 +419,69 @@ async function run(scenario) {
     assert.match(app.$('#driveTestSource').textContent, /MyRobot\/test.py/);
   } else if (scenario === 'station-drive-model') {
     assert.equal(app.driveRequests().at(-1).payload.drive_model, 'project');
-    const selector = app.$('#useMecanumDrive');
-    selector.checked = true;
-    await selector.fire('change');
+    assert.equal(app.$('#useMecanumDrive'), null);
+    assert.equal(app.$('#armConfirm'), null);
+    assert.equal(app.$('#speed'), null);
+    assert.equal(app.driveRequests().at(-1).payload.speed, 1);
+    await app.releaseForward();
+    app.$('#enableButton').focus();
+    await app.forward();
+    assert.equal(app.driveRequests().at(-1).payload.forward, 1, 'Clicking Enable must leave keyboard driving usable');
+    await app.window.fire('keydown', {key: ' '});
+    await app.settle();
+    assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED', 'The configured stop key works while Enable has focus');
+  } else if (scenario === 'station-program-picker') {
+    await app.$('#disableButton').fire('click');
+    const active = {id: 'MyRobot/Drive_tele', name: 'Drive_tele', mode: 'teleop'};
+    const other = {id: 'MyRobot/Practice_tele', name: 'Practice_tele', mode: 'teleop'};
+    app.setPrograms({available: true, active: active.id, programs: [active, other]});
+    await app.context.dashboard.refreshPrograms();
+    assert.equal(app.$('#enableButton').disabled, false);
+    await app.$('#chooseProgram').fire('click');
+    assert.equal(app.$('#programPicker').open, true);
+    const folders = app.$('#programFolders').querySelectorAll('button');
+    assert.equal(folders.length, 2);
+    await folders[1].fire('click');
+    assert.equal(app.requests.filter(r => r.url === '/api/programs/select').length, 0, 'A single click must not select or run a program');
+    await folders[1].fire('dblclick');
+    const selection = app.requests.find(r => r.url === '/api/programs/select');
+    assert.deepEqual(selection.payload, {program: other.id, mode: 'teleop'});
+    assert.equal(app.$('#enableButton').disabled, true, 'Enable stays blocked during the restart');
+    assert.equal(app.$('#programPicker').open, false);
+    assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Selecting a folder never starts autonomous');
+  } else if (scenario === 'station-trigger-speed') {
+    await app.releaseForward();
+    app.setTelemetry({drive_speed: {normal: 1, left_trigger: .5, right_trigger: .3}, gamepad_buttons: {dpad_down: 'stop'}});
+    await app.context.dashboard.refreshTelemetry();
+    await app.arm();
+    let held = [];
+    let numeric = false;
+    app.context.navigator.getGamepads = () => [{index: 0, connected: true, mapping: 'standard', axes: [0, -1, 0, 0],
+      buttons: Array.from({length: 16}, (_, i) => numeric ? (held.includes(i) ? 1 : 0) : {pressed: held.includes(i), value: held.includes(i) ? 1 : 0})}];
+    for (const simple of [false, true]) {
+      numeric = simple;
+      for (const [buttons, expected] of [[[],1], [[6],.5], [[7],.3], [[6,7],.3], [[],1]]) {
+        held = buttons;
+        await app.context.dashboard.sendDrive();
+        await app.settle();
+        assert.equal(app.driveRequests().at(-1).payload.speed, expected);
+        assert.equal(app.driveRequests().at(-1).payload.forward, 1);
+        assert.equal(app.$('#robotState').querySelector('strong').textContent, 'ENABLED');
+      }
+    }
+    assert.notEqual(app.$('#controllerName').textContent, 'No game controller detected');
+    held = [13];
+    const beforeStop = app.driveRequests().length;
+    await app.context.dashboard.sendDrive();
     await app.settle();
     assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED');
-    assert(app.requests.some(item => item.url === '/api/stop'), 'Changing mixers must stop first');
-    const count = app.driveRequests().length;
-    await app.context.dashboard.sendDrive();
-    assert.equal(app.driveRequests().length, count, 'Changing mixers requires re-enabling');
+    assert.equal(app.driveRequests().length, beforeStop, 'A stop button must not send a drive command after disabling');
+    app.context.navigator.getGamepads = () => [];
+    await app.context.dashboard.readPad();
+    assert.equal(app.$('#controllerName').textContent, 'No game controller detected');
     await app.arm();
     await app.forward();
-    assert.equal(app.driveRequests().at(-1).payload.drive_model, 'mecanum');
-    selector.checked = false;
-    await selector.fire('change');
-    await app.settle();
-    await app.arm();
-    await app.forward();
-    assert.equal(app.driveRequests().at(-1).payload.drive_model, 'project');
+    assert.equal(app.driveRequests().at(-1).payload.speed, 1, 'Keyboard retains normal project power');
   } else if (scenario === 'rotation-held') {
     await app.releaseForward();
     for (const [key, rotate] of [['q', 1], ['e', -1]]) {
@@ -559,23 +606,19 @@ async function run(scenario) {
     assert.match(app.$('#autoPlanHelp').textContent, /no autonomous.py/);
     assert.equal(app.$('#enableButton').disabled, true);
     vm.runInContext("autoState = {configured:true, state:'idle', progress:{steps:[['turn',90],['turn',180]]}}; renderAutoStatus(); updateEnableButton()", app.context);
-    app.$('#armConfirm').checked = true;
-    await app.$('#armConfirm').fire('change');
+    await app.context.dashboard.refreshPrograms();
     await app.$('#enableButton').fire('click');
-    assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Enable must not start motion');
-    assert.equal(app.$('#startAuto').disabled, false);
-    await app.$('#startAuto').fire('click');
     assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 1);
     vm.runInContext("autoState = {configured:true,state:'running',elapsed_seconds:1,progress:{steps:[['turn',90]],step:0,target:90,heading:88,error:2}};renderAutoStatus();updateEnableButton()", app.context);
     assert.match(app.$('#autoLive').textContent, /Error 2.0/);
-    assert.equal(app.$('#startAuto').disabled, true);
+    assert.equal(app.$('#startAuto'), null);
     await app.$('#disableButton').fire('click');
-    assert.equal(app.$('#startAuto').disabled, true);
+    assert.equal(app.$('#startAuto'), null);
     assert(app.requests.some(r => r.url === '/api/stop'));
   } else if (scenario === 'station-calibration') {
     await app.$('#calibrateImu').fire('click');
     await app.settle();
-    assert.equal(app.$('#startAuto').disabled, true);
+    assert.equal(app.$('#startAuto'), null);
     assert(app.requests.some(r => r.url === '/api/imu/calibrate'));
     assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED');
   } else if (scenario === 'station-telemetry-layout') {

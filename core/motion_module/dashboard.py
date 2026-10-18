@@ -56,6 +56,7 @@ from .network import NetworkClient
 from .pinout import PHYSICAL_BY_BCM, header_rows, motor_rows, servo_rows
 from .project_export import project_archive
 from .runner import load_project
+from .programs import default_program, list_programs, program_folders, program_mode, resolve_program, workspace_for
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
 from .telemetry import empty_snapshot, merge_cameras, merge_usb_controllers, normalize_snapshot
@@ -63,7 +64,7 @@ from .updates import PasswordRequired, TooManyPasswordAttempts, UpdateChecker, i
 from .usb import sensor_controllers, usb_devices
 
 
-DASHBOARD_PAGES = {"overview", "diagnostics", "code"}
+DASHBOARD_PAGES = {"overview", "diagnostics", "code", "update"}
 PAGE_ALIASES = {"hardware": "diagnostics", "network": "diagnostics", "drive": "diagnostics"}
 # Older links land on the matching tab inside the page that replaced them.
 ALIAS_TABS = {"hardware": "wiring", "network": "network", "drive": "mecanum"}
@@ -360,6 +361,7 @@ def create_app(
     network_state = {"busy": False, "last_error": ""}
     deployment_lock = threading.Lock()
     workspace = Path(workspace_directory).resolve() if workspace_directory else None
+    selection_pending = False
     # The bench test drives the live module, so its labels and allowed channels
     # must come from that same active hardware.py. Otherwise the page can name
     # one set of pins while the module drives another.
@@ -397,7 +399,7 @@ def create_app(
     def refuse_actuation_in_recovery():
         # The robot project failed to load, so nothing may move until a
         # working project is deployed. Turning servo outputs off stays allowed.
-        if not recovery["active"] or request.method != "POST":
+        if not (recovery["active"] or selection_pending) or request.method != "POST":
             return None
         body = request.get_json(silent=True) if request.is_json else None
         enabling_servos = (
@@ -405,6 +407,8 @@ def create_app(
             and not (isinstance(body, dict) and body.get("enabled") is False)
         )
         if request.path in ACTUATION_ROUTES or enabling_servos:
+            if selection_pending:
+                return jsonify({"ok": False, "error": "Loading the selected program. Reconnect before enabling."}), 423
             return jsonify({
                 "ok": False,
                 "recovery": True,
@@ -464,6 +468,7 @@ def create_app(
             project_name=project_name,
             asset_version=asset_version,
             install_ref=build_ref,
+            initial_mode=program_mode(Path(project_path).parent) if project_path else "teleop",
         )
 
     @app.get("/")
@@ -757,11 +762,12 @@ def create_app(
         robots = workspace / "robots"
         projects = sorted(
             path.name for path in robots.iterdir()
-            if path.is_dir() and (path / "robot.py").is_file()
+            if path.is_dir() and ((path / "robot.py").is_file() or program_folders(path))
         ) if robots.is_dir() else []
         try:
-            active = (workspace / "active").resolve(strict=True).name
-        except OSError:
+            active_folder = (workspace / "active").resolve(strict=True)
+            active = active_folder.relative_to(robots).parts[0]
+        except (OSError, ValueError, IndexError):
             active = project_name
         return jsonify({"ok": True, "available": True, "active": active, "projects": projects})
 
@@ -785,6 +791,49 @@ def create_app(
                              download_name=f"{source.name}-robot-backup.zip")
         response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.get("/api/programs")
+    def programs():
+        mode = request.args.get("mode", "teleop")
+        try:
+            entries = list_programs(workspace / "robots", mode) if workspace else []
+        except MotionModuleError as error:
+            return jsonify({"ok": False, "error": str(error)}), 400
+        active = ""
+        if workspace and project_path:
+            folder = Path(project_path).resolve().parent
+            if folder.is_relative_to(workspace / "robots"):
+                active = folder.relative_to(workspace / "robots").as_posix()
+        return jsonify({"ok": True, "available": workspace is not None and restart_callback is not None,
+                        "programs": entries, "active": active, "mode": mode})
+
+    @app.post("/api/programs/select")
+    def select_program():
+        nonlocal selection_pending
+        if not authorized():
+            return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
+        if workspace is None or restart_callback is None:
+            return jsonify({"ok": False, "error": "Program selection is available on the installed Pi runtime"}), 503
+        if not deployment_lock.acquire(blocking=False):
+            return jsonify({"ok": False, "error": "Another project operation is in progress"}), 409
+        try:
+            body = request.get_json(silent=True) or {}
+            folder = resolve_program(workspace / "robots", body.get("program"), body.get("mode"))
+            from .deploy import _check_python
+            _check_python(folder, strict=True)
+            with command_lock:
+                selection_pending = True
+                stop_outputs()
+            autonomous.stop()
+            with command_lock:
+                activate_project(folder, workspace / "active")
+        except (MotionModuleError, OSError) as error:
+            selection_pending = False
+            return jsonify({"ok": False, "error": str(error)}), 400
+        finally:
+            deployment_lock.release()
+        restart_soon()
+        return jsonify({"ok": True, "restarting": True, "program": body["program"]}), 202
 
     def sample_files() -> list[tuple[str, bytes]]:
         """The Mecanum sample this release ships, as (Mecanum/path, contents)."""
@@ -821,7 +870,7 @@ def create_app(
         active_drive.stop()
         module.stop_all()
         result = deploy_project_files(entries, workspace / "robots", workspace / "backups", name)
-        activate_project(result["target"], workspace / "active")
+        activate_project(default_program(Path(result["target"])), workspace / "active")
         return result
 
     def restart_soon() -> None:
@@ -983,6 +1032,8 @@ def create_app(
                     selected_drive = mecanum_test_drive
             sequence = int(body.get("sequence", -1))
             with command_lock:
+                if selection_pending:
+                    return jsonify({"ok": False, "error": "The selected program is loading"}), 423
                 if autonomous.running:
                     return jsonify({"ok": False, "error": "Disable autonomous before taking manual control."}), 409
                 if sequence <= last_sequence:
@@ -1625,7 +1676,9 @@ def serve(
     recovery_error: str = "",
 ) -> None:
     project_name = project_path.parent.name if project_path else "No project"
-    workspace = project_path.parent.parent.parent if project_path else None
+    workspace = workspace_for(project_path) if project_path else None
+    if workspace and project_path:
+        project_name = project_path.parent.relative_to(workspace / "robots").as_posix()
     if recovery_error:
         drive, dashboard_telemetry = RecoveryDrive(module, recovery_error), None
     else:
@@ -1685,6 +1738,8 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     project_path = args.project.resolve() if args.project else None
+    if project_path and project_path.name == "robot.py":
+        project_path = default_program(project_path.parent) / "robot.py"
     with open_module(project_path) as (module, recovery_error):
         serve(module, stop_event, project_path, recovery_error)
     return 0

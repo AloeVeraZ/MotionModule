@@ -184,8 +184,14 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_station_calibration_disarms(self):
         self.run_behavior('station-calibration', self.station_fixture)
 
-    def test_full_station_mixer_selection_stops_and_requires_reenabling(self):
+    def test_full_station_uses_project_drive_without_checkboxes_or_speed_slider(self):
         self.run_behavior("station-drive-model", self.station_fixture)
+
+    def test_folder_picker_selects_on_double_click_and_waits_for_restart(self):
+        self.run_behavior("station-program-picker", self.station_fixture)
+
+    def test_project_trigger_limits_and_keyboard_normal_power(self):
+        self.run_behavior("station-trigger-speed", self.station_fixture)
 
     def test_a_disconnected_servo_board_is_red_and_explained(self):
         self.run_behavior("servo-offline")

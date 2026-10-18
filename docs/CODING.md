@@ -123,8 +123,7 @@ gap longer than the configured watchdog also stops/releases test outputs.
 Keep Space as a safety stop, not an actuator command. Releasing servo pulses
 does not mechanically hold a loaded mechanism: support it safely before testing.
 
-This file affects only Debug. The full Driver Station still uses `robot.py`
-(or its explicitly selected confirmed Mecanum mixer). `dashboard.py` key and
+This file affects only Debug. The full Driver Station still uses `robot.py`. `dashboard.py` key and
 stick layouts and autonomous code do not change Drive Test.
 
 ### Optional full Driver Station telemetry
@@ -589,22 +588,22 @@ correction. Use that mixer when extending this robot rather than maintaining
 another copy of its wheel equations. It returns normalized powers keyed by
 channels 1–4; motor polarity remains in `hardware.py`.
 
-The Driver Station's **Use confirmed Mecanum mixer** selects that same built-in
-movement for manual commands without editing the project's files. It defaults
-on for a project named `Mecanum`, off for other projects. Uncheck it to call
-your own drive method. Changing it disables and stops outputs, requiring a
-fresh enable. Project controls, telemetry, and autonomous routines still run
-their own code; this selector only changes the keyboard/gamepad movement path.
+The **Driver Station** runs the selected program's `drive()` method from the
+keyboard, a game controller, or touch sticks. Choose a `_tele` folder for teleop
+or an `_auto` folder for autonomous, double-click it, then press Enable.
+Each program folder contains its own `robot.py`, optional `hardware.py`,
+`dashboard.py`, and sensors. Autonomous folders also contain `autonomous.py`.
+The sample keeps keyboard and controller bindings and trigger speed limits in
+`robot.py`; its `dashboard.py` exposes them through telemetry.
 
-With that option unchecked, the **Driver Station** calls your `drive()` method, from the keyboard, a
-game controller or the touch sticks. All three send the same `forward`, `strafe`
+All three send the same `forward`, `strafe`
 and `rotate` numbers, so code written for one works with the others. Keys and
 sticks are laid out in `dashboard.py`; see
 [The Driver Station's controls](#the-driver-stations-controls).
 
-Drive works only while its deliberate-enable box is ticked. Releasing keys or
+Drive works only after pressing Enable. Releasing keys or
 sticks, the stop key, STOP, leaving the page, or losing communications produces a stop, and
-a lost connection also disarms the box so you have to re-arm on purpose. The
+a lost connection also disables driving until you press Enable again. The
 hardware watchdog is the final backstop.
 
 While armed, the page sends a command on every tick, including zeros. Letting go
@@ -645,3 +644,9 @@ host ports, their bus paths, and downstream hub ports, including empty ones.
 Linux sysfs `peer` links combine USB 2 and USB 3 paths sharing one socket;
 without that metadata, logical ports remain separate rather than guessing a
 physical location. These paths do not imply a top/bottom label on the case.
+
+Program folders may override `TelemetryDashboard.drive_speed()` with power limits
+from 0 to 1, such as `{"normal": 1, "left_trigger": .5, "right_trigger": .3}`.
+The lowest held trigger limit wins. Unbind speed triggers from other actions in
+`gamepad_buttons()` by setting them to `None`. The Mecanum sample defines all
+these inputs in `robot.py`, including Space as its configurable stop key.

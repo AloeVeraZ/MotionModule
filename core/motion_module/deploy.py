@@ -102,9 +102,17 @@ def _extract_archive(archive_path: Path, staging: Path) -> None:
 def _check_python(project: Path, *, strict: bool = False) -> None:
     """Check Python and pins; browser uploads also need a dashboard entry point."""
 
+    from .programs import program_folders, program_mode
+    if program_mode(project) == "autonomous" and not (project / "autonomous.py").is_file():
+        raise MotionModuleError(f"{project.name} must contain autonomous.py")
     robot = project / "robot.py"
     if not robot.is_file():
-        raise MotionModuleError("The uploaded project must contain robot.py at its top level")
+        folders = program_folders(project)
+        if not folders:
+            raise MotionModuleError("The uploaded project must contain robot.py at its top level or in _tele / _auto program folders")
+        for folder in folders:
+            _check_python(folder, strict=strict)
+        return
     for source_path in sorted(project.rglob("*.py")):
         try:
             with tokenize.open(source_path) as source_file:
@@ -170,6 +178,8 @@ def _check_python(project: Path, *, strict: bool = False) -> None:
             load_project_config(project)
         except ConfigurationError as error:
             raise MotionModuleError(str(error)) from error
+    for folder in program_folders(project):
+        _check_python(folder, strict=strict)
 
 
 def replace_project(staging: Path, target: Path, backups: Path, name: str) -> Path | None:

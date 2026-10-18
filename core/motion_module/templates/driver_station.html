@@ -614,6 +614,16 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
     min-height: 48px; justify-content: center; font-size: 1rem;
   }
 }
+.station-state { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: .75rem; padding: .75rem 1rem; }
+.program-choice { display: grid; gap: .625rem; padding: .875rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--well); }
+.program-choice strong { overflow-wrap: anywhere; }
+.program-picker { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); width: min(36rem, calc(100vw - 2rem)); max-height: 80vh; margin: auto; padding: 0; }
+.program-picker::backdrop { background: rgba(0,0,0,.65); }
+.program-folders { display: grid; gap: .5rem; }
+.program-folder { text-align: left; display: grid; gap: .25rem; width: 100%; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--well); color: var(--ink); cursor: pointer; }
+.program-folder:hover, .program-folder:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.program-folder small { color: var(--muted); overflow-wrap: anywhere; }
+#keyGrid[hidden], #keyLegend[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -636,6 +646,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   </div>
 </header>
 
+<div class="robot-state station-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
 <div class="signal-strip" aria-label="Robot status" data-touch-panel="status">
   <div class="signal" id="commsSignal"><i></i><small>Communications</small><strong>Connecting</strong></div>
   <div class="signal" id="codeSignal"><i></i><small>Robot code</small><strong>Checking</strong></div>
@@ -645,6 +656,10 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 <div class="notice danger connection-banner" id="connectionBanner" role="alert"><strong>Robot connection lost.</strong> Controls are disabled until telemetry returns and the operator deliberately enables again.</div>
 
 <button type="button" class="stop-button station-mobile-stop" id="mobileStop">Stop all outputs</button>
+<dialog id="programPicker" class="program-picker" aria-labelledby="programPickerTitle">
+  <div class="panel-head"><h2 id="programPickerTitle">Choose a program</h2><button class="button" id="closeProgramPicker" type="button">Close</button></div>
+  <div class="panel-body stack"><p class="empty-copy" id="programPickerHelp">Double-click a folder to select it. Enable runs the selected code.</p><div class="program-folders" id="programFolders"></div></div>
+</dialog>
 <main class="station-grid">
   <aside class="column left-column">
     <section class="panel">
@@ -659,20 +674,11 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
           <strong id="autoState">Idle</strong>
           <small id="autoDetail">autonomous.py has not been run yet.</small>
         </div>
-        <div class="robot-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
-        <label class="safety-check"><input id="useMecanumDrive" type="checkbox"{% if project_name == 'Mecanum' %} checked{% endif %}><span>Use confirmed Mecanum mixer</span></label>
-        <details class="drive-help"><summary>About the drive mixer</summary>
-        <p class="empty-copy">For manual driving: checked uses exactly the same movement
-          as the default Mecanum Drive Test; unchecked calls your <code>robot.py</code> drive method.
-          Debug's custom <code>test.py</code> does not change this console.
-          Project sensors, extra controls, and autonomous code remain separate.</p>
-        </details>
-        <label class="safety-check"><input id="armConfirm" type="checkbox"><span>The area is clear and the physical cutoff is within reach.</span></label>
+        <div class="program-choice"><span class="eyebrow" id="programModeLabel">Teleop program</span><strong id="selectedProgram">Loading program…</strong><button class="button" id="chooseProgram" type="button">Choose program folder</button><p class="empty-copy" id="programMessage" role="status"></p></div>
         <div class="command-pair">
           <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
           <button class="command disable" id="disableButton" type="button">DISABLE</button>
         </div>
-        <label class="range-label"><span>Maximum drive output <output id="speedValue">40%</output></span><input id="speed" type="range" min="10" max="100" step="5" value="40"></label>
         <button class="stop-button stop-command" id="stopButton" type="button">Stop all outputs</button>
       </div>
     </section>
@@ -683,7 +689,6 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
         <p id="autoPlanHelp">Loading the active project…</p>
         <ol id="autoCommands"></ol>
         <p id="autoLive" aria-live="polite"></p>
-        <button class="command enable" id="startAuto" type="button" disabled>START AUTONOMOUS</button>
       </div>
     </section>
     <section class="panel input-panel" id="driverInputPanel">
@@ -709,8 +714,8 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
             <div class="stick-caption"><strong>Turn</strong><output>0.00</output></div>
           </div>
         </div>
-        <div class="key-grid" id="keyGrid"></div>
-        <p class="empty-copy" id="keyLegend">Loading this project's key layout&hellip;</p>
+        <div class="key-grid" id="keyGrid" hidden></div>
+        <p class="empty-copy" id="keyLegend" hidden></p>
         <p class="empty-copy touch-legend" id="touchLegend">Left stick drives and strafes, right stick turns. Lift your thumb to stop.</p>
       </div>
     </section>
@@ -786,7 +791,7 @@ let armed = false;
 let heldKeys = new Set();
 const touchActions = new Set();
 const canDrive = () => armed && connected && mode === 'teleop';
-const stopFromControl = () => { $('#armConfirm').checked = false; setArmed(false); };
+const stopFromControl = () => { setArmed(false); };
 const touchDrive = createHoldControls({
   enabled: canDrive,
   change: (action, held) => {
@@ -811,6 +816,15 @@ const GAMEPAD_BUTTON_INDEX = {
   dpad_up: 12, dpad_down: 13, dpad_left: 14, dpad_right: 15,
 };
 let gamepadButtons = {...DEFAULT_GAMEPAD_BUTTONS};
+let driveSpeed = {normal: 1};
+function selectedDriveSpeed() {
+  const pressed = activePad() ? padPressedButtons(activePad()) : new Set();
+  const limits = [driveSpeed.normal];
+  for (const trigger of ['left_trigger', 'right_trigger']) {
+    if (pressed.has(trigger) && Number.isFinite(driveSpeed[trigger])) limits.push(driveSpeed[trigger]);
+  }
+  return Math.min(...limits);
+}
 let padButtonsHeld = new Set();
 // Up or right drives forward, strafes right or turns right. drive() counts
 // rotate up turning left, so a turn is sent the other way round.
@@ -871,7 +885,78 @@ const DEFAULT_BINDINGS = {forward:'w', back:'s', left:'a', right:'d', turn_left:
 const ACTION_LABELS = {forward:'Forward', back:'Back', left:'Left', right:'Right', turn_left:'Turn L', turn_right:'Turn R', stop:'Stop'};
 let bindings = {...DEFAULT_BINDINGS};
 let bindingSignature = '';
-let mode = 'teleop';
+let mode = {{ (initial_mode or 'teleop') | tojson }};
+let programActive = '';
+let programAvailable = false;
+let programLoading = false;
+let programEntries = [];
+let programKnown = false;
+let programRequest = 0;
+
+async function refreshPrograms() {
+  const generation = ++programRequest;
+  const requestedMode = mode;
+  try {
+    const data = await jsonFetch(`/api/programs?mode=${requestedMode}`);
+    if (generation !== programRequest || requestedMode !== mode) return;
+    programKnown = true;
+    programAvailable = Boolean(data.available);
+    programActive = data.active || '';
+    programEntries = data.programs || [];
+    const selected = programEntries.find(entry => entry.id === programActive);
+    $('#selectedProgram').textContent = selected ? selected.name : programAvailable ? 'Choose a program folder' : {{ project_name | tojson }};
+    $('#programModeLabel').textContent = mode === 'autonomous' ? 'Autonomous program' : 'Teleop program';
+    $('#chooseProgram').disabled = !programAvailable || armed || programLoading;
+    $('#programMessage').textContent = programAvailable ? (selected ? selected.id : 'Choose the code to run in this mode.') : 'Running the local project. Folder selection is available on the installed robot.';
+    updateEnableButton();
+    return data;
+  } catch (error) { $('#programMessage').textContent = error.message; }
+}
+
+async function openProgramPicker() {
+  await refreshPrograms();
+  if (!programAvailable || armed || programLoading) return;
+  $('#programPickerTitle').textContent = mode === 'autonomous' ? 'Autonomous folders · _auto' : 'Teleop folders · _tele';
+  const rows = programEntries.map(entry => {
+    const button = element('button', 'program-folder');
+    button.type = 'button';
+    button.append(element('strong', null, `▸ ${entry.name}`), element('small', null, entry.id));
+    button.addEventListener('dblclick', () => selectProgram(entry));
+    button.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); selectProgram(entry); } });
+    return button;
+  });
+  replaceWith($('#programFolders'), rows.length ? rows : [element('p', 'empty-copy', `No ${mode === 'teleop' ? '_tele' : '_auto'} program folders installed. Upload your robot folder from Code.`)]);
+  $('#programPicker').showModal();
+}
+
+async function selectProgram(entry) {
+  if (armed || programLoading) return;
+  if (entry.id === programActive) { $('#programPicker').close(); return; }
+  programLoading = true;
+  $('#programPicker').close();
+  updateEnableButton();
+  $('#programMessage').textContent = `Loading ${entry.name}…`;
+  try {
+    await jsonFetch('/api/programs/select', {method: 'POST', headers: apiHeaders, body: JSON.stringify({program: entry.id, mode})});
+    $('#selectedProgram').textContent = entry.name;
+    let attempts = 0;
+    const reconnect = async () => {
+      try {
+        const status = await jsonFetch(`/api/programs?mode=${mode}`);
+        if (status.active === entry.id) { location.reload(); return; }
+      } catch (_) { /* The service is restarting. */ }
+      if (++attempts < 60) setTimeout(reconnect, 1000);
+      else { $('#programMessage').textContent = 'The program is taking longer to load. Reload to reconnect.'; }
+    };
+    setTimeout(reconnect, 1200);
+  } catch (error) {
+    programLoading = false;
+    $('#programMessage').textContent = error.message;
+    updateEnableButton();
+  }
+}
+$('#chooseProgram').addEventListener('click', openProgramPicker);
+$('#closeProgramPicker').addEventListener('click', () => $('#programPicker').close());
 let autoState = {configured: false, state: 'idle', error: '', elapsed_seconds: 0, duration_seconds: null};
 const IDLE = {forward: 0, strafe: 0, rotate: 0};
 
@@ -898,30 +983,35 @@ function setSignal(id, state, text) {
 }
 
 function updateEnableButton() {
-  const ready = connected && $('#armConfirm').checked && !armed;
+  const selectedForMode = !programAvailable || programEntries.some(entry => entry.id === programActive);
+  const ready = connected && programKnown && !armed && !programLoading && selectedForMode;
   $('#enableButton').disabled = !ready || (mode === 'autonomous' && !autoState.configured);
   $('#enableButton').textContent = 'ENABLE';
-  $('#startAuto').disabled = !armed || !connected || !autoState.configured || autoState.state === 'running';
   // Switching modes mid-run would leave the routine driving under a teleop
   // label, so the choice is locked while the robot is enabled.
   $('#modeTeleop').disabled = armed;
-  $('#modeAuto').disabled = armed;
+  $('#modeAuto').disabled = armed || programLoading;
+  $('#modeTeleop').disabled = armed || programLoading;
+  $('#chooseProgram').disabled = !programAvailable || armed || programLoading;
   $('#touchDrive').classList.toggle('locked', !canDrive());
 }
 
 function setMode(next) {
-  if (armed || next === mode) return;
+  if (armed || programLoading || next === mode) return;
   mode = next;
+  programKnown = false;
+  programEntries = [];
   $$('.mode-switch button').forEach(button =>
     button.classList.toggle('active', button.dataset.mode === mode));
   $('#autoStatus').hidden = mode !== 'autonomous';
   $('#autoPanel').hidden = mode !== 'autonomous';
   $('#driverInputPanel').hidden = mode === 'autonomous';
   $('#robotState').querySelector('small').textContent = mode === 'autonomous'
-    ? 'The routine will not start until you enable it'
+    ? 'Enable to start the selected routine'
     : 'Driver commands are blocked';
   updateEnableButton();
   renderAutoStatus();
+  refreshPrograms();
 }
 
 const AUTO_WORDS = {
@@ -947,7 +1037,7 @@ function renderAutoStatus() {
     : (autoState.load_error || 'The active robot folder has no autonomous.py. Open Code to deploy your routine or install the Mecanum sample, then reload.');
   const progress = autoState.progress;
   $('#autoPlanHelp').textContent = !autoState.configured ? $('#autoDetail').textContent
-    : 'Enable after confirming the area is clear, then press Start. Angles count from the starting direction.';
+    : 'Enable to run autonomous.py. Angles count from the starting direction.';
   replaceWith($('#autoCommands'), (progress?.steps || []).map((step, index) => {
     const done = index < (progress.completed || 0);
     const active = index === progress.step && autoState.state === 'running';
@@ -993,15 +1083,14 @@ function setArmed(value) {
   state.classList.toggle('armed', armed);
   state.querySelector('strong').textContent = armed ? 'ENABLED' : 'DISABLED';
   state.querySelector('small').textContent = armed
-    ? (mode === 'autonomous' ? (autoState.state === 'running' ? 'The autonomous routine is running' : 'Ready to start autonomous') : 'Driver commands are live')
-    : (mode === 'autonomous' ? 'The routine will not start until you enable it' : 'Driver commands are blocked');
+    ? (mode === 'autonomous' ? (autoState.state === 'running' ? 'The autonomous routine is running' : 'Starting autonomous…') : 'Driver commands are live')
+    : (mode === 'autonomous' ? 'Enable to start the selected routine' : 'Driver commands are blocked');
   setSignal('#inputSignal', armed ? 'good' : '',
     armed ? (mode === 'autonomous' ? 'Autonomous' : 'Ready') : 'Blocked');
   updateEnableButton();
   if (!armed) stopAll();
 }
 
-$('#useMecanumDrive').addEventListener('change', () => setArmed(false));
 
 async function stopAll() {
   heldKeys.clear();
@@ -1020,7 +1109,7 @@ async function stopAll() {
 
 function activePad() {
   if (typeof navigator.getGamepads !== 'function') return null;
-  const pads = [...navigator.getGamepads()].filter(Boolean);
+  const pads = [...navigator.getGamepads()].filter(pad => pad && pad.connected !== false);
   if (!pads.length) { padIndex = null; return null; }
   const pad = pads.find(item => item.index === padIndex) || pads[0];
   padIndex = pad.index;
@@ -1099,7 +1188,6 @@ function handlePadKillButtons(pressed) {
   }
   for (const [button, action] of Object.entries(gamepadButtons)) {
     if ((action === 'stop' || action === 'estop') && pressed.has(button) && !padButtonsHeld.has(button)) {
-      $('#armConfirm').checked = false;
       setArmed(false);
     }
   }
@@ -1154,13 +1242,13 @@ async function sendDrive() {
   const touch = keyboardMoving ? IDLE : touchCommand();
   const touchMoving = moving(touch);
   const command = keyboardMoving ? keys : touchMoving ? touch : readPad() || IDLE;
+  if (!armed || !connected || mode !== 'teleop') return;
   setSignal('#inputSignal', 'good', keyboardMoving ? (touchActions.size ? 'Touch / mouse' : 'Keyboard')
     : touchMoving ? 'Touch sticks' : command === IDLE ? 'Ready' : 'Controller');
   try {
     const response = await fetch('/api/drive', {
       method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({sequence: ++sequence, ...command, speed: Number($('#speed').value) / 100,
-        drive_model: $('#useMecanumDrive').checked ? 'mecanum' : 'project'}),
+      body: JSON.stringify({sequence: ++sequence, ...command, speed: selectedDriveSpeed(), drive_model: 'project'}),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -1273,12 +1361,14 @@ function applyStickLayout(data) {
   const pad = layout(data.gamepad_sticks, DEFAULT_GAMEPAD_STICKS);
   const buttons = data.gamepad_buttons && typeof data.gamepad_buttons === 'object' ? data.gamepad_buttons : DEFAULT_GAMEPAD_BUTTONS;
   const panels = Array.isArray(data.touch_panels) ? data.touch_panels.map(String) : [];
-  const signature = JSON.stringify([touch, pad, buttons, panels]);
+  const speed = {normal: 1, ...(data.drive_speed || {})};
+  const signature = JSON.stringify([touch, pad, buttons, panels, speed]);
   if (signature === stickSignature) return;
   stickSignature = signature;
   touchSticks = touch;
   gamepadSticks = pad;
   gamepadButtons = buttons;
+  driveSpeed = speed;
   touchPanels = panels;
   turnActions.clear();
   turnButtons.clear();
@@ -1579,23 +1669,17 @@ $('#calibrateImu').addEventListener('click', async () => {
   finally { $('#calibrateImu').disabled = false; }
 });
 
-$('#armConfirm').addEventListener('change', updateEnableButton);
 $$('.mode-switch button').forEach(button =>
   button.addEventListener('click', () => setMode(button.dataset.mode)));
 $('#enableButton').addEventListener('click', async () => {
-  if (!connected || !$('#armConfirm').checked || (mode === 'autonomous' && !autoState.configured)) return;
+  if (!connected || !programKnown || armed || programLoading || (programAvailable && !programEntries.some(entry => entry.id === programActive)) || (mode === 'autonomous' && !autoState.configured)) return;
   setArmed(true);
-});
-$('#startAuto').addEventListener('click', async () => {
-  if (!armed || !connected || mode !== 'autonomous' || !$('#armConfirm').checked) return;
-  $('#startAuto').disabled = true;
-  if (!await startAutonomous()) setArmed(false);
+  if (mode === 'autonomous' && !await startAutonomous()) setArmed(false);
   updateEnableButton();
 });
 $('#disableButton').addEventListener('click', () => setArmed(false));
-$('#stopButton').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
-$('#mobileStop').addEventListener('click', () => { $('#armConfirm').checked=false; setArmed(false); });
-$('#speed').addEventListener('input', () => { $('#speedValue').textContent=`${$('#speed').value}%`; sendDrive(); });
+$('#stopButton').addEventListener('click', () => { setArmed(false); });
+$('#mobileStop').addEventListener('click', () => { setArmed(false); });
 /* Match how the robot reports a key: a single character is compared without
    case, a named key such as ArrowUp is compared as-is. */
 const eventKey = event => event.key.length === 1 ? event.key.toLowerCase() : event.key;
@@ -1622,11 +1706,11 @@ addEventListener('resize', () => {
 });
 
 addEventListener('keydown', event => {
-  if (!armed || ['INPUT','BUTTON'].includes(document.activeElement.tagName)) return;
+  if (!armed || ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
   const key = eventKey(event);
   // The stop key works in either mode; it is the keyboard's big red button.
   if (bindings.stop && key === bindings.stop) {
-    event.preventDefault(); $('#armConfirm').checked = false; setArmed(false); return;
+    event.preventDefault(); setArmed(false); return;
   }
   const control = controlForKey(key);
   if (control && !boundKeys().has(key)) {
@@ -1652,6 +1736,11 @@ loadControls();
 refreshStatus();
 refreshTelemetry();
 refreshAutonomous();
+$$('.mode-switch button').forEach(button => button.classList.toggle('active', button.dataset.mode === mode));
+$('#autoStatus').hidden = mode !== 'autonomous';
+$('#autoPanel').hidden = mode !== 'autonomous';
+$('#driverInputPanel').hidden = mode === 'autonomous';
+refreshPrograms();
 readPad();
 setInterval(refreshStatus, 500);
 setInterval(refreshTelemetry, 250);
