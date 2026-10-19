@@ -365,10 +365,10 @@ class AutonomousTurnTests(unittest.TestCase):
                 for step in range(4):
                     segment = [(p, power, rate) for p, power, rate in samples if p['step'] == step]
                     self.assertTrue(any(abs(power) > 0.4 for _, power, _ in segment), 'Speed recovers for every new target')
-                    approach = next(i for i, (p, _, _) in enumerate(segment) if p['turn_phase'] == 'approach')
+                    approach = next(i for i, (p, _, _) in enumerate(segment) if p['turn_phase'] != 'cruise')
                     self.assertLessEqual(abs(segment[approach][0]['error']), 30)
                     self.assertTrue(all(abs(power) <= 0.4 for _, power, _ in segment[approach:]))
-                    self.assertTrue(all(p['turn_phase'] == 'approach' for p, _, _ in segment[approach:]))
+                    self.assertTrue(all(p['turn_phase'] != 'cruise' for p, _, _ in segment[approach:]))
                     final, power, rate = segment[-1]
                     self.assertLessEqual(abs(final['error']), 2)
                     self.assertLessEqual(abs(rate), 5)
@@ -390,6 +390,52 @@ class AutonomousTurnTests(unittest.TestCase):
             self.run_plan(robot)
         self.assertFalse(robot.moving())
         self.assertLess(robot.now, 1.0)
+
+    def test_overshoot_locks_actual_motor_power_to_thirty_percent_until_next_turn(self):
+        for direction in (-1, 1):
+            with self.subTest(direction=direction):
+                robot = SimRobot(heading=170 * direction)
+                robot.LAG_SECONDS = 0.2
+                drive = MecanumDrive(robot, sensors=robot)
+                routine = sample_autonomous.MecanumAutonomous(robot, drive)
+                target = robot.value + 90 * direction  # Also crosses the ±180° heading boundary.
+                disturbances, samples = [], []
+                advance, move = robot.advance, routine.move
+
+                def disturb(seconds):
+                    advance(seconds)
+                    error = wrap180(target - robot.value)
+                    if not disturbances and abs(error) < 10:
+                        # Momentum carries it well past the target.
+                        robot.value, robot.rate_value = target + 20 * direction, 130 * direction
+                        disturbances.append('overshoot')
+                    elif (len(disturbances) == 1 and routine.progress['turn_phase'] == 'correction'
+                          and error * direction < 0 and abs(error) < 8):
+                        # A correction now undershoots: the cap must not reset.
+                        robot.value, robot.rate_value = target - 12 * direction, -100 * direction
+                        disturbances.append('undershoot')
+
+                def record(forward, strafe, turn, speed):
+                    result = move(forward, strafe, turn, speed=speed)
+                    samples.append((routine.progress['turn_phase'], dict(robot.outputs)))
+                    return result
+
+                robot.advance, routine.move = disturb, record
+                with patch.object(sample_autonomous, 'time', FakeTime(robot)):
+                    self.assertTrue(routine.turn_to(target, threading.Event()))
+                    self.assertEqual(disturbances, ['overshoot', 'undershoot'])
+                    first = next(i for i, (phase, _) in enumerate(samples) if phase == 'correction')
+                    for phase, wheels in samples[first:]:
+                        self.assertEqual(phase, 'correction')
+                        self.assertLessEqual(max(map(abs, wheels.values())), 0.30)
+                    self.assertLessEqual(abs(wrap180(robot.value - target)), 2)
+                    self.assertFalse(robot.moving())
+                    # Starting a genuinely new target restores the normal profile.
+                    robot.advance = advance
+                    before_next_turn = len(samples)
+                    self.assertTrue(routine.turn_to(target + 90 * direction, threading.Event()))
+                    self.assertTrue(any(max(map(abs, wheels.values())) > 0.4
+                                        for _, wheels in samples[before_next_turn:]))
 
     def test_stalled_turn_fails_and_does_not_advance(self):
         robot = SimRobot()

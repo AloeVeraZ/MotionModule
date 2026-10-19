@@ -12,13 +12,14 @@ from .errors import MotionModuleError
 
 MODES = {"teleop", "autonomous"}
 
-# Exact stock bundles from 174d6e6, 659fe36 and eab849f. Older installers kept
+# Exact stock bundles from 174d6e6, 659fe36, eab849f and ddc6f99. Older installers kept
 # robot folders unchanged across software updates, so the previous release's
 # example may be newer than the copy still on a robot. Never match by name.
 LEGACY_AUTONOMOUS_BUNDLES = {
     "b9054779c69ea10be0c0b90ff66b4fef6119a8888e0262980353f6fe5c7cd967",
     "2f6c86c5c42e574d719a65a13644d2c117f6f1c2bb1d7d0dad6c8591401e491f",
     "bd7ca9c9daa5bd60494697e029dcba1cb467aa334b53c7b5994bef8e08bec6a4",
+    "329bc61f86b4d06ccef8fbc005f1f10bb41f0aa5c934bc73c60ca47610077c7d",
 }
 
 

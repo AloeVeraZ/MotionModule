@@ -10,7 +10,8 @@ What it does: turn left to 90, 180, 270 and 360 degrees from the starting
 direction, settling within two degrees at each stop. It never translates.
 Change PLAN to make your own. Each turn cruises at up to 50% power, slows to
 at most 40% for the last 30 degrees, then tapers and settles before the next
-turn. This program has its own folder and does not import teleop code.
+turn. Crossing the target locks corrections to at most 30% until that turn
+finishes. This program has its own folder and does not import teleop code.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
 faces when Enable is pressed, so line the robot up first.
@@ -51,6 +52,7 @@ class MecanumAutonomous:
     DRIVE_SPEED = 0.35      # power limit while driving a step
     TURN_SPEED = 0.50       # cruise power; actual motor power, not a multiplier
     APPROACH_SPEED = 0.40   # maximum power near each target
+    OVERSHOOT_SPEED = 0.30  # correction cap after passing the target, latched
     APPROACH_DEGREES = 30.0
     SETTLED_RATE = 5.0      # degrees/second; passing the target is not settling
     TURN_TIMEOUT = 6.0      # seconds before failing a turn, never skipping it
@@ -110,6 +112,8 @@ class MecanumAutonomous:
         self.target = wrap180(target)
         settle = Settle(self.turn_heading)
         approaching = False
+        overshot = False
+        direction = None
         deadline = time.monotonic() + self.TURN_TIMEOUT
         while time.monotonic() < deadline:
             if stop.is_set():
@@ -118,16 +122,24 @@ class MecanumAutonomous:
             if heading is None:
                 raise RuntimeError("IMU heading lost; autonomous stopped")
             error = wrap180(self.target - heading)
+            if direction is None:
+                direction = 1 if error >= 0 else -1
+            # Once the target has been crossed, every subsequent correction
+            # stays at 30% or less, including an undershoot back across it.
+            # A new turn_to call is the only thing that restores cruise speed.
+            overshot = overshot or error * direction < 0
             rate_reader = getattr(self.sensors, "rate", None)
             rate = rate_reader() if callable(rate_reader) else None
             # Once slow, stay slow for this target, even after an overshoot.
             approaching = approaching or abs(error) <= self.APPROACH_DEGREES
             limit = self.APPROACH_SPEED if approaching else self.TURN_SPEED
+            if overshot:
+                limit = min(limit, self.OVERSHOOT_SPEED)
             limit = min(limit, self.turn_heading.max_power)
             still = rate is None or abs(rate) <= self.SETTLED_RATE
             self.progress = {**self.progress, "target": self.target,
                              "heading": heading, "error": error,
-                             "turn_phase": "approach" if approaching else "cruise",
+                             "turn_phase": "correction" if overshot else "approach" if approaching else "cruise",
                              "power_limit": limit}
             # A fast crossing must restart the settling timer. At rest inside
             # tolerance, send zero rather than another minimum-power nudge.

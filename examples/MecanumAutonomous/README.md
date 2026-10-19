@@ -16,9 +16,11 @@ still unavailable, and Disable interrupts the wait immediately.
 
 The turn plan is in `autonomous.py`. Disable stops all outputs immediately.
 Each turn uses up to 50% motor power, drops to a 40% cap for its last 30°,
-then tapers further as it reaches the target. The approach stays slow even
-after an overshoot. It waits within 2° at a low turn rate for 0.2 seconds
-before starting the next turn. `TURN_SPEED`, `APPROACH_SPEED` and
+then tapers further as it reaches the target. If it overshoots, correction
+power drops to a maximum of 30% for the rest of that turn, even if it crosses
+back and undershoots. Cruise speed returns only for the next target.
+It waits within 2° at a low turn rate for 0.2 seconds
+before starting the next turn. `TURN_SPEED`, `APPROACH_SPEED`, `OVERSHOOT_SPEED` and
 `APPROACH_DEGREES` in the routine control this profile; it does not change
 teleop's tuning. A turn that cannot settle still stops with a timeout.
 Software updates refresh unchanged copies of this bundled program and keep
