@@ -13,6 +13,23 @@ from .config import load_config
 from .controller import MotionModule
 
 
+def unload_project_modules(folder: Path | None) -> None:
+    """Forget imports from the previous robot folder before loading another."""
+
+    if folder is None:
+        return
+    root = folder.resolve()
+    for name, module in list(sys.modules.items()):
+        source = getattr(module, "__file__", None)
+        if source:
+            try:
+                if Path(source).resolve().is_relative_to(root):
+                    sys.modules.pop(name, None)
+            except (OSError, ValueError):
+                pass
+    sys.path[:] = [entry for entry in sys.path if entry != str(root)]
+
+
 def load_project(path: Path):
     if not path.is_file():
         raise FileNotFoundError(f"Robot project was not found: {path}")

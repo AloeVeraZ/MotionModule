@@ -335,7 +335,7 @@ class InstallerFinishTests(unittest.TestCase):
         # keeps the installer's default successful-install reboot enabled.
         self.assertIn("systemd-run", helper)
         self.assertIn('--uid="$OWNER"', helper)
-        self.assertIn('/usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" >/dev/null', helper)
+        self.assertIn('/usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" "${fresh_options[@]}" >/dev/null', helper)
         self.assertIn('main-mini|testing-mini|main-standard|testing-standard)', helper)
         self.assertNotIn('install "$REF" --no-reboot', helper)
         self.assertIn("/var/log/motionmodule-update.log", helper)
@@ -356,7 +356,9 @@ class InstallerFinishTests(unittest.TestCase):
         # Branch, named-variant and password rules share the same visudo check.
         rules = self.script[self.script.index('update_sudoers_temp="$(mktemp)"'):
                             self.script.index('visudo -cf "$update_sudoers_temp"')]
-        self.assertEqual(rules.count('>> "$update_sudoers_temp"'), 3)
+        self.assertEqual(rules.count('>> "$update_sudoers_temp"'), 5)
+        self.assertIn("motionmodule-update main-fresh", rules)
+        self.assertIn("motionmodule-update testing-fresh", rules)
         self.assertIn('for update_branch in main testing', rules)
         self.assertIn('for update_variant in standard mini', rules)
         self.assertIn("motionmodule-update password", rules)

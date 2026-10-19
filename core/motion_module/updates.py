@@ -203,6 +203,7 @@ def start_update(
     ref: str,
     *,
     variant: str | None = None,
+    fresh: bool = False,
     password: str | None = None,
     run=subprocess.run,
     helper: Path = UPDATE_HELPER,
@@ -241,7 +242,7 @@ def start_update(
         secret = password
     try:
         # The helper reads the password on stdin; empty means none is needed.
-        helper_ref = f"{ref}-{variant}" if variant is not None else ref
+        helper_ref = f"{ref}-fresh" if fresh else f"{ref}-{variant}" if variant is not None else ref
         result = run(["sudo", "-n", str(helper), helper_ref], input=f"{secret}\n" if secret else "",
                      capture_output=True, text=True, timeout=timeout)
     except (OSError, subprocess.SubprocessError) as error:
@@ -371,7 +372,8 @@ class UpdateChecker:
             self._checked_at = time.time()
             self._checking = False
 
-    def start_update(self, ref: str, password: str | None = None, variant: str | None = None) -> str:
+    def start_update(self, ref: str, password: str | None = None, variant: str | None = None,
+                     fresh: bool = False) -> str:
         with self._start_lock:
             now = self._clock()
             self._rejected = [moment for moment in self._rejected if now - moment < PASSWORD_WINDOW_SECONDS]
@@ -381,7 +383,8 @@ class UpdateChecker:
                 )
             try:
                 message = start_update(
-                    ref, password=password, variant=variant, run=self._run, helper=self._helper, askpass=self._askpass
+                    ref, password=password, variant=variant, fresh=fresh,
+                    run=self._run, helper=self._helper, askpass=self._askpass
                 )
             except PasswordRequired as refusal:
                 if refusal.rejected:

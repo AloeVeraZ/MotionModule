@@ -939,17 +939,9 @@ async function selectProgram(entry) {
   $('#programMessage').textContent = `Loading ${entry.name}…`;
   try {
     await jsonFetch('/api/programs/select', {method: 'POST', headers: apiHeaders, body: JSON.stringify({program: entry.id, mode})});
-    $('#selectedProgram').textContent = entry.name;
-    let attempts = 0;
-    const reconnect = async () => {
-      try {
-        const status = await jsonFetch(`/api/programs?mode=${mode}`);
-        if (status.active === entry.id && !status.loading) { location.reload(); return; }
-      } catch (_) { /* The service is restarting. */ }
-      if (++attempts < 60) setTimeout(reconnect, 1000);
-      else { $('#programMessage').textContent = 'The program is taking longer to load. Reload to reconnect.'; }
-    };
-    setTimeout(reconnect, 1200);
+    programLoading = false;
+    programActive = entry.id;
+    await Promise.all([refreshPrograms(), refreshStatus(), refreshAutonomous(), loadControls()]);
   } catch (error) {
     programLoading = false;
     $('#programMessage').textContent = error.message;
@@ -1197,6 +1189,7 @@ function handlePadKillButtons(pressed) {
 
 function readPad() {
   const pad = activePad();
+  if (pad && inputMode === 'touch') setInputMode('keys');
   renderInputSummary(pad);
   if (!pad) {
     replaceWith($('#axisList'), []);
@@ -1440,7 +1433,7 @@ function markDisconnected() {
 
 let refreshStatusPending = false;
 async function refreshStatus() {
-  if (refreshStatusPending) return;
+  if (refreshStatusPending || programLoading) return;
   refreshStatusPending = true;
   try {
     const data = await jsonFetch('/api/status');
@@ -1688,7 +1681,7 @@ const eventKey = event => event.key.length === 1 ? event.key.toLowerCase() : eve
 /* Touching the screen brings up the sticks; pressing a bound key on a
    keyboard brings the keys back. */
 addEventListener('pointerdown', event => {
-  if (inputMode === 'touch' || !['touch', 'pen'].includes(event.pointerType)) return;
+  if (inputMode === 'touch' || activePad() || !['touch', 'pen'].includes(event.pointerType)) return;
   setInputMode('touch');
   // The key under the finger is on its way out and must not start a hold.
   if (event.target?.closest?.('#keyGrid')) { event.preventDefault(); event.stopPropagation(); }
@@ -1697,7 +1690,7 @@ addEventListener('keydown', event => {
   if (inputMode !== 'keys' && boundKeys().has(eventKey(event))) setInputMode('keys');
 }, true);
 const touchFirst = typeof window.matchMedia === 'function' ? window.matchMedia('(pointer: coarse)') : null;
-touchFirst?.addEventListener?.('change', () => setInputMode(touchFirst.matches ? 'touch' : 'keys'));
+touchFirst?.addEventListener?.('change', () => setInputMode(!activePad() && touchFirst.matches ? 'touch' : 'keys'));
 // Turning the phone moves the sticks out from under the thumbs, so they let go.
 let viewportWidth = window.innerWidth;
 addEventListener('resize', () => {
@@ -1728,9 +1721,10 @@ addEventListener('keyup', event => {
   heldKeys.delete(key); paintKeys(); sendDrive();
 });
 addEventListener('blur',()=>setArmed(false)); addEventListener('pagehide',stopAll); document.addEventListener('visibilitychange',()=>{if(document.hidden)setArmed(false);});
-addEventListener('gamepaddisconnected',()=>{padIndex=null;setArmed(false);});
+addEventListener('gamepadconnected',()=>setInputMode('keys'));
+addEventListener('gamepaddisconnected',()=>{padIndex=null;setArmed(false);if(!activePad() && touchFirst?.matches)setInputMode('touch');});
 
-setInputMode(touchFirst && touchFirst.matches ? 'touch' : 'keys');
+setInputMode(!activePad() && touchFirst && touchFirst.matches ? 'touch' : 'keys');
 renderSticks();
 renderKeys();
 loadControls();

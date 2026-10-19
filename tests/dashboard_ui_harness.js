@@ -177,6 +177,7 @@ function browser(now = 1700000000000) {
       const failure = failures.get(url);
       if (failure instanceof Error) throw failure;
       if (failure) return {ok: false, status: failure.status, json: async () => ({error: failure.message, ...failure.data})};
+      if (url === '/api/programs/select') programData.active = JSON.parse(options.body).program;
       const data = url === '/api/status' ? currentStatus
         : url === '/api/drive/telemetry' ? currentTelemetry
         : url === '/api/diagnostics' ? {ok: true, checks: [{level: 'pass', title: 'Fan', detail: 'Healthy'}]}
@@ -432,8 +433,8 @@ async function run(scenario) {
     assert.equal(app.$('#robotState').querySelector('strong').textContent, 'DISABLED', 'The configured stop key works while Enable has focus');
   } else if (scenario === 'station-program-picker') {
     await app.$('#disableButton').fire('click');
-    const active = {id: 'MyRobot/Drive_tele', name: 'Drive_tele', mode: 'teleop'};
-    const other = {id: 'MyRobot/Practice_tele', name: 'Practice_tele', mode: 'teleop'};
+    const active = {id: 'teleop/Drive', name: 'Drive', mode: 'teleop'};
+    const other = {id: 'teleop/Practice', name: 'Practice', mode: 'teleop'};
     app.setPrograms({available: true, active: active.id, programs: [active, other]});
     await app.context.dashboard.refreshPrograms();
     assert.equal(app.$('#enableButton').disabled, false);
@@ -444,7 +445,7 @@ async function run(scenario) {
     await folders[1].fire('click');
     const selection = app.requests.find(r => r.url === '/api/programs/select');
     assert.deepEqual(selection.payload, {program: other.id, mode: 'teleop'});
-    assert.equal(app.$('#enableButton').disabled, true, 'Enable stays blocked during the restart');
+    assert.equal(app.$('#enableButton').disabled, false, 'Enable is ready as soon as the folder finishes loading');
     assert.equal(app.$('#programPicker').open, false);
     assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Selecting a folder never starts autonomous');
     assert.equal(app.$('#selectedProgram').textContent, other.name, 'One click updates the program name');
@@ -785,7 +786,8 @@ async function run(scenario) {
     await app.context.dashboard.sendDrive();
     await app.settle();
     assert.deepEqual(app.motion(app.driveRequests().at(-1).payload), {forward: 0.25, strafe: 0.25, rotate: 0});
-    assert.equal(app.$('#controllerSummary').textContent, 'Touch + gamepad');
+    assert.equal(app.$('#controllerSummary').textContent, 'Standard gamepad');
+    assert.equal(app.$('html').dataset.input, 'keys', 'A connected controller keeps the full console layout');
     assert.match(app.$('#keyLegend').textContent, /Controller: left stick strafes, right stick drives\./);
   } else if (scenario === 'update-password') {
     const line = {ref: 'testing', label: 'Testing line', current: true, action: 'Update now'};

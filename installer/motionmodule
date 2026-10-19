@@ -92,6 +92,10 @@ case "$command" in
         [ "$#" -ge 1 ] || fail "Usage: motionmodule install VERSION_OR_GIT_REF [--robot PROJECT]"
         ref="$1"
         shift
+        fresh_install=false
+        for option in "$@"; do
+            [ "$option" = --fresh ] && fresh_install=true
+        done
         printf '%s' "$ref" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$' || fail "Invalid branch, tag, or commit: $ref"
         # Each branch installs through its own bootstrap, so main and testing
         # can replace each other even after their install scripts drift apart.
@@ -104,7 +108,7 @@ case "$command" in
         fi
         # Snapshot with the current runtime before handing control to another
         # branch's installer. Older releases may not have preservation support.
-        if [ -x "$CURRENT_LINK/.venv/bin/python" ]; then
+        if [ "$fresh_install" != true ] && [ -x "$CURRENT_LINK/.venv/bin/python" ]; then
             "$(runtime_python)" -m motion_module.project_preservation \
                 "$ROBOT_DIR" "$BACKUP_DIR" "robot-code-before-install-$(date +%Y%m%d%H%M%S)-$$" \
                 --legacy-workspace "$PROJECT_DIR"

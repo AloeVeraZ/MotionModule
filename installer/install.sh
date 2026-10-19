@@ -9,6 +9,7 @@ REBOOT_SYSTEM=true
 ROBOT_PROJECT="${MOTIONMODULE_ROBOT_PROJECT:-Mecanum}"
 ROBOT_EXPLICIT=false
 MODULE_VARIANT="${MOTIONMODULE_VARIANT:-}"
+FRESH_INSTALL=false
 
 if [ -n "${MOTIONMODULE_ROBOT_PROJECT:-}" ]; then
     ROBOT_EXPLICIT=true
@@ -47,6 +48,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --no-reboot)
             REBOOT_SYSTEM=false
+            shift
+            ;;
+        --fresh)
+            FRESH_INSTALL=true
             shift
             ;;
         *)
@@ -90,6 +95,15 @@ PREVIOUS_LINK="$INSTALL_ROOT/previous"
 PROJECT_DIR="${MOTIONMODULE_PROJECT_DIR:-$HOME/MotionModule}"
 ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"
 CONFIG_DIR="${MOTIONMODULE_CONFIG_DIR:-$HOME/.config/motionmodule}"
+if [ "$FRESH_INSTALL" = true ]; then
+    # A reset may erase only the two default MotionModule state directories.
+    # NetworkManager profiles and hostname live elsewhere and stay untouched.
+    [ "$PROJECT_DIR" = "$HOME/MotionModule" ] && [ "$ROBOT_DIR" = "$PROJECT_DIR/robots" ] \
+        && [ "$CONFIG_DIR" = "$HOME/.config/motionmodule" ] \
+        || fail "Fresh install requires the default MotionModule workspace and config paths."
+    [ ! -L "$PROJECT_DIR" ] && [ ! -L "$CONFIG_DIR" ] \
+        || fail "Fresh install refuses symlinked workspace or config paths."
+fi
 CONFIG_FILE="$CONFIG_DIR/hardware.py"
 LEGACY_CONFIG_FILE="$CONFIG_DIR/config.toml"
 VARIANT_FILE="$CONFIG_DIR/variant"
@@ -222,6 +236,12 @@ python3 -m venv --system-site-packages "$release_dir/.venv"
     MOTIONMODULE_VARIANT=standard ./.venv/bin/python -m unittest discover -s tests -v
 )
 touch "$release_dir/.complete"
+
+if [ "$FRESH_INSTALL" = true ]; then
+    say "Resetting MotionModule robot programs and local configuration; preserving NetworkManager and hostname settings..."
+    sudo systemctl stop motionmodule.service
+    rm -rf -- "$PROJECT_DIR" "$CONFIG_DIR"
+fi
 
 say "Creating the persistent student workspace and robot projects..."
 mkdir -p "$PROJECT_DIR" "$ROBOT_DIR" "$CONFIG_DIR"
@@ -373,6 +393,8 @@ rm -f "$sudoers_temp"
 update_sudoers_temp="$(mktemp)"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update main\n' "$USER" > "$update_sudoers_temp"
 printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update testing\n' "$USER" >> "$update_sudoers_temp"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update main-fresh\n' "$USER" >> "$update_sudoers_temp"
+printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update testing-fresh\n' "$USER" >> "$update_sudoers_temp"
 for update_branch in main testing; do
     for update_variant in standard mini; do
         printf '%s ALL=(root) NOPASSWD: /usr/local/sbin/motionmodule-update %s-%s\n' "$USER" "$update_branch" "$update_variant" >> "$update_sudoers_temp"
@@ -581,7 +603,11 @@ done < <(remove_other_releases "$RELEASES_DIR" "$release_dir" "$keep_release")
 rm -f -- "$INSTALL_ROOT"/current.new.* "$INSTALL_ROOT"/current.restore.* "$PROJECT_DIR"/active.new.*
 rm -rf -- "$PROJECT_DIR/.uploads"
 rm -f -- "$CONFIG_DIR/terminal-access.json"
-say "Kept the robot's own files: $ROBOT_DIR, $PROJECT_DIR/backups, the active project, $CONFIG_FILE, and the Wi-Fi settings."
+if [ "$FRESH_INSTALL" = true ]; then
+    say "Fresh robot workspace created. Existing network profiles and hostname were kept."
+else
+    say "Kept the robot's own files: $ROBOT_DIR, $PROJECT_DIR/backups, the active project, $CONFIG_FILE, and the Wi-Fi settings."
+fi
 
 say "Running the automatic non-moving hardware check..."
 if ! /usr/local/bin/motionmodule doctor; then

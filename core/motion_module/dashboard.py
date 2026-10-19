@@ -338,6 +338,7 @@ def create_app(
     project_path: str | os.PathLike[str] | None = None,
     camera_auto_install: bool = False,
     recovery_error: str = "",
+    module_factory=None,
 ) -> Flask:
     app = Flask(
         __name__,
@@ -377,6 +378,8 @@ def create_app(
     firmware_lock = threading.Lock()
     updates = update_checker if update_checker is not None else UpdateChecker()
     app.config["UPDATE_CHECKER"] = updates
+    app.config["ACTIVE_MODULE"] = module
+    app.config["DASHBOARD_TELEMETRY"] = dashboard_telemetry
     # A test or the offline demo never wants a background pip install; the
     # real Pi dashboard (serve(), below) opts in explicitly.
     camera_manager = USBCameraManager(auto_install=camera_auto_install)
@@ -663,8 +666,15 @@ def create_app(
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
         body = request.get_json(silent=True)
         body = body if isinstance(body, dict) else {}
-        ref = str(body.get("ref", ""))
+        fresh = body.get("fresh") is True
+        if fresh and body.get("confirmed") is not True:
+            return jsonify({"ok": False, "error": "Confirm erasing the robot workspace first"}), 400
+        ref = installed_release()["ref"] if fresh else str(body.get("ref", ""))
+        if fresh and ref not in {"main", "testing"}:
+            return jsonify({"ok": False, "error": "The installed branch is unknown; fresh install is unavailable"}), 400
         variant = body.get("variant")
+        if fresh:
+            variant = None
         if variant is not None and (not isinstance(variant, str) or variant not in {"standard", "mini"}):
             return jsonify({"ok": False, "error": "Module variant must be standard or mini"}), 400
         # Sent only when sudo on this Pi asked for it; it goes to this update
@@ -678,6 +688,8 @@ def create_app(
             stop_outputs()
         try:
             options = {"variant": variant} if variant is not None and variant != module.config.variant else {}
+            if fresh:
+                options["fresh"] = True
             message = updates.start_update(ref, password=password, **options)
         except PasswordRequired as error:
             return jsonify({
@@ -803,15 +815,17 @@ def create_app(
             folder = Path(project_path).resolve().parent
             if folder.is_relative_to(workspace / "robots"):
                 active = folder.relative_to(workspace / "robots").as_posix()
-        return jsonify({"ok": True, "available": workspace is not None and restart_callback is not None,
+        return jsonify({"ok": True, "available": workspace is not None and (restart_callback is not None or module_factory is not None),
                         "programs": entries, "active": active, "mode": mode, "loading": selection_pending})
 
     @app.post("/api/programs/select")
     def select_program():
-        nonlocal selection_pending
+        nonlocal selection_pending, module, active_drive, mecanum_test_drive, project_test_drive
+        nonlocal dashboard_telemetry, autonomous, project_path, project_name, bench_channels
+        nonlocal config_path
         if not authorized():
             return jsonify({"ok": False, "error": "Invalid dashboard session"}), 403
-        if workspace is None or restart_callback is None:
+        if workspace is None or (restart_callback is None and module_factory is None):
             return jsonify({"ok": False, "error": "Program selection is available on the installed Pi runtime"}), 503
         if not deployment_lock.acquire(blocking=False):
             return jsonify({"ok": False, "error": "Another project operation is in progress"}), 409
@@ -824,15 +838,93 @@ def create_app(
                 selection_pending = True
                 stop_outputs()
             autonomous.stop()
-            with command_lock:
-                activate_project(folder, workspace / "active")
+            if module_factory is None:
+                # Embedded test/demo clients can still use the service restart.
+                with command_lock:
+                    activate_project(folder, workspace / "active")
+            else:
+                old_folder = Path(project_path).parent if project_path else None
+                old_module = module
+                previous_telemetry = dashboard_telemetry
+                with command_lock:
+                    close_telemetry = getattr(previous_telemetry, "close", None)
+                    if callable(close_telemetry):
+                        try:
+                            close_telemetry()
+                        except Exception:
+                            app.logger.exception("Previous program telemetry cleanup failed")
+                    old_module.close()
+                try:
+                    from .runner import unload_project_modules
+                    unload_project_modules(old_folder)
+                    replacement = module_factory(folder)
+                    new_drive, new_telemetry, failure = load_project_hooks(replacement, folder / "robot.py")
+                    if failure:
+                        raise MotionModuleError(failure)
+                    new_routine = load_autonomous_routine(replacement, new_drive, folder / "robot.py")
+                    activate_project(folder, workspace / "active")
+                except Exception as error:
+                    for resource in (locals().get("new_telemetry"), locals().get("new_drive")):
+                        close = getattr(resource, "close", None)
+                        if callable(close):
+                            try:
+                                close()
+                            except Exception:
+                                app.logger.exception("Program cleanup failed")
+                    if 'replacement' in locals():
+                        replacement.close()
+                    # Restore a safe, disabled previous program if loading the
+                    # new folder fails after releasing the GPIO pins.
+                    try:
+                        restored = module_factory(old_folder)
+                        restored_drive, restored_telemetry, restored_error = load_project_hooks(
+                            restored, old_folder / "robot.py" if old_folder else None)
+                        module = restored
+                        active_drive = restored_drive
+                        dashboard_telemetry = restored_telemetry
+                        project_test_drive = DriveTest(restored, project_path)
+                        mecanum_test_drive = MecanumTestDrive(restored)
+                        autonomous = AutonomousRunner(restored, None, halt_for_autonomous, restored_error)
+                        recovery.update(active=bool(restored_error), error=restored_error)
+                        app.config["ACTIVE_MODULE"] = restored
+                        app.config["DASHBOARD_TELEMETRY"] = restored_telemetry
+                    except Exception as restore_error:
+                        # Keep the dashboard available in simulation if the
+                        # previous hardware cannot be reopened.
+                        module = MotionModule(default_config(), gpio=MockGPIO())
+                        active_drive = RecoveryDrive(module, str(restore_error))
+                        dashboard_telemetry = None
+                        project_test_drive = DriveTest(module, project_path)
+                        mecanum_test_drive = MecanumTestDrive(module)
+                        autonomous = AutonomousRunner(module, None, halt_for_autonomous, str(restore_error))
+                        recovery.update(active=True, error=f"Program switch failed: {restore_error}")
+                        app.config["ACTIVE_MODULE"] = module
+                        app.config["DASHBOARD_TELEMETRY"] = None
+                    raise MotionModuleError(f"Could not load {folder.name}: {error}") from error
+                with command_lock:
+                    module = replacement
+                    active_drive = new_drive
+                    dashboard_telemetry = new_telemetry
+                    project_path = folder / "robot.py"
+                    project_name = folder.relative_to(workspace / "robots").as_posix()
+                    config_path = resolve_config_path(project=folder)
+                    mecanum_test_drive = MecanumTestDrive(replacement)
+                    project_test_drive = DriveTest(replacement, project_path)
+                    bench_channels = {item.channel for item in replacement.config.motors}
+                    autonomous = AutonomousRunner(replacement, new_routine, halt_for_autonomous)
+                    recovery.update(active=False, error="")
+                    app.config["ACTIVE_MODULE"] = replacement
+                    app.config["DASHBOARD_TELEMETRY"] = new_telemetry
+                    selection_pending = False
         except (MotionModuleError, OSError) as error:
             selection_pending = False
             return jsonify({"ok": False, "error": str(error)}), 400
         finally:
             deployment_lock.release()
-        restart_soon()
-        return jsonify({"ok": True, "restarting": True, "program": body["program"]}), 202
+        if module_factory is None:
+            restart_soon()
+            return jsonify({"ok": True, "restarting": True, "program": body["program"]}), 202
+        return jsonify({"ok": True, "program": body["program"]})
 
     def sample_files() -> list[tuple[str, bytes]]:
         """The Mecanum sample this release ships, as (Mecanum/path, contents)."""
@@ -1712,14 +1804,17 @@ def serve(
         project_path=project_path,
         camera_auto_install=True,
         recovery_error=recovery_error,
+        module_factory=lambda folder: MotionModule(load_config(project=folder)),
     )
     with ExitStack() as cleanup:
         # Register cleanup before binding the server. A bind failure or a
         # broken project close hook must not leak background workers.
-        for resource in (app.config.get("CAMERA_MANAGER"), app.config.get("UPDATE_CHECKER"), dashboard_telemetry):
+        for resource in (app.config.get("CAMERA_MANAGER"), app.config.get("UPDATE_CHECKER")):
             close = getattr(resource, "close", None)
             if callable(close):
                 cleanup.callback(close)
+        cleanup.callback(lambda: getattr(app.config.get("DASHBOARD_TELEMETRY", dashboard_telemetry), "close", lambda: None)())
+        cleanup.callback(lambda: getattr(app.config.get("ACTIVE_MODULE", module), "close", lambda: None)())
         cleanup.callback(app.config["STOP_OUTPUTS"])
         # Nginx is the only network-facing listener.
         server = make_server("127.0.0.1", 8080, app, threaded=True)

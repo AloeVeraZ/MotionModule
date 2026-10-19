@@ -42,15 +42,67 @@ class ProgramTests(unittest.TestCase):
         with self.assertRaises(MotionModuleError):
             list_programs(self.robots, "invalid")
 
-    def test_flat_projects_remain_available_for_the_modes_they_support(self):
+    def test_only_immediate_mode_program_folders_are_listed(self):
         legacy = self.robots / "Legacy"
         legacy.mkdir()
         (legacy / "robot.py").write_bytes(ROBOT)
-        self.assertIn("Legacy", [row["id"] for row in list_programs(self.robots, "teleop")])
-        self.assertNotIn("Legacy", [row["id"] for row in list_programs(self.robots, "autonomous")])
         (legacy / "autonomous.py").write_bytes(AUTO)
-        self.assertNotIn("Legacy", [row["id"] for row in list_programs(self.robots, "autonomous")])
-        self.assertIn("Legacy", [row["id"] for row in list_programs(self.robots, "teleop")])
+        (self.robots / "autonomous" / "loose.py").write_bytes(AUTO)
+        nested = self.robots / "teleop" / "wrapper" / "Nested"
+        nested.mkdir(parents=True)
+        (nested / "robot.py").write_bytes(ROBOT)
+        self.assertEqual([row["id"] for row in list_programs(self.robots, "teleop")], ["teleop/Mecanum"])
+        self.assertEqual([row["id"] for row in list_programs(self.robots, "autonomous")], ["autonomous/Mecanum"])
+        with self.assertRaises(MotionModuleError):
+            resolve_program(self.robots, "Legacy", "teleop")
+
+    def test_selection_reloads_program_without_restarting_dashboard(self):
+        (self.auto / "robot.py").write_bytes(AUTO)
+        module = MotionModule(default_config(), gpio=MockGPIO())
+        self.addCleanup(module.close)
+        replacements = []
+
+        def factory(_folder):
+            replacement = MotionModule(default_config(), gpio=MockGPIO())
+            replacements.append(replacement)
+            self.addCleanup(replacement.close)
+            return replacement
+
+        app = create_app(module, workspace_directory=self.workspace, project_path=self.tele / "robot.py",
+                         module_factory=factory)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        with patch("motion_module.dashboard.activate_project"):
+            response = client.post("/api/programs/select", headers=headers,
+                                   json={"program": "autonomous/Mecanum", "mode": "autonomous"})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertFalse(response.get_json().get("restarting", False))
+        self.assertEqual(client.get("/api/programs?mode=autonomous").get_json()["active"], "autonomous/Mecanum")
+        self.assertIs(app.config["ACTIVE_MODULE"], replacements[-1])
+        self.assertFalse(any(module.motor_values.values()))
+
+    def test_failed_live_switch_restores_previous_program_disabled(self):
+        (self.auto / "robot.py").write_bytes(AUTO)
+        module = MotionModule(default_config(), gpio=MockGPIO())
+        self.addCleanup(module.close)
+        replacements = []
+
+        def factory(_folder):
+            replacement = MotionModule(default_config(), gpio=MockGPIO())
+            replacements.append(replacement)
+            self.addCleanup(replacement.close)
+            return replacement
+
+        app = create_app(module, workspace_directory=self.workspace, project_path=self.auto / "robot.py",
+                         module_factory=factory)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        response = client.post("/api/programs/select", headers=headers,
+                               json={"program": "teleop/Mecanum", "mode": "teleop"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(client.get("/api/programs?mode=autonomous").get_json()["active"], "autonomous/Mecanum")
+        self.assertIs(app.config["ACTIVE_MODULE"], replacements[-1])
+        self.assertFalse(app.config["RECOVERY"]["active"])
 
     def test_default_install_has_only_mecanum_teleop_on_both_module_types(self):
         import os

@@ -72,12 +72,17 @@ def list_programs(robots: Path, mode: str) -> list[dict]:
     if not robots.is_dir():
         return []
     entries = []
-    root = robots.resolve()
-    for folder in program_folders(robots):
-        if program_mode(folder) != mode or not (folder / "robot.py").resolve().is_relative_to(root):
+    mode_root = robots / mode
+    if not mode_root.is_dir() or mode_root.is_symlink():
+        return []
+    root = mode_root.resolve()
+    for folder in sorted(mode_root.iterdir(), key=lambda item: item.name.casefold()):
+        # Only robots/<mode>/<name>/robot.py is a selectable program. Old flat
+        # projects, loose Python files and deeper nested folders are ignored.
+        if not folder.is_dir() or folder.is_symlink() or folder.name.startswith("."):
             continue
-        # A legacy bundle containing nested programs is a library, not a second program.
-        if program_folders(folder):
+        robot_file = folder / "robot.py"
+        if not robot_file.is_file() or robot_file.is_symlink() or not robot_file.resolve().is_relative_to(root):
             continue
         entries.append({"id": folder.relative_to(robots).as_posix(), "name": folder.name,
                         "project": folder.name, "mode": mode})

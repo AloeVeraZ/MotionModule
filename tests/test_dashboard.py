@@ -641,6 +641,22 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(limited.status_code, 429)
         self.assertIn("Wait", limited.get_json()["error"])
 
+    def test_fresh_install_uses_installed_branch_and_requires_confirmation(self):
+        checker = Mock()
+        checker.start_update.return_value = "Fresh install started"
+        app = create_app(self.module, MecanumDrive(self.module), self.network, update_checker=checker)
+        client = app.test_client()
+        headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+        with patch("motion_module.dashboard.installed_release", return_value={"ref": "testing"}):
+            refused = client.post("/api/updates", headers=headers, json={"fresh": True, "ref": "main"})
+            self.assertEqual(refused.status_code, 400)
+            self.assertEqual(checker.start_update.call_count, 0)
+            started = client.post("/api/updates", headers=headers,
+                                  json={"fresh": True, "confirmed": True, "ref": "main"})
+        self.assertEqual(started.status_code, 202)
+        checker.start_update.assert_called_once_with("testing", password=None, fresh=True)
+        self.assertTrue(self.module.stopped)
+
     def test_giga_firmware_status_and_install_are_guarded(self):
         status = self.client.get("/api/giga/firmware").get_json()
         self.assertTrue(status["ok"])

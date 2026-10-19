@@ -1595,6 +1595,11 @@ heading = imu.heading() if imu is not None else None
               is in here.</p>
             <pre class="logs" id="serviceLogs">Loading service log&hellip;</pre>
           </article>
+          <article class="card">
+            <div class="panel-head"><h2>Fresh install</h2></div>
+            <p class="lead">Erase robot programs and local MotionModule settings, then reinstall the current branch and run the installer checks. Network settings and the Pi hostname are kept.</p>
+            <div class="panel-body button-row"><button class="button danger" id="freshInstall" type="button">Fresh install current branch</button></div>
+          </article>
         <article class="card commands-card">
           <div class="panel-head">
             <h2>Useful commands</h2>
@@ -3541,7 +3546,8 @@ async function requestUpdate(line, password = '') {
   try {
     const answer = await jsonFetch('/api/updates', {
       method: 'POST', headers: apiHeaders,
-      body: JSON.stringify({ref: line.ref, variant: line.variant, ...(password ? {password} : {})}),
+      body: JSON.stringify({ref: line.ref, variant: line.variant,
+        ...(line.fresh ? {fresh: true, confirmed: true} : {}), ...(password ? {password} : {})}),
     });
     closeUpdatePassword();
     toast(answer.message || 'Update started. Keep the robot powered.');
@@ -3600,6 +3606,12 @@ $('#updatePasswordDialog')?.addEventListener('close', () => {
 });
 
 $('#refreshUpdates')?.addEventListener('click', () => refreshUpdates(true));
+$('#freshInstall')?.addEventListener('click', () => {
+  const ref = {{ install_ref | default('') | tojson }};
+  if (!['main', 'testing'].includes(ref)) { toast('The installed branch is unknown; fresh install is unavailable.', true); return; }
+  if (!confirm(`Fresh install the ${ref} branch? This permanently erases robot programs, backups, and MotionModule local settings. Network settings and the Pi hostname stay in place. The Pi will reboot after checks finish.`)) return;
+  requestUpdate({ref, fresh: true, action: 'Fresh install'});
+});
 
 /* ------------------------------------------------------------ USB list */
 

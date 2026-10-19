@@ -31,7 +31,12 @@ fail() { printf '[MotionModule ERROR] %s\n' "$*" >&2; exit 2; }
 
 REF="${1:-}"
 variant_options=()
+fresh_options=()
 case "$REF" in
+    main-fresh|testing-fresh)
+        fresh_options=(--fresh)
+        REF="${REF%-fresh}"
+        ;;
     main-mini|testing-mini|main-standard|testing-standard)
         variant_options=(--variant "${REF##*-}")
         REF="${REF%-*}"
@@ -115,7 +120,7 @@ if ! systemd-run \
     --property=StandardOutput=append:"$LOG" \
     --property=StandardError=append:"$LOG" \
     --property=TimeoutStartSec=infinity \
-    /usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" >/dev/null; then
+    /usr/local/bin/motionmodule install "$REF" "${variant_options[@]}" "${fresh_options[@]}" >/dev/null; then
     rm -rf -- "$SECRET_DIR"
     fail "Could not start the update."
 fi
