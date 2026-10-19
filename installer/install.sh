@@ -269,7 +269,7 @@ for old_robot_file in "$PROJECT_DIR"/*/robot.py; do
     fi
 done
 
-# One shared four-wheel teleop works on either installed module variant.
+# Install independent four-wheel teleop and gyro autonomous samples.
 "$release_dir/.venv/bin/python" -m motion_module.programs \
     "$ROBOT_DIR" "$PROJECT_DIR/backups" "$release_dir/examples/Mecanum" \
     --previous-examples "$CURRENT_LINK/examples"

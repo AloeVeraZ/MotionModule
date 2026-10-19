@@ -122,10 +122,12 @@ MyRobot/
 ├── robot.py
 ├── hardware.py
 ├── sensors.py
-├── autonomous.py
 ├── dashboard.py
 └── any_other_python_files.py
 ```
+
+The installer also supplies an independent `robots/autonomous/Mecanum/`
+folder with a gyro-guided routine that turns through four 90° steps.
 
 Edit the local folder in any editor. `hardware.py` owns this robot's pins,
 inversion, PWM, watchdog, and servo board list. `robot.py` defines

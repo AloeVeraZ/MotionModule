@@ -1,8 +1,6 @@
-"""Optional autonomous routine for the Mecanum sample: four IMU-guided turns.
+"""Independent Mecanum autonomous routine: four IMU-guided turns.
 
-This file is optional. Delete it and the robot still drives; the Driver
-Station explains that no routine is loaded. Choose Autonomous, select this program folder,
-then press Enable to run what is written here.
+Choose Autonomous, select this Mecanum folder, then press Enable to run it.
 
 MotionModule calls `create_autonomous(module, drive)` once at startup, then
 calls `run(stop)` on the object it returns each time the operator starts
@@ -11,8 +9,8 @@ autonomous.
 What it does: turn left to 90, 180, 270 and 360 degrees from the starting
 direction, settling within two degrees at each stop. It never translates.
 Change PLAN to make your own. The IMU heading loop (see
-motion_module/heading.py) and shares its tuning, HEADING in robot.py, with
-teleop heading hold.
+motion_module/heading.py) uses the same default controller as teleop heading
+hold. This program has its own folder and does not import teleop code.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
 faces when Enable is pressed, so line the robot up first.
@@ -56,9 +54,9 @@ class MecanumAutonomous:
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
-        # sensors.py, created by robot.py. None if the robot has no sensors.
+        # The factory below provides the Pi IMU. None if it is unavailable.
         self.sensors = getattr(drive, "sensors", None)
-        # The same tuning as the Driver Station's snap turns (robot.py).
+        # The same heading controller used for Driver Station snap turns.
         self.heading = getattr(drive, "heading", None) or HeadingController()
         # move() sets the wheels with no driver assist in the way.
         self.move = getattr(drive, "move", drive.drive)
@@ -170,9 +168,8 @@ class MecanumAutonomous:
 def create_autonomous(module, drive):
     """Required entry point. Return anything with run(stop)."""
 
-    # Upgrade support: older owner-edited Mecanum projects may have neither
-    # sensors nor a raw move() method. Keep their teleop code and use the
-    # confirmed channel mixer for this bundled routine only.
+    # This separate program receives an idle drive from robot.py. Build its
+    # own confirmed four-wheel mixer and Pi gyro; no teleop folder is loaded.
     if not callable(getattr(drive, "move", None)) or getattr(drive, "sensors", None) is None:
         from types import SimpleNamespace
         from motion_module.imu import IMUConfig

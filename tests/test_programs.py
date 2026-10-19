@@ -104,15 +104,18 @@ class ProgramTests(unittest.TestCase):
         self.assertIs(app.config["ACTIVE_MODULE"], replacements[-1])
         self.assertFalse(app.config["RECOVERY"]["active"])
 
-    def test_default_install_has_only_mecanum_teleop_on_both_module_types(self):
+    def test_default_install_has_mecanum_teleop_and_gyro_autonomous_on_both_module_types(self):
         import os
         sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
         for variant in ("standard", "mini"):
             library = self.workspace / variant / "robots"
             target = initialize_library(library, self.workspace / variant / "backups", sample)
             self.assertEqual([row["name"] for row in list_programs(library, "teleop")], ["Mecanum"])
-            self.assertEqual(list_programs(library, "autonomous"), [])
+            self.assertEqual([row["id"] for row in list_programs(library, "autonomous")],
+                             ["autonomous/Mecanum"])
+            auto_target = library / "autonomous" / "Mecanum"
             _check_python(target, strict=True)
+            _check_python(auto_target, strict=True, mode="autonomous")
             from motion_module.config import load_config
             with patch.dict(os.environ, {"MOTIONMODULE_VARIANT": variant}):
                 with MotionModule(load_config(project=target), gpio=MockGPIO()) as module:
@@ -121,6 +124,13 @@ class ProgramTests(unittest.TestCase):
                     self.assertTrue(any(module.motor_values.values()))
                     self.assertTrue(all(power == 0 for channel, power in module.motor_values.items() if channel > 4))
                     self.assertIsNone(load_autonomous_routine(module, drive, target / "robot.py"))
+                with MotionModule(load_config(project=auto_target), gpio=MockGPIO()) as module:
+                    auto_drive = load_drive(module, auto_target / "robot.py")
+                    routine = load_autonomous_routine(module, auto_drive, auto_target / "robot.py")
+                    self.assertEqual(routine.progress["steps"],
+                                     [["turn", 90], ["turn", 180], ["turn", 270], ["turn", 360]])
+                    self.assertFalse(routine.ready())
+                    self.assertFalse(any(module.motor_values.values()))
 
     def test_legacy_mecanum_class_is_valid_and_loads_without_a_factory(self):
         (self.tele / "robot.py").write_text("class MecanumDrive:\n    def __init__(self, module): pass\n    def drive(self, *args): return {}\n    def stop(self): pass\n", encoding="utf-8")
@@ -152,8 +162,17 @@ class ProgramTests(unittest.TestCase):
         backups = self.workspace / "old" / "backups"
         initialize_library(library, backups, sample, previous)
         self.assertEqual([row["id"] for row in list_programs(library, "teleop")], ["teleop/Mecanum"])
-        self.assertEqual(list_programs(library, "autonomous"), [])
+        self.assertEqual([row["id"] for row in list_programs(library, "autonomous")],
+                         ["autonomous/Mecanum"])
         self.assertEqual(len(list(backups.iterdir())), 2)
+
+    def test_install_preserves_an_edited_autonomous_program(self):
+        sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        auto = self.robots / "autonomous" / "Mecanum"
+        (auto / "robot.py").write_text("def run(module, stop):\n    pass\n", encoding="utf-8")
+        initialize_library(self.robots, self.workspace / "backups", sample)
+        self.assertEqual((auto / "robot.py").read_text(encoding="utf-8"),
+                         "def run(module, stop):\n    pass\n")
 
     def test_mode_groups_keep_same_named_programs_separate(self):
         tele = list_programs(self.robots, "teleop")

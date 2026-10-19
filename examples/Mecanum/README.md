@@ -1,6 +1,6 @@
 # Mecanum sample robot
 
-Six small Python files make the complete sample. Only one is required.
+Five small Python files make the teleop sample. Only one is required.
 
 | File | What it does | Required? |
 | --- | --- | --- |
@@ -8,7 +8,6 @@ Six small Python files make the complete sample. Only one is required.
 | `test.py` | Debug Drive Test motor/servo mapping | No — without it, the same built-in Mecanum test runs |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
 | `sensors.py` | MPU6500 read directly by the Pi | Included; missing hardware is shown offline |
-| `autonomous.py` | The routine the robot runs by itself | No — delete it and there is no autonomous mode |
 | `dashboard.py` | Driver Station cameras, sensors, keys, and sticks | No — delete it without affecting driving |
 
 ## Try it
@@ -90,9 +89,10 @@ by the default **Debug → Drive Test**. Forward, strafe, rotation, and combined
 therefore have one implementation. `hardware.py` still supplies the names,
 locked pins, and per-motor polarity; no extra inversion is applied in `robot.py`.
 
-Mecanum is the only bundled robot program, and it is teleop only. The same
-four-wheel Python code runs on MotionModule and MotionModule Mini. The installed
-module type controls available spare channels without changing the wheel wiring.
+The installer bundles two independent Mecanum folders: one teleop and one
+autonomous. Both use channels 1–4 on MotionModule and MotionModule Mini. The
+installed module type controls available spare channels without changing the
+wheel wiring.
 
 ```text
 robots/
@@ -104,15 +104,16 @@ robots/
       sensors.py
       test.py
   autonomous/
-    YourProgram/    # your own separate autonomous robot.py and supporting files
+    Mecanum/
+      robot.py
+      autonomous.py
 ```
 
 Choose Teleoperated and click Mecanum once in the program picker. The selected
-folder's name appears in Robot control; Enable runs it. Autonomous lists only
-separate autonomous folders. No autonomous routine is supplied. An autonomous
-program can define `run(module, stop)` directly in its own `robot.py`, without a
-teleop `create_drive()` factory. Folder suffixes `_tele` and `_auto` continue to
-identify older separate programs.
+folder's name appears in Robot control; Enable runs it. Choose Autonomous to
+select the separate Mecanum gyro-turn program. An autonomous program can also
+define `run(module, stop)` directly in its own `robot.py`, without a teleop
+`create_drive()` factory.
 
 ## Customize Drive Test
 
@@ -129,20 +130,11 @@ The full Driver Station's `robot.py` behavior is independent of this file.
 
 ## Autonomous programs
 
-Autonomous programs are separate from this teleop sample. Create
-`robots/autonomous/YourProgram/robot.py` with `run(module, stop)` and check
-`stop.is_set()` during every loop. Keep that program's hardware, dashboard and
-sensor files beside it. Choose Autonomous, click its folder once, then Enable.
-Disabling stops outputs and signals the routine to finish. No autonomous program
-is installed by default.
-
-## Autonomous programs
-
-No autonomous program is bundled. Put your own independent program in
-`robots/autonomous/YourProgram/robot.py`. Define `run(module, stop)` or
-`create_autonomous(module, drive)` there and keep its supporting files beside it.
-The Autonomous picker shows only autonomous folders. Click one once to select
-it, then Enable to run. Teleop folders never appear in that picker.
+The bundled `robots/autonomous/Mecanum/` program turns left to 90°, 180°, 270°
+and 360° from its heading at Enable. It uses the Pi MPU6500 and refuses to move
+if the IMU is unavailable. Edit its `autonomous.py` plan or add your own folder
+under `robots/autonomous/YourProgram/`. Disable stops outputs and signals the
+routine to finish. The Autonomous picker shows only autonomous folders.
 
 ## Full Driver Station: cameras, IMU, and sensors
 

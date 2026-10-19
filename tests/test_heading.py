@@ -7,6 +7,7 @@ tests show the loop's logic and direction are right. They do not tune it:
 gains for the real robot still have to be checked on the floor.
 """
 
+import importlib.util
 import sys
 import threading
 import unittest
@@ -19,8 +20,10 @@ PROJECT_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
 if str(PROJECT_DIR) not in sys.path:
     sys.path.insert(0, str(PROJECT_DIR))
 
-sys.path.insert(0, str(Path(__file__).parent / "fixtures"))
-import mecanum_autonomous as sample_autonomous  # noqa: E402
+AUTONOMOUS_FILE = PROJECT_DIR.parent / "MecanumAutonomous" / "autonomous.py"
+spec = importlib.util.spec_from_file_location("sample_autonomous", AUTONOMOUS_FILE)
+sample_autonomous = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(sample_autonomous)
 from robot import HEADING, MecanumDrive  # noqa: E402
 
 

@@ -259,8 +259,9 @@ folders still load (0.12.1 and later) and read the MPU6500, with a warning in
 the service log; replace them with `IMUConfig(...)` when you next edit them. Arduino expansion uses declared
 inputs and does not load Pi-side IMU drivers.
 
-The sample shares this single reader between robot.py, autonomous.py and
-dashboard.py. No other sensor is predeclared.
+The teleop sample shares its Pi IMU reader between `robot.py` and
+`dashboard.py`. The separate Mecanum autonomous folder opens the same Pi IMU
+when selected. No other sensor is predeclared.
 
 ### Heading control (`motion_module.heading`)
 

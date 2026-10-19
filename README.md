@@ -196,7 +196,7 @@ Do not put `sudo` before that command. The installer:
 
 Fresh installs select Mecanum with teleop and the IMU autonomous routine ready
 to use. Autonomous turns in place through 90°, 180°, 270°, and back to the
-starting direction; it only moves after you Enable and press Start. Debug
+starting direction; it only moves after you press Enable. Debug
 Overview reports IMU activity as 1/1 or 0/1 responding. The Pi 5 fan uses
 approximately 75% PWM at 47 °C and 100% at 50 °C after installation and reboot.
 
@@ -257,8 +257,11 @@ The Driver Station runs the selected folder's own `robot.py`. Choose Teleoperate
 or Autonomous, open **Choose program folder**, and click a program once. Folders in `robots/teleop/` appear in Teleop; separate folders in
 `robots/autonomous/` appear in Autonomous. Press
 **Enable** to drive or start the selected autonomous routine; **Disable** stops it.
-Only `teleop/Mecanum` is bundled. Its four-wheel code supports both MotionModule
-and MotionModule Mini. No autonomous program is bundled. Existing flat robot folders remain supported.
+The installer includes `teleop/Mecanum` and `autonomous/Mecanum` as separate
+folders. Both use the same four motor channels on MotionModule and MotionModule
+Mini. The autonomous routine uses the Pi gyroscope to turn to 90°, 180°, 270°
+and 360° from its starting heading. Existing flat robot folders remain supported
+outside the Driver Station picker.
 
 The sample's `robot.py` defines both keyboard and gamepad inputs: W/S drive,
 A/D strafe, Q/E turn, Space stops, and the controller sticks drive and turn.

@@ -74,10 +74,11 @@ class MiniTests(unittest.TestCase):
             self.assertEqual(header[pin]['category'], 'unused')
         self.assertIn('MPU6500', header[11]['role'])
 
-    def test_only_one_teleop_sample_is_shipped(self):
+    def test_separate_mecanum_teleop_and_autonomous_samples_are_shipped(self):
         samples = [folder.name for folder in (ROOT / 'examples').iterdir() if folder.is_dir() and (folder / 'robot.py').is_file()]
-        self.assertEqual(samples, ['Mecanum'])
+        self.assertEqual(samples, ['Mecanum', 'MecanumAutonomous'])
         self.assertFalse((ROOT / 'examples/Mecanum/autonomous.py').exists())
+        self.assertTrue((ROOT / 'examples/MecanumAutonomous/autonomous.py').is_file())
 
     def test_switching_either_mecanum_project_restores_full_ports_and_debug_wiring(self):
         for name in ('Mecanum',):
