@@ -198,7 +198,17 @@ class MecanumSensorTests(unittest.TestCase):
             self.assertIs(routine.sensors, sensors)
             self.assertFalse(any(module.snapshot()['motors'].values()))
             result = routine.move(0, 0, 0.3, speed=1)
-            self.assertEqual(result['outputs'], channel_mix(0, 0, 0.3))
+            self.assertEqual(result['outputs'], channel_mix(0, 0, -0.3))
+            # Verify the complete path to PWM, including configured inversion.
+            for power in (0.4, 0.12, -0.08):
+                routine.move(0, 0, power, speed=1)
+                expected = channel_mix(0, 0, -power)
+                for motor in module.config.motors[:4]:
+                    electrical = expected[motor.channel] * (-1 if motor.inverted else 1)
+                    active = motor.forward_gpio if electrical > 0 else motor.reverse_gpio
+                    inactive = motor.reverse_gpio if electrical > 0 else motor.forward_gpio
+                    self.assertAlmostEqual(module.gpio.values[active], abs(power))
+                    self.assertEqual(module.gpio.values[inactive], 0)
             routine.drive.stop()
             self.assertFalse(any(module.snapshot()['motors'].values()))
 

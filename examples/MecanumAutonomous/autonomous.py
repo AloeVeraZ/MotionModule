@@ -7,10 +7,10 @@ calls `run(stop)` on the object it returns each time the operator starts
 autonomous.
 
 What it does: turn left to 90, 180, 270 and 360 degrees from the starting
-heading, then end. Each turn cruises, progressively slows over the last 45
+heading, then end. Each turn cruises, progressively slows over the last 35
 degrees, and latches an even slower recovery rate if it overshoots. Cruise
 returns only for the next marker. Reverse as needed and stay within ±3 degrees
-at a low measured turn rate for 0.3 seconds before advancing. Crossing a marker is not enough.
+at a low measured turn rate for 0.2 seconds before advancing. Crossing a marker is not enough.
 It never translates. Change PLAN to make your own. This program has its own
 folder and does not import teleop code.
 
@@ -41,6 +41,11 @@ PLAN = [
     ("turn", 90), ("turn", 180), ("turn", 270), ("turn", 360),
 ]
 
+# Measured on the reference robot: positive mixer rotation DECREASES IMU
+# heading. Convert heading feedback to that motor convention here, without
+# changing the owner's verified manual controls, motor inversion, or wiring.
+IMU_TO_MIXER_SIGN = -1.0
+
 
 class MecanumAutonomous:
     """Runs PLAN, steering every step by the IMU."""
@@ -51,12 +56,12 @@ class MecanumAutonomous:
     duration_seconds = 90.0
 
     DRIVE_SPEED = 0.35      # power limit while driving a step
-    TURN_SPEED = 0.40       # actual motor power, not a multiplier
+    TURN_SPEED = 0.85       # actual motor power, not a multiplier
     APPROACH_SPEED = 0.30   # maximum power near each target
     CORRECTION_SPEED = 0.28 # lower power cap after overshoot, in either direction
-    APPROACH_DEGREES = 45.0
-    APPROACH_RATE = 60.0    # degrees/second at the start of the approach
-    FINAL_APPROACH_RATE = 20.0  # taper to this as the remaining angle shrinks
+    APPROACH_DEGREES = 35.0
+    APPROACH_RATE = 120.0   # degrees/second at the start of the approach
+    FINAL_APPROACH_RATE = 40.0  # taper to this as the remaining angle shrinks
     CORRECTION_RATE = 12.0  # stay this slow after overshoot, even if undershooting
     TURN_TIMEOUT = 20.0    # allow time for slow recovery; never skip a marker
     LOOP_SECONDS = 0.02     # 50 updates a second
@@ -69,7 +74,8 @@ class MecanumAutonomous:
         self.sensors = getattr(drive, "sensors", None)
         self.heading = getattr(drive, "heading", None) or HeadingController()
         # Dedicated PID state and tuning; no changes to TeleOp heading assist.
-        self.turn_heading = TurnPID(max_power=self.TURN_SPEED, integral_power_limit=self.APPROACH_SPEED)
+        self.turn_heading = TurnPID(kp=0.026, max_power=self.TURN_SPEED, integral_power_limit=self.APPROACH_SPEED,
+                                    settle_seconds=0.2)
         # move() sets the wheels with no driver assist in the way.
         self.move = getattr(drive, "move", drive.drive)
         self.target = 0.0
@@ -239,8 +245,12 @@ def create_autonomous(module, drive):
 
         mixer = MecanumTestDrive(module)
         imu = module.imu
+
+        def heading_move(forward, strafe, rotate, speed=1.0):
+            return mixer.drive(forward, strafe, IMU_TO_MIXER_SIGN * rotate, speed=speed)
+
         drive = SimpleNamespace(
-            drive=mixer.drive, move=mixer.drive, stop=mixer.stop,
+            drive=heading_move, move=heading_move, stop=mixer.stop,
             sensors=imu, heading=HeadingController(),
         )
     return MecanumAutonomous(module, drive)

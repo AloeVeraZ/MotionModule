@@ -339,6 +339,30 @@ class FakeTime:
 
 
 class AutonomousTurnTests(unittest.TestCase):
+    def test_stock_factory_matches_measured_negative_mixer_to_gyro_direction(self):
+        from motion_module.config import default_config
+
+        class ReferenceRobot(SimRobot):
+            config = default_config()
+
+            def set_motors(self, outputs):
+                names = ('front_left', 'rear_left', 'front_right', 'rear_right')
+                super().set_motors({names[channel - 1]: power for channel, power in outputs.items()})
+
+            def turn(self):
+                # Real measurement: mixer +0.4 produced negative IMU rate.
+                return -super().turn()
+
+        robot = ReferenceRobot(heading=170)
+        robot.imu = robot
+        routine = sample_autonomous.create_autonomous(robot, object())
+        with patch.object(sample_autonomous, 'time', FakeTime(robot)):
+            routine.run(threading.Event())
+        self.assertEqual(routine.progress['completed'], 4)
+        self.assertGreater(robot.value, 170 + 350)
+        self.assertLessEqual(abs(wrap180(robot.value - 170)), 3)
+        self.assertFalse(robot.moving())
+
     def run_plan(self, robot, stop=None):
         drive = MecanumDrive(robot, sensors=robot)
         routine = sample_autonomous.MecanumAutonomous(robot, drive)
@@ -431,7 +455,8 @@ class AutonomousTurnTests(unittest.TestCase):
                     # Every sample in the final dwell is in tolerance and at
                     # rest; a quick pass through a marker cannot advance PLAN.
                     dwell = [s for s in segment if s[0] >= when - routine.turn_heading.settle_seconds]
-                    self.assertGreaterEqual(len(dwell), 14)
+                    self.assertGreaterEqual(len(dwell),
+                                            round(routine.turn_heading.settle_seconds / routine.LOOP_SECONDS) - 1)
                     self.assertTrue(all(abs(p['error']) <= 3 and power == 0
                                         for _, p, power, _ in dwell))
                 self.assertFalse(robot.moving())
