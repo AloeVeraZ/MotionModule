@@ -15,9 +15,9 @@ stopped for up to five seconds. It stops with an explanation if heading is
 still unavailable, and Disable interrupts the wait immediately.
 
 The turn plan is in `autonomous.py`. Disable stops all outputs immediately.
-Each turn cruises at up to 85% motor power. Within the last 35°, power is
-capped at 30% and the requested turn rate progressively falls from 120°/s to
-40°/s near the marker. That approach rate can only decrease for this target.
+Each turn cruises at up to 100% motor power. Within the last 25°, power is
+capped at 60% and the requested turn rate progressively falls from 200°/s to
+80°/s near the marker. That approach rate can only decrease for this target.
 After overshoot, recovery uses a still lower 12°/s target and a 28% power cap,
 latched for the rest of that turn even if it undershoots back across the marker.
 Only a new marker restores cruise speed. PID brakes and reverses as needed;
@@ -29,9 +29,9 @@ The same correction and settling happens at 360°, then all outputs stop and
 the routine ends.
 
 `TurnPID` in `core/motion_module/heading.py` supplies the autonomous gains
-(`kp=0.026`, `ki=0.006`, `kd=0.004` for this program). On approach and recovery, P requests
+(`kp=0.065`, `ki=0.006`, `kd=0.0035`, `derivative_seconds=0.01` for this program). On approach and recovery, P requests
 a bounded turn rate, D follows the measured rate, and I supplies torque to
-overcome friction. The integral has a 30% power bound and protection against
+overcome friction. The integral has a 60% power bound and protection against
 windup; it resets
 for every target and when crossing or entering tolerance. The derivative uses
 filtered changes in heading, including across ±180°, so a noisy gyro-rate
@@ -53,7 +53,9 @@ wiring unchanged. Custom drives supplied to `MecanumAutonomous` must accept
 positive rotation as increasing heading. The old simulation assumed that
 relationship already held for the stock mixer, which hid the feedback error.
 
-On-robot validation on 2026-10-19 completed all four markers in about 5 seconds,
-ending 2.34° from the final target with all motors stopped. The earlier slower
-profile took about 9 seconds. Battery charge and floor traction affect these
-measurements; they are not a guaranteed completion time.
+On-robot tuning on 2026-10-19 completed all four markers in 3.4–3.7 seconds
+across five runs. Every accepted marker was within 2.4°, and final resting
+errors were within 1.1°. Temporary overshoot reached about 5.7° before slow
+correction; acceptance still requires ±3° and low rotation rate for 0.2 seconds.
+More aggressive tuning increased overshoot and completion time. Battery charge
+and floor traction affect these measurements; they are not guaranteed times.

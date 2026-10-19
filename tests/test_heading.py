@@ -439,7 +439,7 @@ class AutonomousTurnTests(unittest.TestCase):
                     approach = next(i for i, (_, p, _, _) in enumerate(segment)
                                     if p['turn_phase'] != 'cruise')
                     self.assertLessEqual(abs(segment[approach][1]['error']), routine.APPROACH_DEGREES)
-                    self.assertTrue(all(abs(power) <= 0.3 for _, _, power, _ in segment[approach:]))
+                    self.assertTrue(all(abs(power) <= routine.APPROACH_SPEED for _, _, power, _ in segment[approach:]))
                     rates = [p['rate_limit'] for _, p, _, _ in segment[approach:]]
                     self.assertTrue(all(rate is not None for rate in rates))
                     self.assertTrue(all(later <= earlier for earlier, later in zip(rates, rates[1:])),
