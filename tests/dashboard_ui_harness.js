@@ -293,14 +293,13 @@ async function run(scenario) {
     assert.deepEqual(cards.map(card => card.dataset.driver), Array.from({length: capacity / 2}, (_, index) => index + 1));
     assert.equal(app.$('#motorTests').children.length, capacity);
     vm.runInContext(`renderUpdates(${JSON.stringify({module_variant: capacity === 4 ? 'mini' : 'standard', module_name: capacity === 4 ? 'MotionModule Mini' : 'MotionModule', installed: {ref:'testing'}, lines:[], job:{state:'idle', log:[]}})})`, app.context);
-    assert.match(app.$('#installedModuleLine').textContent, new RegExp(`${capacity} motors.*${capacity / 2} driver boards`));
+    const installedLabel = capacity === 4 ? 'MotionModule Mini' : 'MotionModule';
+    assert.equal(app.$('#installedModuleLine').textContent, `Installed: ${installedLabel} · testing branch`);
     const miniChoice = app.$('[data-module-variant="mini"]');
     const fullChoice = app.$('[data-module-variant="standard"]');
     await miniChoice.fire('click');
     assert.equal(miniChoice.attrs['aria-pressed'], 'true');
-    assert(miniChoice.classList.contains('primary'));
-    assert.match(app.$('#moduleInstallHint').textContent, /Mini.*4 motors/);
-    assert.equal(app.$('[data-installed-variant="mini"]').hidden, capacity !== 4, 'Choosing a target does not change the installed module');
+    assert.equal(app.$('#installedModuleLine').textContent, `Installed: ${installedLabel} · testing branch`, 'Choosing a target does not change the installed module');
     assert.equal(fullChoice.attrs['aria-pressed'], 'false');
     await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
     await app.settle();
@@ -309,10 +308,30 @@ async function run(scenario) {
     await fullChoice.fire('click');
     assert.equal(fullChoice.attrs['aria-pressed'], 'true');
     assert.equal(miniChoice.attrs['aria-pressed'], 'false');
-    assert.match(app.$('#moduleInstallHint').textContent, /8 motors.*4 driver boards/);
     await app.context.dashboard.installUpdate({ref: 'testing', label: 'Testing line', current: true});
     assert.deepEqual(app.requests.filter(item => item.url === '/api/updates' && item.method === 'POST').at(-1).payload,
       {ref: 'testing', variant: 'standard'});
+  } else if (scenario === 'update-availability') {
+    const line = {ref: 'testing', label: 'Testing line', current: true, status: 'up-to-date', latest: 'abc1234', installed: 'abc1234', action: 'Update now'};
+    const data = {module_variant: 'standard', installed: {ref: 'testing'}, lines: [line], installable: true, checking: false, job: {state: 'idle'}};
+    const render = changes => vm.runInContext(`renderUpdates(${JSON.stringify({...data, ...changes})})`, app.context);
+    const action = () => app.$('#updateLines').querySelector('button');
+    render();
+    assert.equal(action().disabled, true, 'An identical release cannot be reinstalled from Update now');
+    assert.equal(action().textContent, 'Up to date');
+    await app.$('[data-module-variant="mini"]').fire('click');
+    assert.equal(action().disabled, false, 'Changing module type is still possible on the newest release');
+    assert.equal(action().textContent, 'Change module type');
+    await app.$('[data-module-variant="standard"]').fire('click');
+    assert.equal(action().disabled, true, 'Restoring the installed module disables the button immediately');
+    for (const status of ['unknown', 'unreachable', 'update-available', 'other-line']) {
+      render({lines: [{...line, status, current: status !== 'other-line'}]});
+      assert.equal(action().disabled, ['unknown', 'unreachable'].includes(status), status);
+    }
+    for (const changes of [{checking: true}, {installable: false}, {job: {state: 'running'}}]) {
+      render({lines: [{...line, status: 'update-available'}], ...changes});
+      assert.equal(action().disabled, true, 'Checking, installing, or a missing helper prevents starting another install');
+    }
   } else if (scenario === 'cad-downloads') {
     vm.runInContext(`renderHardwareGuide(${JSON.stringify(fixture.guide)})`, app.context);
     const links = app.$('#partsGroups').querySelectorAll('a');

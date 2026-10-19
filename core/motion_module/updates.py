@@ -375,6 +375,13 @@ class UpdateChecker:
     def start_update(self, ref: str, password: str | None = None, variant: str | None = None,
                      fresh: bool = False) -> str:
         with self._start_lock:
+            # The dashboard omits variant unless the operator is changing it.
+            # A fresh install remains available separately in Debug.
+            if not fresh and variant is None:
+                with self._lock:
+                    lines = update_lines(installed_release(self._root), self._remotes)
+                if any(line["ref"] == ref and line["status"] == "up-to-date" for line in lines):
+                    raise MotionModuleError("This branch is already up to date. No update is available.")
             now = self._clock()
             self._rejected = [moment for moment in self._rejected if now - moment < PASSWORD_WINDOW_SECONDS]
             if password and len(self._rejected) >= PASSWORD_ATTEMPTS:

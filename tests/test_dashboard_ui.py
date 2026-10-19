@@ -105,6 +105,9 @@ class DashboardUIBehaviorTests(unittest.TestCase):
             **self.fixture, "guide": hardware_guide(default_config()),
         })
 
+    def test_update_requires_an_available_release_or_intentional_module_change(self):
+        self.run_behavior("update-availability")
+
     def test_mini_renders_only_two_drivers_and_four_motor_test_rows(self):
         from motion_module.config import MINI_HARDWARE_PATH, load_hardware_file
         from motion_module.hardware_guide import hardware_guide

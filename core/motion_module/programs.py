@@ -2,6 +2,7 @@
 
 import argparse
 import ast
+import hashlib
 import os
 import shutil
 import uuid
@@ -10,6 +11,15 @@ from pathlib import Path
 from .errors import MotionModuleError
 
 MODES = {"teleop", "autonomous"}
+
+# Exact stock bundles from 174d6e6, 659fe36 and eab849f. Older installers kept
+# robot folders unchanged across software updates, so the previous release's
+# example may be newer than the copy still on a robot. Never match by name.
+LEGACY_AUTONOMOUS_BUNDLES = {
+    "b9054779c69ea10be0c0b90ff66b4fef6119a8888e0262980353f6fe5c7cd967",
+    "2f6c86c5c42e574d719a65a13644d2c117f6f1c2bb1d7d0dad6c8591401e491f",
+    "bd7ca9c9daa5bd60494697e029dcba1cb467aa334b53c7b5994bef8e08bec6a4",
+}
 
 
 def source_mode(source: str, name: str = "") -> str:
@@ -104,6 +114,13 @@ def _contents(folder: Path) -> dict[str, bytes]:
             and path.suffix not in {".pyc", ".pyo"}}
 
 
+def _bundle_signature(contents: dict[str, bytes]) -> str:
+    digest = hashlib.sha256()
+    for name, content in sorted(contents.items()):
+        digest.update(name.encode("utf-8") + b"\0" + hashlib.sha256(content).digest())
+    return digest.hexdigest()
+
+
 def initialize_library(robots: Path, backups: Path, sample: Path, previous_examples: Path | None = None) -> Path:
     """Install Mecanum teleop and Autonomous Driver for four-wheel mecanum robots."""
     robots.mkdir(parents=True, exist_ok=True)
@@ -133,6 +150,17 @@ def initialize_library(robots: Path, backups: Path, sample: Path, previous_examp
             raise MotionModuleError("The old autonomous program is outside the robot library")
         os.replace(old_autonomous, backups / f"retired-autonomous-Mecanum-{uuid.uuid4().hex[:8]}")
     autonomous_target = robots / "autonomous" / "Autonomous Driver"
+    installed_auto = (_contents(autonomous_target) if autonomous_target.is_dir()
+                      and not autonomous_target.is_symlink() else None)
+    stock_auto = installed_auto is not None and (
+        _bundle_signature(installed_auto) in LEGACY_AUTONOMOUS_BUNDLES
+        or (old_reference and old_reference.is_dir() and installed_auto == _contents(old_reference)))
+    if stock_auto and installed_auto != _contents(autonomous_sample):
+        # Refresh the shipped routine so control fixes reach existing robots.
+        # Leave edited programs alone and retain the previous stock copy.
+        if autonomous_target.resolve().parent != (robots / "autonomous").resolve():
+            raise MotionModuleError("The autonomous program is outside the robot library")
+        os.replace(autonomous_target, backups / f"updated-autonomous-driver-{uuid.uuid4().hex[:8]}")
     if not autonomous_target.exists():
         autonomous_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(autonomous_sample, autonomous_target,

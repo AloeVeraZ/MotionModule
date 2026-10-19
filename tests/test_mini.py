@@ -119,7 +119,9 @@ class MiniTests(unittest.TestCase):
                         self.assertIn(f'0 / {count}</div>', page)
                         self.assertIn(('Two' if count == 4 else 'Four') + ' dual H-bridge drivers</h2>', page)
                         self.assertIn(('Four' if count == 4 else 'Eight') + ' outputs. Your names.', page)
-                        self.assertIn(f'{count} motors · {count // 2} driver boards', page)
+                        self.assertIn(f'{count} motor ports</small>', page)
+                        installed_name = 'MotionModule Mini' if count == 4 else 'MotionModule'
+                        self.assertIn(f'id="installedModuleLine">Installed: {installed_name} ·', page)
                         expected_image = 'motionmodule-mini-complete-wiring.png' if count == 4 else 'motionmodule-complete-wiring.png'
                         self.assertIn(expected_image, page)
                         headers = {'X-MotionModule-Token': app.config['DASHBOARD_TOKEN']}

@@ -205,7 +205,11 @@ class MecanumSensorTests(unittest.TestCase):
     def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
         sensors = FakeHeadingSensors()
         module = TurningModule(sensors)
-        drive = MecanumDrive(module, sensors=sensors)
+        # Instantaneous and frictionless: a real breakaway nudge would jump
+        # eight degrees in a single write. Inertia/friction are tested with
+        # SimRobot in test_heading instead.
+        from motion_module.heading import HeadingController
+        drive = MecanumDrive(module, sensors=sensors, heading=HeadingController(min_turn_power=0))
         routine = MecanumAutonomous(module, drive)
         self.assertTrue(routine.turn_to(90, threading.Event()))
         self.assertAlmostEqual(sensors.value, 90, delta=routine.heading.tolerance + 1)

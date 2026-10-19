@@ -340,6 +340,19 @@ class UpdateCheckerTests(unittest.TestCase):
         with self.assertRaisesRegex(MotionModuleError, "motionmodule install testing"):
             checker.start_update("testing")
 
+    def test_current_release_is_not_reinstalled_but_variant_change_and_reset_work(self):
+        from unittest.mock import patch
+        checker = self.build()
+        self.settle(checker)
+        with patch("motion_module.updates.start_update", return_value="Started") as install:
+            with self.assertRaisesRegex(MotionModuleError, "already up to date"):
+                checker.start_update("testing")
+            install.assert_not_called()
+            for options in ({"variant": "mini"}, {"fresh": True}):
+                self.assertEqual(checker.start_update("testing", **options), "Started")
+            self.assertEqual(checker.start_update("main"), "Started")
+            self.assertEqual(install.call_count, 3)
+
     def installable(self, **answers):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)

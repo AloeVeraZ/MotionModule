@@ -207,6 +207,46 @@ class ProgramTests(unittest.TestCase):
         with self.assertRaises(MotionModuleError):
             validate_project_name("../Autonomous Driver")
 
+    def test_upgrade_refreshes_stock_autonomous_but_preserves_edits(self):
+        import shutil
+        sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        for edited in (False, True):
+            with self.subTest(edited=edited):
+                base = self.workspace / str(edited)
+                previous = base / "examples" / "MecanumAutonomous"
+                target = base / "robots" / "autonomous" / "Autonomous Driver"
+                shutil.copytree(sample.parent / "MecanumAutonomous", previous)
+                old_code = b"# Previous shipped turn routine\n"
+                (previous / "autonomous.py").write_bytes(old_code)
+                shutil.copytree(previous, target)
+                if edited:
+                    (target / "autonomous.py").write_bytes(b"# My own routine\n")
+                initialize_library(base / "robots", base / "backups", sample, base / "examples")
+                if edited:
+                    self.assertEqual((target / "autonomous.py").read_bytes(), b"# My own routine\n")
+                    self.assertEqual(list((base / "backups").iterdir()), [])
+                else:
+                    self.assertEqual((target / "autonomous.py").read_bytes(),
+                                     (sample.parent / "MecanumAutonomous" / "autonomous.py").read_bytes())
+                    backup, = (base / "backups").iterdir()
+                    self.assertEqual((backup / "autonomous.py").read_bytes(), old_code)
+                    # Re-running the installer at this version keeps the same copy.
+                    initialize_library(base / "robots", base / "backups", sample, base / "examples")
+                    self.assertEqual(len(list((base / "backups").iterdir())), 1)
+
+    def test_recognized_older_bundle_updates_even_if_previous_release_example_is_newer(self):
+        import shutil
+        from motion_module.programs import _bundle_signature, _contents
+        sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        target = self.robots / "autonomous" / "Autonomous Driver"
+        shutil.copytree(sample.parent / "MecanumAutonomous", target)
+        (target / "autonomous.py").write_bytes(b"# Older stock autonomous\n")
+        signature = _bundle_signature(_contents(target))
+        with patch("motion_module.programs.LEGACY_AUTONOMOUS_BUNDLES", {signature}):
+            initialize_library(self.robots, self.workspace / "backups", sample, sample.parent)
+        self.assertEqual(_contents(target), _contents(sample.parent / "MecanumAutonomous"))
+        self.assertEqual(len(list((self.workspace / "backups").iterdir())), 1)
+
     def test_legacy_mecanum_class_is_valid_and_loads_without_a_factory(self):
         (self.tele / "robot.py").write_text("class MecanumDrive:\n    def __init__(self, module): pass\n    def drive(self, *args): return {}\n    def stop(self): pass\n", encoding="utf-8")
         _check_python(self.tele, strict=True)

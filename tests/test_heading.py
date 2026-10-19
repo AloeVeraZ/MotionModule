@@ -344,6 +344,38 @@ class AutonomousTurnTests(unittest.TestCase):
         self.assertGreaterEqual(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT)
         self.assertLess(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT + 0.1)
 
+    def test_each_turn_cruises_then_slows_and_settles_with_inertia(self):
+        for lag, friction, speed in ((0.08, 0.12, 300), (0.2, 0.18, 500), (0.35, 0.08, 500)):
+            with self.subTest(lag=lag, friction=friction, speed=speed):
+                robot = SimRobot(heading=170)
+                robot.LAG_SECONDS, robot.FRICTION, robot.DEGREES_PER_SECOND = lag, friction, speed
+                drive = MecanumDrive(robot, sensors=robot)
+                routine = sample_autonomous.MecanumAutonomous(robot, drive)
+                samples = []
+                move = routine.move
+
+                def record(forward, strafe, turn, speed):
+                    samples.append((dict(routine.progress), turn, robot.rate_value))
+                    return move(forward, strafe, turn, speed=speed)
+
+                routine.move = record
+                with patch.object(sample_autonomous, "time", FakeTime(robot)):
+                    routine.run(threading.Event())
+                self.assertEqual(routine.progress['completed'], 4)
+                for step in range(4):
+                    segment = [(p, power, rate) for p, power, rate in samples if p['step'] == step]
+                    self.assertTrue(any(abs(power) > 0.4 for _, power, _ in segment), 'Speed recovers for every new target')
+                    approach = next(i for i, (p, _, _) in enumerate(segment) if p['turn_phase'] == 'approach')
+                    self.assertLessEqual(abs(segment[approach][0]['error']), 30)
+                    self.assertTrue(all(abs(power) <= 0.4 for _, power, _ in segment[approach:]))
+                    self.assertTrue(all(p['turn_phase'] == 'approach' for p, _, _ in segment[approach:]))
+                    final, power, rate = segment[-1]
+                    self.assertLessEqual(abs(final['error']), 2)
+                    self.assertLessEqual(abs(rate), 5)
+                    self.assertEqual(power, 0, 'Settling holds zero output rather than nudging back and forth')
+                self.assertLess(abs(wrap180(robot.value - 170)), 2)
+                self.assertFalse(robot.moving())
+
     def test_losing_the_imu_mid_run_stops_the_robot(self):
         robot = SimRobot()
         original = robot.advance

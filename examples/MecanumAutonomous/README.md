@@ -15,4 +15,12 @@ stopped for up to five seconds. It stops with an explanation if heading is
 still unavailable, and Disable interrupts the wait immediately.
 
 The turn plan is in `autonomous.py`. Disable stops all outputs immediately.
+Each turn uses up to 50% motor power, drops to a 40% cap for its last 30°,
+then tapers further as it reaches the target. The approach stays slow even
+after an overshoot. It waits within 2° at a low turn rate for 0.2 seconds
+before starting the next turn. `TURN_SPEED`, `APPROACH_SPEED` and
+`APPROACH_DEGREES` in the routine control this profile; it does not change
+teleop's tuning. A turn that cannot settle still stops with a timeout.
+Software updates refresh unchanged copies of this bundled program and keep
+the previous copy in `backups/`. Edited robot programs are left as they are.
 Keep the robot off the ground for the first powered check.

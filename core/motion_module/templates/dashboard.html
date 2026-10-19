@@ -565,8 +565,15 @@
 .parts-table td:first-child { width: 6rem; font: 700 1.0625rem/1.15 var(--font-display); }
 .parts-table strong { display: block; font-size: .875rem; font-weight: 650; }
 .module-choices { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .625rem; }
-.module-choices .button { flex: 1 1 12rem; display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; padding: .875rem 1rem; }
-.module-choices small { font: 500 .75rem/1.5 var(--font-text); text-transform: none; letter-spacing: normal; }
+.module-choices .button { flex: 1 1 14rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border-radius: var(--radius-sm); text-align: left; }
+.module-choice-copy { display: grid; gap: .375rem; min-width: 0; }
+.module-choice-copy strong { font: 650 1rem/1.4 var(--font-text); letter-spacing: normal; text-transform: none; }
+.module-choices small { color: var(--muted); font: 500 .8125rem/1.5 var(--font-text); text-transform: none; letter-spacing: normal; }
+.module-choices .button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+.module-choices .button::after { background: var(--accent-soft); }
+.module-choices .button:not(:disabled):is(:hover, :focus-visible) { color: var(--ink); border-color: var(--accent); }
+.module-choice-check { flex: 0 0 1.25rem; width: 1.25rem; height: 1.25rem; color: var(--accent-text); visibility: hidden; }
+.module-choices [aria-pressed="true"] .module-choice-check { visibility: visible; }
 .installed-module { padding: .875rem 1rem; border: 1px solid var(--green); border-radius: var(--radius-sm); background: var(--green-soft); font-weight: 650; }
 .parts-table p { max-width: 70ch; margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .parts-table a { display: inline-block; margin-top: .375rem; font-size: .75rem; font-weight: 650; text-decoration: none; }
@@ -612,7 +619,7 @@
 .usb-meta { display: grid; grid-template-columns: auto 1fr; gap: .1875rem .75rem; font-size: .75rem; }
 .usb-meta b { color: var(--faint); font-weight: 650; }
 .usb-meta span { color: var(--muted); text-align: right; word-break: break-all; }
-.update-lines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.update-lines { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.25rem; }
 .update-line {
   display: flex; flex-direction: column; align-items: stretch; gap: 1.25rem;
   padding: 1.5rem; border: 1px solid var(--line-soft);
@@ -1940,14 +1947,14 @@ heading = imu.heading()
             Updates run tests before switching and restore the previous version if startup fails.
             The Pi reboots automatically when installation finishes.</p>
           <div class="panel-body">
-            <p class="installed-module spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ motor_capacity }} motors · {{ driver_count }} driver boards · {{ install_ref or 'local' }} branch</p>
+            <p class="installed-module spaced" id="installedModuleLine">Installed: {{ module_name }} · {{ install_ref or 'local' }} branch</p>
             <p class="spaced">Choose your module type</p>
             <div class="module-choices" role="group" aria-label="Module for the next install">
-              <button class="button{% if not is_mini %} primary{% endif %}" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><strong>MotionModule</strong><small>8 motors · 4 driver boards</small><small data-installed-variant="standard"{% if is_mini %} hidden{% endif %}>Currently installed</small></button>
-              <button class="button{% if is_mini %} primary{% endif %}" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><strong>MotionModule Mini</strong><small>4 motors · 2 driver boards</small><small data-installed-variant="mini"{% if not is_mini %} hidden{% endif %}>Currently installed</small></button>
+              <button class="button" type="button" data-module-variant="standard" aria-pressed="{{ 'false' if is_mini else 'true' }}"><span class="module-choice-copy"><strong>MotionModule</strong><small>8 motor ports</small></span><svg class="module-choice-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button>
+              <button class="button" type="button" data-module-variant="mini" aria-pressed="{{ 'true' if is_mini else 'false' }}"><span class="module-choice-copy"><strong>MotionModule Mini</strong><small>4 motor ports</small></span><svg class="module-choice-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg></button>
             </div>
-            <p class="small spaced" id="moduleInstallHint" aria-live="polite">Selected for next install: {{ module_name }} · {{ motor_capacity }} motors. Choose the main or testing software branch below to install.</p>
-            <p class="small muted">Choose the module, then install main or testing below. Every update keeps your active robot project and its files, and saves a pre-update copy in <code>~/MotionModule/backups</code>. Channels 1–4, servos and IMU use the same wiring on both modules. Code that needs motors 5–8 or an incompatible API may need changes to run; your code is still kept. Match the selected module to your hardware.</p>
+            <p class="small spaced" id="moduleInstallHint" aria-live="polite">Choose the module that matches your hardware.</p>
+            <p class="small muted">Both modules share the same wiring for channels 1–4, servos and IMU. MotionModule adds channels 5–8 using driver boards 3 and 4. Your active robot folder is kept, with a backup in <code>~/MotionModule/backups</code>.</p>
             <div class="update-lines" id="updateLines">
               <p class="muted">Looking for this Pi's version&hellip;</p>
             </div>
@@ -3437,17 +3444,15 @@ const UPDATE_STATES = {
 };
 
 let selectedModuleVariant = {{ ('mini' if is_mini else 'standard') | tojson }};
+let latestUpdateData = null;
 
 function selectModuleVariant(variant) {
   selectedModuleVariant = variant;
   document.querySelectorAll('[data-module-variant]').forEach(button => {
     const selected = button.dataset.moduleVariant === variant;
-    button.classList.toggle('primary', selected);
     button.setAttribute('aria-pressed', String(selected));
   });
-  $('#moduleInstallHint').textContent = variant === 'mini'
-    ? 'Selected for next install: MotionModule Mini · 4 motors / 2 driver boards. Choose main or testing below to install. Your robot project stays active.'
-    : 'Selected for next install: MotionModule · 8 motors / 4 driver boards. Drivers 3 and 4 are required for the extra ports. Choose main or testing below to install. Your robot project stays active.';
+  if (latestUpdateData) renderUpdates(latestUpdateData);
 }
 document.querySelectorAll('[data-module-variant]').forEach(button => {
   button.addEventListener('click', () => selectModuleVariant(button.dataset.moduleVariant));
@@ -3471,7 +3476,7 @@ function updateLineCard(line, data) {
   } else if (line.status === 'up-to-date') {
     copy.append(element('p', null, `Running the newest ${line.label.toLowerCase()} (${line.latest}).`));
   } else if (line.status === 'unknown') {
-    copy.append(element('p', null, 'This version was installed before update checks existed, so it cannot be compared. Updating fixes that.'));
+    copy.append(element('p', null, 'The installed version is not recorded, so an available update cannot be confirmed.'));
   } else if (line.status === 'unreachable') {
     copy.append(element('p', null, data.error || 'The Pi could not reach GitHub. Connect it to Wi-Fi with internet access.'));
   } else {
@@ -3484,21 +3489,30 @@ function updateLineCard(line, data) {
     versions.append(version);
   }
   copy.append(versions);
-  const button = element('button', `button${line.status === 'update-available' ? ' primary' : ''}`, line.action);
+  const variantChanged = selectedModuleVariant !== (data.module_variant || {{ ('mini' if is_mini else 'standard') | tojson }});
+  const available = line.status === 'update-available' || line.status === 'other-line'
+    || (line.status === 'up-to-date' && variantChanged);
+  const action = line.current && variantChanged ? 'Change module type'
+    : line.status === 'up-to-date' ? 'Up to date' : line.action;
+  const button = element('button', `button${line.status === 'update-available' ? ' primary' : ''}`, action);
   button.type = 'button';
-  button.disabled = updateBusy || !data.installable || line.status === 'unreachable' || data.job.state === 'running';
+  button.disabled = updateBusy || !data.installable || !available || data.checking || data.job?.state === 'running';
   button.addEventListener('click', () => installUpdate(line));
   row.append(copy, button);
   return row;
 }
 
 function renderUpdates(data) {
+  latestUpdateData = data;
   const moduleLine = $('#installedModuleLine');
   const installedVariant = data.module_variant || {{ ('mini' if is_mini else 'standard') | tojson }};
-  const installedMotors = installedVariant === 'mini' ? 4 : 8;
-  if (moduleLine) moduleLine.textContent = `Installed: ${data.module_name || 'MotionModule'} · ${installedMotors} motors · ${installedMotors / 2} driver boards · ${data.installed?.ref || 'local'} branch`;
-  document.querySelectorAll('[data-installed-variant]').forEach(label => {
-    label.hidden = label.dataset.installedVariant !== installedVariant;
+  if (moduleLine) moduleLine.textContent = `Installed: ${data.module_name || 'MotionModule'} · ${data.installed?.ref || 'local'} branch`;
+  const moduleChanged = selectedModuleVariant !== installedVariant;
+  $('#moduleInstallHint').textContent = moduleChanged
+    ? `Selected: ${selectedModuleVariant === 'mini' ? 'MotionModule Mini' : 'MotionModule'}. Choose a branch below to change module type.`
+    : 'Choose the module that matches your hardware.';
+  document.querySelectorAll('[data-module-variant]').forEach(button => {
+    button.disabled = updateBusy || data.job?.state === 'running';
   });
   const job = data.job || {state: 'idle', log: []};
   const running = job.state === 'running';
@@ -3573,6 +3587,7 @@ async function refreshUpdates(force = false) {
 }
 
 async function installUpdate(line) {
+  if (updateBusy) return;
   line = {...line, variant: selectedModuleVariant};
   const moduleLabel = line.variant === 'mini' ? 'MotionModule Mini (4 motors)' : 'MotionModule (8 motors)';
   const question = line.current
@@ -3589,6 +3604,7 @@ let passwordLine = null;
 
 async function requestUpdate(line, password = '') {
   updateBusy = true;
+  if (latestUpdateData) renderUpdates(latestUpdateData);
   try {
     const answer = await jsonFetch('/api/updates', {
       method: 'POST', headers: apiHeaders,
