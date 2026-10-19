@@ -2,7 +2,7 @@
 
 `hardware.py` next to this file names the four wheels. This file turns the
 Driver Station's forward / strafe / rotate commands into wheel power, and
-`sensors.py` reads the robot's MPU6500 directly from the Raspberry Pi.
+MotionModule always reads the built-in MPU6500; use `module.imu` from any code.
 
 The same three numbers arrive whether someone is using the keyboard or a game
 controller, using the same stick mapping:
@@ -25,9 +25,6 @@ MotionModule calls `create_drive(module)` once at startup, then calls
 
 from motion_module.heading import HeadingController, HeadingHold
 from motion_module.mecanum import clamp, mix as mix_channels
-
-from sensors import create_sensors  # sensors.py, next to this file
-
 
 # These names stay in physical wheel order. Motor 2 (rear_left / Driver 1B)
 # and motor 4 (rear_right / Driver 2B) reverse their electrical polarity in
@@ -99,8 +96,8 @@ class MecanumDrive:
 
     def __init__(self, module, wheels=WHEELS, sensors=None, heading=HEADING):
         self.module = module
-        # autonomous.py and dashboard.py read the sensors from here.
-        self.sensors = sensors
+        # The core owns this reader; a robot folder never configures it.
+        self.sensors = sensors if sensors is not None else getattr(module, "imu", None)
         self.heading = heading
         self.assist = HeadingHold(heading)
         self.wheels = tuple(wheels)
@@ -163,8 +160,9 @@ class MecanumDrive:
         if self.sensors is None:
             raise ValueError(f"Unknown control: {name}")
         if name == "zero_heading":
-            if not self.sensors.zero_heading():
+            if self.sensors.heading() is None:
                 raise ValueError("The IMU is not ready yet; wait until it reads a heading")
+            self.sensors.zero(level=True)
             self.assist.cancel()    # the old held heading means something else now
             return {"heading": self.sensors.heading()}
         if name == "recalibrate_gyro":
@@ -185,7 +183,7 @@ class MecanumDrive:
 def create_drive(module):
     """Required entry point. Return anything with drive(...) and stop()."""
 
-    return MecanumDrive(module, sensors=create_sensors(module))
+    return MecanumDrive(module, sensors=module.imu)
 
 
 # ---------------------------------------------------------------------------

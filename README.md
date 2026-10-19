@@ -340,7 +340,6 @@ Every project is self-contained, and only the first file is required:
 MyRobot/
 ├── robot.py          # required browser-control entry point
 ├── hardware.py       # optional: your own names, pins, and inversions
-├── sensors.py        # the MPU6500 wired directly to the Pi
 ├── autonomous.py     # optional: the routine the robot runs by itself
 ├── dashboard.py      # optional: Driver Station cameras, sensors, keys, sticks
 ├── drivetrain.py     # optional Python modules
@@ -418,15 +417,19 @@ The complete contract and copyable example are in
 ### Sensors: the Pi-connected MPU6500
 
 The Mecanum robot's motors, PCA9685 servo controller and MPU6500 IMU connect
-directly to the Raspberry Pi. `sensors.py` reads one MPU6500 on the independent
+directly to the Raspberry Pi. MotionModule always reads its built-in MPU6500 on the independent
 `i2c-gpio` bus: SDA on physical pin 11, SCL on 12, VCC on 17, GND on 6, and
 AD0 on 20. Use the single [IMU wiring plan](docs/PINOUT.md#optional-mpu6500-six-axis-imu).
-The Pi installer enables this bus for its next reboot. No extra sensors are declared.
+The Pi installer enables this bus for its next reboot. Every robot program can use
+`module.imu.heading()`, `module.imu.rate()` and `module.imu.reading()` without
+declaring a sensor or adding a file. Driver Station shows this same sensor in
+teleop and autonomous, even without `dashboard.py`. Switching program folders
+keeps its reader, heading and calibration running. No extra sensors are declared.
 The robot can still drive without an IMU; heading stays unavailable, the
 driving assist switches off, and the sample autonomous routine does not move.
 With the IMU, the default robot holds its heading while it drives. Its optional
-autonomous routine performs four IMU-guided turns. The default Mecanum and
-The same Mecanum code works on the full module and Mini, without extra mechanism controls.
+autonomous routine performs four IMU-guided turns. The bundled Mecanum teleop
+and Autonomous Driver code work on the full module and Mini.
 
 An **Arduino GIGA R1 WiFi** can optionally connect by USB for additional GPIO
 inputs. The repository includes USB auto-detection, bridge firmware and a Python

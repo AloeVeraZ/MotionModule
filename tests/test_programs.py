@@ -104,6 +104,50 @@ class ProgramTests(unittest.TestCase):
         self.assertIs(app.config["ACTIVE_MODULE"], replacements[-1])
         self.assertFalse(app.config["RECOVERY"]["active"])
 
+    def test_builtin_imu_readings_continue_from_teleop_to_autonomous_and_back(self):
+        from motion_module.telemetry import IMUReading
+        (self.tele / "robot.py").write_text(
+            "class Drive:\n"
+            "    def drive(self, *args): pass\n"
+            "    def stop(self): pass\n"
+            "def create_drive(module): return Drive()\n", encoding="utf-8")
+        (self.auto / "robot.py").write_bytes(AUTO)
+        with MotionModule(default_config(), gpio=MockGPIO()) as module:
+            imu = module._local_imu = Mock()
+            imu.reading.return_value = IMUReading(name="Main IMU", yaw=91, rate=3)
+            module._owns_imu = False  # The dashboard service holds the sensor.
+            self.addCleanup(imu.close)
+            replacements = []
+
+            def factory(_folder):
+                # Telemetry may arrive while the old module is closed.
+                during = client.get("/api/drive/telemetry").get_json()["imu"]
+                self.assertEqual(during["yaw"], 91)
+                replacement = MotionModule(default_config(), gpio=MockGPIO(), _imu=imu)
+                replacements.append(replacement)
+                self.addCleanup(replacement.close)
+                return replacement
+
+            app = create_app(module, workspace_directory=self.workspace,
+                             project_path=self.tele / "robot.py", module_factory=factory)
+            self.addCleanup(app.config["CAMERA_MANAGER"].close)
+            self.addCleanup(app.config["UPDATE_CHECKER"].close)
+            client = app.test_client()
+            headers = {"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            for mode in ("autonomous", "teleop"):
+                with patch("motion_module.dashboard.activate_project"):
+                    response = client.post("/api/programs/select", headers=headers,
+                                           json={"program": f"{mode}/Mecanum", "mode": mode})
+                self.assertEqual(response.status_code, 200, response.get_json())
+                self.assertIs(app.config["ACTIVE_MODULE"].imu, imu)
+                for endpoint in ("/api/drive/telemetry", "/api/status"):
+                    data = client.get(endpoint).get_json()
+                    reading = data["robot"]["imu"] if "robot" in data else data["imu"]
+                    self.assertEqual(reading["yaw"], 91)
+                    self.assertEqual(reading["rate"], 3)
+                imu.close.assert_not_called()
+                imu.calibrate_zero.assert_not_called()
+
     def test_default_install_has_mecanum_teleop_and_gyro_autonomous_on_both_module_types(self):
         import os
         sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"

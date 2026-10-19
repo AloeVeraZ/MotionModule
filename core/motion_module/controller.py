@@ -27,7 +27,7 @@ class MotionModule:
     are numbered from 0, and each board provides channels 0-15.
     """
 
-    def __init__(self, config: ModuleConfig | None = None, gpio=None, servo_controller=None) -> None:
+    def __init__(self, config: ModuleConfig | None = None, gpio=None, servo_controller=None, *, _imu=None) -> None:
         self.config = config or load_config()
         self.gpio = gpio or create_gpio_backend()
         self._lock = threading.RLock()
@@ -39,6 +39,7 @@ class MotionModule:
         self._stop_event = threading.Event()
         self._giga = None
         self._local_imu = None
+        self._owns_imu = _imu is None
         self._motors = {
             item.channel: HBridgeMotor(self.gpio, item, self.config.pwm_hz)
             for item in self.config.motors
@@ -61,6 +62,12 @@ class MotionModule:
             target=self._watchdog_loop, name="motionmodule-watchdog", daemon=True
         )
         self._watchdog_thread.start()
+        # The IMU belongs to the runtime, never to a robot folder. Discovery
+        # and calibration run in the reader thread, even before code uses it.
+        from .pi_imu import LocalIMU
+        self._local_imu = _imu if _imu is not None else LocalIMU(
+            bus=None, auto_address=True, simulated=not self.hardware,
+        )
 
     def motor(self, channel: int | str) -> Motor:
         """Return one motor by its hardware.py name or by channel number."""
@@ -106,34 +113,28 @@ class MotionModule:
 
         return bool(getattr(self.gpio, "is_hardware", False))
 
-    def local_imu(self, declaration=None):
-        """Read the reference MPU6500 on the independent i2c-gpio bus.
+    @property
+    def imu(self):
+        """The always-present built-in MPU6500; heading() is None until ready.
 
-        Returns None in simulation or if the bus overlay is missing. The
-        module owns the reader and closes it during shutdown.
+        Reading, discovery and calibration are managed by MotionModule.
+        The same sensor is available to teleop, autonomous and the dashboard.
+        Simulation and disconnected hardware report unavailable readings.
         """
-        from .imu import IMUConfig
-        from .pi_imu import LocalIMU, find_i2c_gpio_bus
-
-        if declaration is None:
-            declaration = IMUConfig()
-        if not isinstance(declaration, IMUConfig):
-            raise TypeError("Use IMUConfig for the Pi-connected MPU6500")
-
         with self._lock:
             if self._closed:
                 raise RuntimeError("MotionModule is closed")
-            if self._local_imu is not None:
-                if self._local_imu.declaration != declaration:
-                    raise ValueError("The Pi IMU is already configured differently")
-                return self._local_imu
-            if not self.hardware:
-                return None
-            bus = find_i2c_gpio_bus()
-            if bus is None:
-                return None
-            self._local_imu = LocalIMU(declaration, bus=bus, auto_address=True)
             return self._local_imu
+
+    def local_imu(self, declaration=None):
+        """Compatibility alias for module.imu in preserved robot folders.
+
+        An old declaration cannot replace or reconfigure the built-in sensor.
+        """
+        from .imu import IMUConfig
+        if declaration is not None and not isinstance(declaration, IMUConfig):
+            raise TypeError("Use IMUConfig for the Pi-connected MPU6500")
+        return self.imu
 
     def giga(self, pins=(), imus=(), *, serial: str = ""):
         """Optional USB GPIO expansion through an Arduino GIGA R1 WiFi.
@@ -154,7 +155,7 @@ class MotionModule:
         if retired:
             logging.getLogger(__name__).warning(
                 "sensors.py passes imus= to module.giga(); Arduino IMUs are no longer read "
-                "(%s). Use module.local_imu(IMUConfig(...)) for the Pi's MPU6500.",
+                "(%s). Use module.imu for the built-in MPU6500.",
                 ", ".join(retired),
             )
         with self._lock:
@@ -399,7 +400,7 @@ class MotionModule:
         self._watchdog_thread.join(timeout=1)
         if giga is not None:
             attempt(giga.close)
-        if local_imu is not None:
+        if local_imu is not None and self._owns_imu:
             attempt(local_imu.close)
         if failures:
             raise ExceptionGroup("Errors while shutting down MotionModule", failures)

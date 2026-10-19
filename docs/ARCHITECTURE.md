@@ -35,7 +35,6 @@ fused power system and physical cutoff.
 │   ├── Mecanum/
 │   │   ├── robot.py
 │   │   ├── hardware.py
-│   │   ├── sensors.py
 │   │   ├── autonomous.py
 │   │   └── dashboard.py
 │   └── AnotherRobot/
@@ -112,11 +111,13 @@ USB discovery alone cannot identify which physical sensor is wired to a pin.
 
 ## Reference Pi IMU
 
-The Mecanum sample declares one MPU6500 at its default address 0x68.
-`module.local_imu()` finds the independent `i2c-gpio` adapter, detects the
-chip at 0x68 or 0x69, creates a `LocalIMU` and closes it on
-module shutdown. Simulation and a missing overlay return no reader; the
-sample reports heading unavailable. The wiring is the single plan in
+MotionModule always owns one built-in MPU6500 reader, exposed as the read-only
+`module.imu` property. It finds the independent `i2c-gpio` adapter and detects
+the chip at 0x68 or 0x69, retrying discovery or missing hardware in the background.
+The dashboard service retains the same reader across program switches and closes
+it at service shutdown. Simulation and missing hardware keep an offline sensor
+object with unavailable readings. Both telemetry endpoints use the core reading,
+independently of a program's optional dashboard file. The wiring is the single plan in
 Debug → Wiring and PINOUT.md. Motors and the PCA9685 also connect to the Pi.
 No additional sensors are declared by the sample.
 

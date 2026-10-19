@@ -41,11 +41,17 @@ from robot import MecanumDrive  # noqa: E402
 
 class FakeModule:
     def __init__(self):
+        from motion_module.pi_imu import LocalIMU
+        self._local_imu = LocalIMU(simulated=True)
         self.config = load_project_config(EXAMPLE_DIR)
         self.outputs = {channel: 0.0 for channel in range(1, 9)}
         self.stopped = False
         self._servos = MockServoController(self.config.servos)
         self.servo_outputs_enabled = True
+
+    @property
+    def imu(self):
+        return self._local_imu
 
     def set_motors(self, outputs):
         for reference, value in outputs.items():
@@ -172,7 +178,8 @@ class DashboardTests(unittest.TestCase):
         page = self.client.get('/diagnostics').get_data(as_text=True)
         self.assertIn('MPU6500', page)
         self.assertIn('Must be high for I²C', page)
-        self.assertIn('address=0x68', page)
+        self.assertIn('imu = module.imu', page)
+        self.assertNotIn('Declare the installed IMU in sensors.py.', page)
         header = self.client.get('/api/config').get_json()['header']
         self.assertIn('IMU SDA', header[10]['role'])
         checks = self.client.get('/api/diagnostics').get_json()['checks']
@@ -218,7 +225,7 @@ class DashboardTests(unittest.TestCase):
     def test_imu_calibration_without_an_imu_is_explained(self):
         response = self.client.post('/api/imu/calibrate', headers=self.headers)
         self.assertEqual(response.status_code, 409)
-        self.assertIn('no supported Pi IMU', response.get_json()['error'])
+        self.assertIn('Wait for a connected', response.get_json()['error'])
 
     def test_all_dashboard_pages_are_served_by_versioned_runtime(self):
         for path in ("/", "/diagnostics", "/code", "/update"):
@@ -518,7 +525,7 @@ class DashboardTests(unittest.TestCase):
             names = set(archive.namelist())
         self.assertIn("Mecanum/robot.py", names)
         self.assertIn("Mecanum/hardware.py", names)
-        self.assertIn("Mecanum/sensors.py", names)
+        self.assertNotIn("Mecanum/sensors.py", names)
         self.assertIn("Mecanum/dashboard.py", names)
         self.assertNotIn("Mecanum/autonomous.py", names)
         self.assertIn("Mecanum/README.md", names)
@@ -702,6 +709,9 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(self.module.stopped)
 
     def test_optional_dashboard_telemetry_api_exposes_typed_inputs(self):
+        from motion_module.telemetry import IMUReading
+        self.module._local_imu = Mock()
+        self.module._local_imu.reading.return_value = IMUReading(name="Main IMU", yaw=42)
         class Dashboard:
             def snapshot(self):
                 return {
@@ -717,7 +727,8 @@ class DashboardTests(unittest.TestCase):
         data = app.test_client().get("/api/drive/telemetry").get_json()
         self.assertTrue(data["configured"])
         self.assertEqual(data["cameras"][0]["name"], "Front")
-        self.assertEqual(data["imu"]["yaw"], 18.0)
+        self.assertEqual(data["imu"]["yaw"], 42.0)
+        self.assertEqual(data["imu"]["name"], "Main IMU")
         self.assertEqual([item["kind"] for item in data["sensors"]], ["analog", "digital"])
         self.assertEqual(data["pi_inputs"], data["sensors"])
         self.assertTrue(data["pi_gpio"]["digital_only"])
@@ -769,7 +780,7 @@ class DashboardTests(unittest.TestCase):
         self.assertFalse(data["configured"])
         self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
         self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
-        self.assertEqual(data["touch_panels"], [])
+        self.assertEqual(data["touch_panels"], ["imu"])
 
     def test_json_commands_reject_arrays_scalars_null_and_malformed_json(self):
         routes = ["/api/drive", "/api/drive/control", "/api/test/motor",
@@ -805,7 +816,33 @@ class DashboardTests(unittest.TestCase):
                 self.assertEqual(data["gamepad_buttons"], {"dpad_down": "stop"})
                 self.assertEqual(data["gamepad_sticks"], DEFAULT_GAMEPAD_STICKS)
                 self.assertEqual(data["touch_sticks"], DEFAULT_TOUCH_STICKS)
-                self.assertEqual(data["touch_panels"], [])
+                self.assertEqual(data["touch_panels"], ["imu"])
+
+    def test_builtin_imu_survives_missing_or_broken_project_telemetry(self):
+        from motion_module.telemetry import IMUReading
+        self.module._local_imu = Mock()
+        self.module._local_imu.reading.return_value = IMUReading(
+            name="Main IMU", yaw=90, pitch=2, roll=-1, rate=15,
+            acceleration_g=(0, 0, 1), gyro_dps=(0, 0, 15),
+        )
+        broken = Mock()
+        broken.snapshot.side_effect = RuntimeError("custom sensor failed")
+        for telemetry in (None, broken):
+            with self.subTest(telemetry=telemetry):
+                app = create_app(self.module, dashboard_telemetry=telemetry)
+                self.addCleanup(app.config["CAMERA_MANAGER"].close)
+                self.addCleanup(app.config["UPDATE_CHECKER"].close)
+                if telemetry is None:
+                    response = app.test_client().get("/api/drive/telemetry")
+                else:
+                    with self.assertLogs("motion_module.dashboard", level="ERROR"):
+                        response = app.test_client().get("/api/drive/telemetry")
+                self.assertEqual(response.status_code, 200)
+                data = response.get_json()
+                self.assertEqual(data["imu"]["yaw"], 90)
+                self.assertEqual(data["imu"]["gyro_dps"], [0, 0, 15])
+                self.assertIn("imu", data["touch_panels"])
+                self.assertEqual(bool(data["project_telemetry_error"]), telemetry is not None)
 
     def test_giga_is_auto_discovered_and_merged_with_project_pin_data(self):
         class Dashboard:
@@ -923,7 +960,7 @@ class DashboardTests(unittest.TestCase):
                 self.assertTrue(restarted.wait(1))
             activate.assert_called_once()
             self.assertTrue(self.module.stopped)
-            for name in ("robot.py", "sensors.py", "dashboard.py", "hardware.py"):
+            for name in ("robot.py", "dashboard.py", "hardware.py"):
                 self.assertEqual((robot / name).read_bytes(), (EXAMPLE_DIR / name).read_bytes(), name)
             backups = list((Path(directory) / "backups").iterdir())
             self.assertEqual(len(backups), 1)
@@ -1535,6 +1572,7 @@ class DashboardAssetHelperTests(unittest.TestCase):
 class DashboardShutdownTests(unittest.TestCase):
     def test_bind_failure_still_closes_all_workers_when_project_cleanup_fails(self):
         camera, updates, telemetry, stop = Mock(), Mock(), Mock(), Mock()
+        module = Mock()
         telemetry.close.side_effect = RuntimeError("project close failed")
         app = SimpleNamespace(config={
             "CAMERA_MANAGER": camera, "UPDATE_CHECKER": updates, "STOP_OUTPUTS": stop,
@@ -1545,11 +1583,12 @@ class DashboardShutdownTests(unittest.TestCase):
                 patch("motion_module.dashboard.create_app", return_value=app), \
                 patch("motion_module.dashboard.make_server", side_effect=OSError("port busy")):
             with self.assertRaisesRegex(RuntimeError, "project close failed"):
-                serve(Mock(), threading.Event())
+                serve(module, threading.Event())
         stop.assert_called_once_with()
         telemetry.close.assert_called_once_with()
         updates.close.assert_called_once_with()
         camera.close.assert_called_once_with()
+        module.imu.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

@@ -105,6 +105,29 @@ class NoTransportTests(unittest.TestCase):
 
 
 class LocalIMURecoveryTests(unittest.TestCase):
+    def test_missing_overlay_is_reported_and_discovery_retries_without_a_robot_request(self):
+        bus = Mock()
+        imu = LocalIMU(bus=None, auto_start=False, bus_factory=Mock(return_value=bus))
+        self.addCleanup(imu.close)
+        with patch("motion_module.pi_imu.find_i2c_gpio_bus", side_effect=[None, 15]):
+            self.assertFalse(imu.poll(0))
+            self.assertIn("independent i2c-gpio bus", imu.describe())
+            self.assertFalse(imu.reading().connected)
+            imu._bus_factory.assert_not_called()
+            self.assertTrue(imu.poll(2))
+        imu._bus_factory.assert_called_once_with(15)
+        self.assertEqual(imu.state, "starting")
+        self.assertIsNone(imu.heading())
+
+    def test_simulated_sensor_never_discovers_or_opens_a_bus(self):
+        with patch("motion_module.pi_imu.find_i2c_gpio_bus") as discover:
+            imu = LocalIMU(simulated=True)
+            self.addCleanup(imu.close)
+            imu.start()
+            self.assertFalse(imu.poll())
+            self.assertIsNone(imu._thread)
+            discover.assert_not_called()
+
     def test_background_reader_retries_an_initial_bus_failure(self):
         imu = LocalIMU(IMU, bus=15, auto_start=False)
         attempts = []

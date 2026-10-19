@@ -1,14 +1,11 @@
 """Optional Driver Station telemetry for the Mecanum example.
 
 MotionModule finds this file automatically because it sits beside robot.py.
-Delete it and driving still works. Sensors are set up in sensors.py and
-reach this file through drive.sensors, so the Driver Station shows exactly
-what the robot code reads.
+Delete it and driving still works. MotionModule supplies the built-in IMU
+display independently of this file, including in autonomous programs.
 """
 
-from dataclasses import replace
-
-from motion_module.telemetry import CameraFeed, IMUReading, TelemetryDashboard
+from motion_module.telemetry import CameraFeed, TelemetryDashboard
 
 
 # An external streamer's browser-readable MJPEG URL, e.g.
@@ -24,7 +21,6 @@ class MecanumDashboard(TelemetryDashboard):
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
-        self.sensors = getattr(drive, "sensors", None)
 
     def driver_bindings(self):
         """Which keys the Driver Station listens for on this robot.
@@ -85,7 +81,7 @@ class MecanumDashboard(TelemetryDashboard):
     def touch_panels(self):
         """Extra panels for a phone or tablet.
 
-        A touchscreen shows robot control, the sticks and the cameras. Add
+        A touchscreen shows robot control, sticks, cameras and the built-in IMU. Add
         any of "status", "mechanisms", "imu", "pi_inputs" and
         "usb_controllers" to show those too; a computer always shows all.
         """
@@ -114,17 +110,6 @@ class MecanumDashboard(TelemetryDashboard):
                 detail="Forward C920 / C270 view",
             ),
         ]
-
-    def imu(self):
-        if self.sensors is None:
-            return IMUReading(name="Robot IMU", connected=False, calibrated=False,
-                              detail="Pi MPU6500 is not configured in sensors.py.")
-        reading = self.sensors.reading()
-        assist = getattr(self.drive, "assist", None)
-        if assist is None or not isinstance(reading, IMUReading) or not reading.connected:
-            return reading
-        # Show what the driving assist is doing under the IMU's own status.
-        return replace(reading, detail=f"{reading.detail} {assist.describe()}".strip())
 
     def usb_controllers(self):
         # No additional USB sensors are declared by this robot.

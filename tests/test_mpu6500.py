@@ -64,6 +64,35 @@ class Mpu6500Tests(LocalImuTestCase):
             self.run_for(1)
             self.assertAlmostEqual(self.imu.heading(), rate, delta=1)
 
+    def test_builtin_sensor_streams_to_autonomous_and_driver_station_without_project_telemetry(self):
+        from pathlib import Path
+        from motion_module.config import default_config
+        from motion_module.controller import MotionModule
+        from motion_module.dashboard import create_app, load_drive, load_autonomous_routine
+        from motion_module.gpio import MockGPIO
+
+        with MotionModule(default_config(), gpio=MockGPIO(), _imu=self.imu) as module:
+            app = create_app(module, project_name="Autonomous Driver")
+            self.addCleanup(app.config["CAMERA_MANAGER"].close)
+            self.addCleanup(app.config["UPDATE_CHECKER"].close)
+            client = app.test_client()
+            initial = client.get("/api/drive/telemetry").get_json()["imu"]
+            self.assertIsNone(initial["yaw"])
+            self.run_for(3)
+            self.world.rate = 90
+            self.run_for(1)
+            streamed = client.get("/api/drive/telemetry").get_json()["imu"]
+            self.assertTrue(streamed["connected"])
+            self.assertTrue(streamed["calibrated"])
+            self.assertAlmostEqual(streamed["yaw"], 90, delta=1)
+            self.assertAlmostEqual(streamed["rate"], 90, delta=1)
+            self.assertEqual(len(streamed["acceleration_g"]), 3)
+            self.assertEqual(len(streamed["gyro_dps"]), 3)
+            path = Path(__file__).resolve().parents[1] / "examples/MecanumAutonomous/robot.py"
+            routine = load_autonomous_routine(module, load_drive(module, path), path)
+            self.assertIs(routine.sensors, module.imu)
+            self.assertTrue(routine.ready())
+
     def test_mpu6500_is_detected_calibrated_and_named_at_either_address(self):
         for selected in (0x68, 0x69):
             with self.subTest(address=selected):

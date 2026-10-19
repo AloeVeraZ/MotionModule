@@ -792,7 +792,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 
   <aside class="column right-column">
     <section class="panel" data-touch-panel="imu">
-      <div class="panel-head"><h2>Gyroscope / IMU</h2><span id="imuStatus">Not configured</span></div>
+      <div class="panel-head"><h2>Gyroscope / IMU</h2><span id="imuStatus">Connecting</span></div>
       <div class="panel-body imu-body">
         <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
         <div class="imu-grid">
@@ -807,7 +807,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
         </div>
         <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
         <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
-        <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
+        <p class="imu-detail" id="imuDetail">The built-in MPU6500 starts automatically. Keep the robot still while it calibrates.</p>
       </div>
     </section>
 
@@ -1608,7 +1608,7 @@ function renderCameras(data) {
 const numberText = (value, suffix='°') => Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : '—';
 function renderImu(imu) {
   const available = Boolean(imu && imu.connected);
-  $('#imuStatus').textContent = !imu ? 'Not configured' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
+  $('#imuStatus').textContent = !imu ? 'Connecting' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
   // Yaw counts up turning left (counter-clockwise), as robot code and rotate
   // do. Shown from -180 to 180; the needle turns the way the robot turned.
   const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
@@ -1617,7 +1617,7 @@ function renderImu(imu) {
   $('#imuAccel').textContent = axes(imu?.acceleration_g);
   $('#imuGyro').textContent = axes(imu?.gyro_dps);
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
-  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
+  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Waiting for the built-in MPU6500. No project sensor file is required.';
 }
 
 function sensorText(sensor) {

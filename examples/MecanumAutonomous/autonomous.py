@@ -50,11 +50,12 @@ class MecanumAutonomous:
     DRIVE_SPEED = 0.35      # power limit while driving a step
     TURN_TIMEOUT = 6.0      # seconds before failing a turn, never skipping it
     LOOP_SECONDS = 0.02     # 50 updates a second
+    IMU_READY_TIMEOUT = 5.0  # remain stopped while startup calibration finishes
 
     def __init__(self, module, drive):
         self.module = module
         self.drive = drive
-        # The factory below provides the Pi IMU. None if it is unavailable.
+        # Both programs read the same runtime-managed, built-in Pi IMU.
         self.sensors = getattr(drive, "sensors", None)
         # The same heading controller used for Driver Station snap turns.
         self.heading = getattr(drive, "heading", None) or HeadingController()
@@ -138,8 +139,16 @@ class MecanumAutonomous:
 
         self.progress = {"steps": [list(step) for step in PLAN], "step": None}
         try:
-            if not self.ready():
-                raise RuntimeError("IMU is not ready; calibrate it before running autonomous")
+            deadline = time.monotonic() + self.IMU_READY_TIMEOUT
+            while not self.ready():
+                if stop.is_set():
+                    return
+                if time.monotonic() >= deadline:
+                    detail = getattr(self.sensors, "describe", lambda: "No usable heading")()
+                    raise RuntimeError(f"Built-in IMU is not ready; autonomous stayed stopped. {detail}")
+                self.progress = {**self.progress, "waiting_for_imu": True}
+                stop.wait(self.LOOP_SECONDS)
+            self.progress = {**self.progress, "waiting_for_imu": False}
             start = self.sensors.heading()
             self.target = start
             for index, step in enumerate(PLAN):
@@ -169,14 +178,13 @@ def create_autonomous(module, drive):
     """Required entry point. Return anything with run(stop)."""
 
     # This separate program receives an idle drive from robot.py. Build its
-    # own confirmed four-wheel mixer and Pi gyro; no teleop folder is loaded.
+    # own confirmed four-wheel mixer; the core already owns the Pi gyro.
     if not callable(getattr(drive, "move", None)) or getattr(drive, "sensors", None) is None:
         from types import SimpleNamespace
-        from motion_module.imu import IMUConfig
         from motion_module.mecanum import MecanumTestDrive
 
         mixer = MecanumTestDrive(module)
-        imu = module.local_imu(IMUConfig("Main IMU", address=0x68))
+        imu = module.imu
         drive = SimpleNamespace(
             drive=mixer.drive, move=mixer.drive, stop=mixer.stop,
             sensors=imu, heading=HeadingController(),

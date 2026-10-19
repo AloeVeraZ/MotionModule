@@ -45,8 +45,8 @@ def GigaIMU(chip="mpu6500", name="IMU", address=None, compass=False, detail=""):
     The installer keeps robot folders someone edited, so those lines must not
     stop the robot from starting. Every declaration now means the one built-in
     IMU on the Pi: this returns its IMUConfig. The reader accepts only MPU6500
-    identity 0x70; ``compass`` and ``detail`` are ignored. Replace it with
-    ``IMUConfig(...)`` when you next edit sensors.py.
+    identity 0x70; ``compass`` and ``detail`` are ignored. New robot code
+    accesses ``module.imu`` without a declaration.
     """
 
     import logging
@@ -57,8 +57,8 @@ def GigaIMU(chip="mpu6500", name="IMU", address=None, compass=False, detail=""):
     )
     logging.getLogger(__name__).warning(
         "sensors.py uses the retired GigaIMU(%r, %r) declaration; reading the Pi's "
-        "auto-detected MPU IMU instead.%s Replace it with IMUConfig(%r, address=0x68).",
-        chip, name, note, str(name).strip() or "Main IMU",
+        "auto-detected MPU IMU instead.%s New code reads module.imu without a declaration.",
+        chip, name, note,
     )
     if address not in MPU6500_ADDRESSES:
         address = 0x68

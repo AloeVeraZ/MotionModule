@@ -59,7 +59,7 @@ from .runner import load_project
 from .programs import default_program, list_programs, program_folders, program_mode, resolve_program, source_mode, workspace_for
 from .sensor_bridge import active_bridges
 from .terminal import TerminalManager
-from .telemetry import empty_snapshot, merge_cameras, merge_usb_controllers, normalize_snapshot
+from .telemetry import IMUReading, empty_snapshot, merge_cameras, merge_usb_controllers, normalize_snapshot
 from .updates import PasswordRequired, TooManyPasswordAttempts, UpdateChecker, installed_release
 from .usb import sensor_controllers, usb_devices
 
@@ -387,6 +387,27 @@ def create_app(
 
     recovery = {"active": bool(recovery_error), "error": recovery_error}
     app.config["RECOVERY"] = recovery
+    runtime_imu = getattr(module, "imu", None)
+
+    def builtin_imu():
+        # During a program switch the old GPIO module is already closed, but
+        # the service still owns and polls this same sensor.
+        return getattr(module, "_local_imu", None) or runtime_imu
+
+    def builtin_imu_reading():
+        """The runtime sensor is independent of every project telemetry hook."""
+        try:
+            imu = builtin_imu()
+            reading = imu.reading() if imu is not None else IMUReading(
+                name="Main IMU", connected=False, calibrated=False,
+                detail="The built-in MPU6500 is unavailable in this runtime.",
+            )
+            return normalize_snapshot({"imu": reading})["imu"]
+        except Exception as error:
+            return normalize_snapshot({"imu": IMUReading(
+                name="Main IMU", connected=False, calibrated=False,
+                detail=f"Could not read the built-in MPU6500: {error}",
+            )})["imu"]
 
     def authorized() -> bool:
         provided = request.headers.get("X-MotionModule-Token", "")
@@ -506,13 +527,7 @@ def create_app(
         # rate limits itself.
         module.refresh_servo_boards()
         robot = module.snapshot()
-        imu = getattr(module, "_local_imu", None)
-        if imu is None:
-            imu = getattr(getattr(active_drive, "sensors", None), "imu", None)
-        try:
-            robot["imu"] = normalize_snapshot({"imu": imu.reading()})["imu"] if imu is not None else None
-        except Exception:
-            robot["imu"] = None
+        robot["imu"] = builtin_imu_reading()
         with servo_lock:
             robot["servo_commands"] = {
                 f"{board}:{channel}": dict(command)
@@ -891,7 +906,7 @@ def create_app(
                     except Exception as restore_error:
                         # Keep the dashboard available in simulation if the
                         # previous hardware cannot be reopened.
-                        module = MotionModule(default_config(), gpio=MockGPIO())
+                        module = MotionModule(default_config(), gpio=MockGPIO(), _imu=runtime_imu)
                         active_drive = RecoveryDrive(module, str(restore_error))
                         dashboard_telemetry = None
                         project_test_drive = DriveTest(module, project_path)
@@ -1253,10 +1268,9 @@ def create_app(
         with command_lock:
             if autonomous.running:
                 return jsonify({"ok": False, "error": "Disable autonomous before calibrating"}), 409
-            sensors = getattr(active_drive, "sensors", None)
-            imu = getattr(sensors, "imu", None) or getattr(module, "_local_imu", None)
+            imu = builtin_imu()
             if not callable(getattr(imu, "calibrate_zero", None)):
-                return jsonify({"ok": False, "error": "The active project has no supported Pi IMU. Load its sensors.py first."}), 409
+                return jsonify({"ok": False, "error": "The built-in MPU6500 is unavailable in this runtime."}), 409
             stop_outputs()
             try:
                 imu.calibrate_zero()
@@ -1277,6 +1291,7 @@ def create_app(
     @app.get("/api/drive/telemetry")
     def drive_telemetry():
         payload = empty_snapshot()
+        telemetry_error = ""
         if dashboard_telemetry is None:
             configured = False
         else:
@@ -1285,13 +1300,10 @@ def create_app(
                 payload = normalize_snapshot(dashboard_telemetry.snapshot())
             except Exception as error:
                 app.logger.exception("The robot project's dashboard snapshot failed")
-                return jsonify({
-                    "ok": False,
-                    "configured": True,
-                    "project": project_name,
-                    "error": f"dashboard.py could not read telemetry: {error}",
-                    **payload,
-                }), 503
+                telemetry_error = f"dashboard.py could not read telemetry: {error}"
+        payload["imu"] = builtin_imu_reading()
+        if "imu" not in payload["touch_panels"]:
+            payload["touch_panels"].append("imu")
         # Retained older dashboard.py files must not advertise removed controls.
         allowed_controls = {control["name"] for control in drive_controls()}
         for field in ("control_keys", "control_buttons"):
@@ -1317,6 +1329,7 @@ def create_app(
         return jsonify({
             "ok": True,
             "configured": configured,
+            "project_telemetry_error": telemetry_error,
             "project": project_name,
             **payload,
         })
@@ -1771,6 +1784,9 @@ def serve(
     project_path: Path | None = None,
     recovery_error: str = "",
 ) -> None:
+    # Retain the one reader across hardware/robot-folder replacements. Its
+    # calibration and heading must not restart when Teleop changes to Auto.
+    runtime_imu = getattr(module, "imu", None)
     project_name = project_path.parent.name if project_path else "No project"
     workspace = workspace_for(project_path) if project_path else None
     if workspace and project_path:
@@ -1804,9 +1820,12 @@ def serve(
         project_path=project_path,
         camera_auto_install=True,
         recovery_error=recovery_error,
-        module_factory=lambda folder: MotionModule(load_config(project=folder)),
+        module_factory=lambda folder: MotionModule(load_config(project=folder), _imu=runtime_imu),
     )
     with ExitStack() as cleanup:
+        if runtime_imu is not None:
+            module._owns_imu = False
+            cleanup.callback(runtime_imu.close)
         # Register cleanup before binding the server. A bind failure or a
         # broken project close hook must not leak background workers.
         for resource in (app.config.get("CAMERA_MANAGER"), app.config.get("UPDATE_CHECKER")):

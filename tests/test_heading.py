@@ -12,6 +12,7 @@ import sys
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from motion_module.heading import HeadingController, HeadingHold, Settle, nearest_step, wrap180
 from motion_module.telemetry import normalize_snapshot
@@ -57,9 +58,8 @@ class SimRobot:
     def rate(self):
         return self.rate_value if self.imu_ok else None
 
-    def zero_heading(self):
+    def zero(self, *, level=False):
         self.zeroed = True
-        return True
 
     def turn(self):
         o = self.outputs
@@ -304,8 +304,15 @@ class AutonomousTurnTests(unittest.TestCase):
         routine = sample_autonomous.MecanumAutonomous(robot, drive)
         original = sample_autonomous.time
         sample_autonomous.time = FakeTime(robot)
+        stop = stop or threading.Event()
+
+        def wait(seconds):
+            robot.advance(seconds)
+            return stop.is_set()
+
         try:
-            routine.run(stop or threading.Event())
+            with patch.object(stop, "wait", side_effect=wait):
+                routine.run(stop)
         finally:
             sample_autonomous.time = original
         return routine
@@ -334,7 +341,8 @@ class AutonomousTurnTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "IMU is not ready"):
             self.run_plan(robot)
         self.assertFalse(robot.moving())
-        self.assertEqual(robot.now, 0.0)
+        self.assertGreaterEqual(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT)
+        self.assertLess(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT + 0.1)
 
     def test_losing_the_imu_mid_run_stops_the_robot(self):
         robot = SimRobot()

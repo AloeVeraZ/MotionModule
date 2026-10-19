@@ -23,7 +23,6 @@ MyRobot/
 ├── robot.py       # required: creates the browser drive controller
 ├── test.py        # optional: Debug Drive Test motor/servo mapping (Mecanum by default)
 ├── hardware.py    # optional: your own names, pins, inversion, servo boards
-├── sensors.py     # MPU6500 wired directly to the Pi
 ├── autonomous.py  # optional: the routine the robot runs by itself
 ├── dashboard.py   # optional: Driver Station cameras, sensors, keys, sticks
 └── helpers.py     # optional: any other Python files you want
@@ -131,13 +130,14 @@ stick layouts and autonomous code do not change Drive Test.
 **Debug → Drive Test** uses `test.py` or its Mecanum fallback, not `robot.py`.
 **Open Driver Station** in the top navigation opens
 `/driver-station`, the separate operator console that does. Put `dashboard.py` beside `robot.py` to add up to two camera feeds,
-one gyro/IMU, up to 20 Raspberry Pi readings, and up to 20 readings per USB
+up to 20 Raspberry Pi readings and up to 20 readings per USB
 sensor controller. MotionModule discovers it automatically; no import in
 `robot.py` is required, and deleting the file does not affect driving.
 
-Sensors are set up once, in `sensors.py`, and `robot.py` hands them to the
-drive object. `dashboard.py` shows that same object, so the console always
-displays what the robot code reads:
+The MPU6500 is a built-in runtime sensor. MotionModule always reads and displays
+`module.imu`, whether or not this file exists. A project cannot replace or remove
+the built-in IMU by changing its dashboard telemetry. Use this file for optional
+cameras, extra inputs and driver bindings:
 
 ```python
 from motion_module.telemetry import CameraFeed, TelemetryDashboard
@@ -147,9 +147,6 @@ FRONT_STREAM = ""  # e.g. http://motionmodule.local:1181/?action=stream
 
 
 class MyDashboard(TelemetryDashboard):
-    def __init__(self, module, drive):
-        self.sensors = drive.sensors
-
     def cameras(self):
         # Naming one camera, with no URL, is enough - see below. A second
         # one is only ever added the same way, one more CameraFeed:
@@ -160,9 +157,6 @@ class MyDashboard(TelemetryDashboard):
         #         CameraFeed("Rear", REAR_STREAM, connected=bool(REAR_STREAM)),
         #     ]
         return [CameraFeed("Front", FRONT_STREAM, connected=bool(FRONT_STREAM))]
-
-    def imu(self):
-        return self.sensors.reading()
 
     def usb_controllers(self):
         return []  # No additional USB sensors declared
@@ -216,23 +210,25 @@ reboots. Add it manually only for a setup without the installer:
 dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
-The sample's `sensors.py` already opens the IMU through MotionModule:
+The MPU6500 starts automatically with MotionModule. Every teleop and autonomous
+program uses the same built-in sensor; no import, declaration or sensor file is
+needed:
 
 ```python
-from motion_module.imu import IMUConfig
-
-# IMUConfig configures the Pi-connected MPU6500.
-imu = module.local_imu(IMUConfig("Main IMU", address=0x68))
-heading = imu.heading() if imu is not None else None
+imu = module.imu
+heading = imu.heading()       # None until connected and calibrated
+turn_rate = imu.rate()       # degrees per second, or None
+reading = imu.reading()      # yaw, pitch, roll, acceleration and gyro axes
 ```
 
-`module.local_imu()` discovers the independent `i2c-gpio` adapter by name,
-creates one `motion_module.pi_imu.LocalIMU` reader, checks both MPU6500
-addresses (0x68 and 0x69), and closes the reader when the
-module shuts down. It returns `None` in simulation or without the overlay;
-it never falls back to the servo bus. Enable the overlay and restart after
-rebooting. With the bus present but the sensor missing, the reader reports
-it offline and retries. `smbus2` is included as a runtime dependency.
+MotionModule discovers the independent `i2c-gpio` adapter by name and checks
+both MPU6500 addresses (0x68 and 0x69). Its reader stays active while disabled
+and when switching program folders, preserving the heading and calibration.
+The service closes it at shutdown. `module.imu` always exists; simulation,
+a missing overlay or disconnected hardware produce unavailable readings with
+an explanation in `describe()`. Discovery retries automatically and never
+falls back to the servo bus. Enable the overlay and reboot when first setting
+up the bus. `smbus2` is included as a runtime dependency.
 
 `imu.heading()` returns degrees from -180 to 180, increasing as the robot
 turns left, or `None` until usable readings arrive. `imu.zero()` sets the
@@ -244,24 +240,21 @@ the DMP is unused. Heading can drift over time, so zero it
 before a run. Compass mode is unsupported for this driver. Mount +Y toward
 the front and +Z upward to match the pitch/roll convention.
 
-On an existing robot folder that you have customized, update its own
-`sensors.py` declaration to `IMUConfig("Main IMU", address=0x68)`.
-The installer preserves every existing robot folder, including untouched
-samples, and saves a pre-update snapshot. Use the explicit Code-page sample
-installation action if you want the current bundled declaration.
+Existing customized robot folders are preserved by updates. Their old
+`module.local_imu(...)` calls still return this same built-in sensor; declarations
+cannot create a second reader or reconfigure it. New code should use `module.imu`.
+The current Mecanum sample no longer includes `sensors.py`.
 
 The only built-in IMU is MPU6500, with WHO_AM_I `0x70`. Unknown identities,
 including MPU9255 `0x73`, are rejected before configuration writes. There is
-no chip selector or legacy IMU driver. `module.local_imu()` without arguments
-uses `IMUConfig()`; a custom name or alternate address uses the declaration
-above. Old `GigaIMU(...)` imports and declarations in customized robot
+no project chip selector or legacy IMU driver. Old `GigaIMU(...)` imports and declarations in customized robot
 folders still load (0.12.1 and later) and read the MPU6500, with a warning in
-the service log; replace them with `IMUConfig(...)` when you next edit them. Arduino expansion uses declared
+the service log; use `module.imu` when you next edit them. Arduino expansion uses declared
 inputs and does not load Pi-side IMU drivers.
 
-The teleop sample shares its Pi IMU reader between `robot.py` and
-`dashboard.py`. The separate Autonomous Driver folder opens the same Pi IMU
-when selected. Both bundled programs work on MotionModule and MotionModule
+The teleop sample and separate Autonomous Driver folder read `module.imu`.
+Driver Station supplies the sensor panel independently of either program's files.
+Both bundled programs work on MotionModule and MotionModule
 Mini; their robot code is set up for four-wheel mecanum robots. No other sensor
 is predeclared.
 
@@ -295,9 +288,8 @@ raise `min_turn_power` if turns stop a few degrees short. `min_turn_power` is
 only used when turning on the spot from a standstill.
 
 Zeroing is manual. `imu.zero(level=True)` makes the present direction 0° and
-the present tilt level; nothing else re-zeroes it. The sample saves the level
-in `.imu-level.json` beside `sensors.py`, so it survives a reboot. The heading
-cannot: the MPU6500 has no compass, so after power-off it starts at 0° facing
+the present tilt level; nothing else re-zeroes it. These offsets are kept while
+switching programs. The MPU6500 has no compass, so after a service restart or power-off it starts at 0° facing
 wherever the robot faces. `imu.recalibrate()` measures the gyro at rest again
 and keeps the heading. The gyro is also measured once at every start-up
 (keep the robot still), because its resting error changes with temperature.

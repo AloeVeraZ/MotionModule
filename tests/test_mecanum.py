@@ -1,7 +1,5 @@
-import json
 import importlib.util
 import sys
-import tempfile
 import threading
 import time
 import unittest
@@ -151,13 +149,12 @@ class TurningModule(FakeModule):
 
 
 class MecanumSensorTests(unittest.TestCase):
-    def test_create_drive_brings_the_sensors_from_sensors_py(self):
-        import sensors
-
+    def test_create_drive_uses_the_builtin_imu_without_a_sensor_file(self):
         config = load_project_config(PROJECT_DIR)
         with MotionModule(config, gpio=MockGPIO()) as module:
             drive = create_drive(module)
-            self.assertIsNone(drive.sensors.imu)
+            self.assertIs(drive.sensors, module.imu)
+            self.assertFalse((PROJECT_DIR / "sensors.py").exists())
             self.assertIsNone(module._giga)
             self.assertIsNone(drive.sensors.heading())
             self.assertFalse(drive.sensors.reading().connected)
@@ -169,54 +166,23 @@ class MecanumSensorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "IMU"):
                 drive.control("turn_left_90", 1)
 
-    def test_sensors_file_declares_only_the_reference_mpu6500(self):
-        import sensors
-
-        from motion_module.imu import IMUConfig
-        self.assertIsInstance(sensors.IMU, IMUConfig)
-        self.assertEqual(sensors.IMU.address, 0x68)
-        self.assertFalse(hasattr(sensors, "PINS"))
-        self.assertFalse(hasattr(sensors, "IMUS"))
-
-    def test_pi_imu_uses_discovered_bus_shares_reader_and_closes_on_shutdown(self):
-        import sensors
-
-        level_file = Path(tempfile.mkdtemp()) / ".imu-level.json"
-        patcher = patch.object(sensors, "LEVEL_FILE", level_file)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    def test_drive_uses_runtime_readings_and_zero_control(self):
         config = load_project_config(PROJECT_DIR)
         with MotionModule(config, gpio=MockGPIO()) as module:
-            module.gpio.is_hardware = True
-            with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=11), \
-                    patch("motion_module.pi_imu.LocalIMU") as reader:
-                reader.return_value.declaration = sensors.IMU
-                reader.return_value.heading.return_value = 42.0
-                reader.return_value.level = (1.5, -2.0)
+            from unittest.mock import Mock
+            imu = module._local_imu = Mock()
+            imu.heading.return_value = 42.0
+            with patch("motion_module.pi_imu.LocalIMU") as reader:
                 drive = create_drive(module)
-                reader.assert_called_once_with(sensors.IMU, bus=11, auto_address=True)
-                self.assertEqual(drive.sensors.heading(), 42.0)
-                self.assertIs(module.local_imu(sensors.IMU), drive.sensors.imu)
-                self.assertTrue(drive.sensors.zero_heading())
-                reader.return_value.zero.assert_called_once_with(level=True)
-                self.assertEqual(json.loads(level_file.read_text()), {"pitch": 1.5, "roll": -2.0})
-                self.assertIs(drive.sensors.reading(), reader.return_value.reading.return_value)
-                module.close()
-                reader.return_value.close.assert_called_once_with()
-                with self.assertRaises(RuntimeError):
-                    module.local_imu(sensors.IMU)
-
-    def test_missing_overlay_never_falls_back_to_servo_bus(self):
-        config = load_project_config(PROJECT_DIR)
-        with MotionModule(config, gpio=MockGPIO()) as module:
-            module.gpio.is_hardware = True
-            with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=None), \
-                    patch("motion_module.pi_imu.LocalIMU") as reader:
-                drive = create_drive(module)
-                self.assertIsNone(drive.sensors.heading())
-                self.assertFalse(drive.sensors.reading().connected)
                 reader.assert_not_called()
-                self.assertIsNone(module._giga)
+                self.assertEqual(drive.sensors.heading(), 42.0)
+                self.assertIs(module.imu, drive.sensors)
+                drive.control("zero_heading", 1)
+                imu.zero.assert_called_once_with(level=True)
+                module.close()
+                imu.close.assert_called_once_with()
+                with self.assertRaises(RuntimeError):
+                    module.local_imu()
 
     def test_default_auto_supports_legacy_teleop_and_builtin_motor_names(self):
         from types import SimpleNamespace
@@ -225,8 +191,10 @@ class MecanumSensorTests(unittest.TestCase):
         from motion_module.mecanum import mix as channel_mix
         with MotionModule(default_config(), gpio=MockGPIO()) as module:
             sensors = SimpleNamespace(heading=lambda: 0, rate=lambda: 0)
-            with patch.object(module, 'local_imu', return_value=sensors):
-                routine = create_autonomous(module, SimpleNamespace())
+            module._local_imu = sensors
+            routine = create_autonomous(module, SimpleNamespace())
+            # The fixture is not a worker and owns no resources.
+            module._owns_imu = False
             self.assertIs(routine.sensors, sensors)
             self.assertFalse(any(module.snapshot()['motors'].values()))
             result = routine.move(0, 0, 0.3, speed=1)
@@ -242,6 +210,30 @@ class MecanumSensorTests(unittest.TestCase):
         self.assertTrue(routine.turn_to(90, threading.Event()))
         self.assertAlmostEqual(sensors.value, 90, delta=routine.heading.tolerance + 1)
         self.assertEqual(set(module.outputs.values()), {0})
+
+    def test_autonomous_waits_without_moving_until_builtin_imu_is_ready(self):
+        from unittest.mock import Mock
+        module = FakeModule()
+        drive = Mock(sensors=FakeHeadingSensors())
+        routine = MecanumAutonomous(module, drive)
+        stop = Mock()
+        stop.is_set.return_value = False
+        with patch.object(routine, "ready", side_effect=[False, True]), \
+                patch.object(sample_autonomous, "PLAN", []):
+            routine.run(stop)
+        stop.wait.assert_called_once_with(routine.LOOP_SECONDS)
+        drive.move.assert_not_called()
+
+    def test_unavailable_imu_and_disable_during_calibration_never_move(self):
+        with MotionModule(load_project_config(PROJECT_DIR), gpio=MockGPIO()) as module:
+            routine = sample_autonomous.create_autonomous(module, object())
+            routine.IMU_READY_TIMEOUT = 0
+            with self.assertRaisesRegex(RuntimeError, "autonomous stayed stopped"):
+                routine.run(threading.Event())
+            stop = threading.Event()
+            stop.set()
+            routine.run(stop)
+            self.assertFalse(any(module.motor_values.values()))
 
     def test_autonomous_turn_takes_the_short_way_round(self):
         sensors = FakeHeadingSensors()

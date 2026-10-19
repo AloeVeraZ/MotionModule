@@ -6,7 +6,7 @@ see docs/PINOUT.md and Debug > Wiring for the complete board guide.
 The MPU6500 board must be in I2C mode; INT is left disconnected.
 
 The chip drivers in imu.py are transport-independent. LocalIMU executes
-those register operations on the Pi; the Mecanum sample uses this path.
+those register operations on the Pi for every robot program.
 """
 
 from __future__ import annotations
@@ -68,24 +68,26 @@ class LocalIMU:
 
     ``declaration`` is the shared IMUConfig chip declaration. Pass the bus
     returned by find_i2c_gpio_bus() for the reference wiring, or use
-    module.local_imu() to manage discovery and shutdown.
+    module.imu for the built-in sensor managed by MotionModule.
     """
 
     def __init__(
         self,
         declaration: IMUConfig = IMUConfig(),
         *,
-        bus: int,
+        bus: int | None = None,
         auto_start: bool = True,
         bus_factory=None,
         clock=None,
         auto_address: bool = False,
+        simulated: bool = False,
     ):
         if not isinstance(declaration, IMUConfig):
             raise TypeError("Use IMUConfig for the Pi-connected MPU6500")
         self.declaration = declaration
         self.name = declaration.name
         self._bus_number = bus
+        self._simulated = simulated
         self._bus_factory = bus_factory
         self._bus = None
         self._clock = clock if clock is not None else time.monotonic
@@ -98,19 +100,32 @@ class LocalIMU:
         self._pending_level = False
         # Pitch and roll that read as level, set by zero(level=True).
         self._level = (0.0, 0.0)
-        self._error = ""
+        self._error = "Simulation: the built-in MPU6500 has no hardware readings." if simulated else ""
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        if auto_start:
+        if auto_start and not simulated:
             self.start()
 
     def start(self) -> None:
-        if self._thread is not None:
+        if self._simulated or self._thread is not None:
             return
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
     def _open_bus(self):
+        if self._simulated:
+            return None
+        if self._bus_number is None:
+            try:
+                self._bus_number = find_i2c_gpio_bus()
+            except OSError as error:
+                with self._lock:
+                    self._error = f"Could not discover the built-in IMU bus: {error}. Retrying."
+                return None
+            if self._bus_number is None:
+                with self._lock:
+                    self._error = "The built-in MPU6500 is waiting for the independent i2c-gpio bus. Enable its overlay and reboot; see Debug > Wiring."
+                return None
         if self._bus_factory is not None:
             return self._bus_factory(self._bus_number)
         try:

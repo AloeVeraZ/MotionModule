@@ -85,8 +85,9 @@ dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18
 ```
 
 Use `i2cdetect -l` to confirm the independent adapter exists, then run
-**Debug → Checks & logs**. The sample's `sensors.py` reads the MPU6500 on that
-bus automatically. It does not use the servo bus or an Arduino for heading.
+**Debug → Checks & logs**. MotionModule starts its built-in MPU6500 reader on that
+bus automatically, independently of the selected robot folder. Robot code reads
+`module.imu`; no sensor declaration or extra file is needed. It does not use the servo bus or an Arduino for heading.
 Without the IMU the robot still drives, with heading unavailable.
 
 ### Optional USB GPIO expansion
@@ -121,7 +122,6 @@ rename the folder for the robot. The sample folder contains:
 MyRobot/
 ├── robot.py
 ├── hardware.py
-├── sensors.py
 ├── dashboard.py
 └── any_other_python_files.py
 ```
@@ -133,8 +133,8 @@ Mini. The bundled robot code is for four-wheel mecanum robots.
 
 Edit the local folder in any editor. `hardware.py` owns this robot's pins,
 inversion, PWM, watchdog, and servo board list. `robot.py` defines
-`create_drive(module)` and imports `sensors.py`, which reads the Pi-connected
-MPU6500. See [CODING.md](CODING.md) for the APIs and examples.
+`create_drive(module)` and uses the built-in `module.imu` for heading assistance.
+See [CODING.md](CODING.md) for the APIs and examples.
 
 Return to Code, choose the whole folder, review its files, accept the output
 stop/restart confirmation, and press **Deploy and run**. The Pi validates it,

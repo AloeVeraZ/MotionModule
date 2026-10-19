@@ -1,14 +1,17 @@
 # Mecanum sample robot
 
-Five small Python files make the teleop sample. Only one is required.
+Four small Python files make the teleop sample. Only one is required.
 
 | File | What it does | Required? |
 | --- | --- | --- |
 | `robot.py` | Turns drive commands into wheel power | Yes |
 | `test.py` | Debug Drive Test motor/servo mapping | No — without it, the same built-in Mecanum test runs |
 | `hardware.py` | Names each motor and servo, and holds the pins | No — delete it to use the built-in names |
-| `sensors.py` | MPU6500 read directly by the Pi | Included; missing hardware is shown offline |
 | `dashboard.py` | Driver Station cameras, sensors, keys, and sticks | No — delete it without affecting driving |
+
+The built-in MPU6500 is always managed by MotionModule. Read `module.imu`
+from any teleop or autonomous program; no declaration or `sensors.py` file is
+needed. Driver Station displays it even without this sample's dashboard file.
 
 ## Try it
 
@@ -101,7 +104,6 @@ robots/
       robot.py
       hardware.py
       dashboard.py
-      sensors.py
       test.py
   autonomous/
     Mecanum/

@@ -148,6 +148,7 @@ class TelemetryDashboard:
         return ()
 
     def imu(self):
+        """Legacy project hook; the live dashboard uses module.imu instead."""
         return None
 
     def sensors(self):
@@ -232,7 +233,7 @@ class TelemetryDashboard:
     def touch_panels(self):
         """Extra panels a touchscreen shows.
 
-        A phone or tablet shows robot control, the sticks and the cameras.
+        A phone or tablet shows robot control, the sticks, cameras and built-in IMU.
         List any of "status", "mechanisms", "imu", "pi_inputs" and
         "usb_controllers" to show those as well.
         """

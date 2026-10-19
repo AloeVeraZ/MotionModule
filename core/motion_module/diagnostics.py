@@ -44,7 +44,7 @@ def local_imu_check(hardware: bool) -> dict:
                     return {**check, "level": "pass", "detail": (
                         f"{chip} detected at 0x{address:02X} on I2C bus {bus_number} (chip ID 0x{chip_id:02X}). "
                         "The chip responds; this does not verify calibration or live heading. "
-                        "LocalIMU in robot code initializes and reads the sensor."
+                        "MotionModule automatically initializes and reads the built-in sensor; robot code uses module.imu."
                     )}
                 answers.append(f"0x{address:02X} returned chip ID 0x{chip_id:02X}")
     except OSError as error:

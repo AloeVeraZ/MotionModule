@@ -38,6 +38,8 @@ from .controller import MotionModule
 from .dashboard import IdleDrive, create_app, load_autonomous_routine, load_drive
 from .errors import MotionModuleError
 from .gpio import MockGPIO
+from .pi_imu import LocalIMU
+from .telemetry import IMUReading
 
 
 EXAMPLE_PROJECT = Path(__file__).resolve().parents[2] / "examples" / "Mecanum"
@@ -136,6 +138,32 @@ class DemoTelemetry:
         }
 
 
+class DemoIMU(LocalIMU):
+    """An explicit runtime simulation of the built-in sensor, never Pi I/O."""
+
+    def __init__(self, telemetry):
+        super().__init__(simulated=True)
+        self.telemetry = telemetry
+
+    def reading(self):
+        return IMUReading(**self.telemetry.snapshot()["imu"])
+
+    def heading(self):
+        return self.reading().yaw
+
+    def rate(self):
+        return self.reading().rate
+
+    def pitch(self):
+        return self.reading().pitch
+
+    def roll(self):
+        return self.reading().roll
+
+    def describe(self):
+        return self.reading().detail
+
+
 def camera_svg(name: str) -> str:
     """A still, camera-shaped frame: a floor grid running to the horizon."""
 
@@ -174,6 +202,9 @@ def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
     # Always simulated, even when this runs on a Raspberry Pi next to a real
     # robot service: the demo must never claim GPIO or talk to a servo board.
     module = MotionModule(config, gpio=MockGPIO())
+    telemetry = DemoTelemetry()
+    module._local_imu.close()
+    module._local_imu = DemoIMU(telemetry)
     drive = load_drive(module, project) if have_example else IdleDrive(module)
     routine, routine_error = None, ""
     if have_example:
@@ -188,7 +219,7 @@ def create_demo_app(dashboard_url: str = "http://127.0.0.1:8080"):
         project_name=example_project.name if have_example else "No project",
         terminal_manager=DemoTerminal(),
         config_path=example_project / "hardware.py" if have_example else None,
-        dashboard_telemetry=DemoTelemetry(),
+        dashboard_telemetry=telemetry,
         autonomous_routine=routine,
         autonomous_error=routine_error,
         project_path=project if have_example else None,

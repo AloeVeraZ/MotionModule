@@ -1420,13 +1420,10 @@
             <p>Keep the robot still during startup calibration. Mount +Y forward and +Z upward. The Pi combines gyro and accelerometer readings for relative heading, pitch, roll and turn rate. Heading is relative and may drift, so zero before a run.</p>
             <p>The Pi installer adds this line under <code>[all]</code> in <code>/boot/firmware/config.txt</code> (older Pi OS: <code>/boot/config.txt</code>) and reboots. Add it manually only for a setup without the installer:</p>
             <pre>dtoverlay=i2c-gpio,i2c_gpio_sda=17,i2c_gpio_scl=18</pre>
-            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Test outputs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU6500 identity 0x70 at 0x68 or 0x69. Only the MPU6500 gyroscope and accelerometer are supported. Detection does not initialize the sensor or prove calibrated heading. When upgrading a customized project, replace old GigaIMU declarations with IMUConfig in sensors.py.</p>
-            <p>The Mecanum sample already reads this Pi IMU. For robot code, MotionModule manages the reader and closes it at shutdown:</p>
-            <pre>from motion_module.imu import IMUConfig
-
-# The MPU6500 uses the independent Pi I2C bus.
-imu = module.local_imu(IMUConfig("Main IMU", address=0x68))
-heading = imu.heading() if imu is not None else None
+            <p>The Pi installer enables the independent I²C bus for its next reboot. Run <code>i2cdetect -l</code> to confirm the adapter exists. Its bus number can change. Open <strong>Test outputs</strong> and run the checks: the Pi IMU row below the PCA9685 checks MPU6500 identity 0x70 at 0x68 or 0x69. Only the MPU6500 gyroscope and accelerometer are supported. MotionModule starts its reader automatically and shows calibration or connection problems in the IMU panel.</p>
+            <p>The built-in IMU is available to every program. No sensor declaration or project file is required:</p>
+            <pre>imu = module.imu
+heading = imu.heading()
 # No heading in simulation or without the independent bus.</pre>
           </div>
         </article>
@@ -1580,7 +1577,7 @@ heading = imu.heading() if imu is not None else None
           </article>
         </div>
         <section class="card spaced">
-          <div class="panel-head"><h2>IMU calibration</h2><span id="imuStatus">Not configured</span></div>
+          <div class="panel-head"><h2>IMU calibration</h2><span id="imuStatus">Connecting</span></div>
           <div class="panel-body imu-body">
             <div class="heading-dial" id="headingDial"><div class="heading-readout"><strong id="imuYaw">—</strong><small>YAW</small></div></div>
             <div class="imu-grid">
@@ -1595,7 +1592,7 @@ heading = imu.heading() if imu is not None else None
         </div>
         <button class="button" id="calibrateImu" type="button">Calibrate gyroscope</button>
             <p class="imu-detail" id="imuCalibration" role="status">Keep the robot still. Calibration sets the current heading, pitch and roll to zero.</p>
-            <p class="imu-detail" id="imuDetail">Declare the installed IMU in sensors.py.</p>
+            <p class="imu-detail" id="imuDetail">The built-in MPU6500 starts automatically. Keep the robot still while it calibrates.</p>
           </div>
         </section>
         <article class="card spaced">
@@ -2059,7 +2056,6 @@ heading = imu.heading() if imu is not None else None
       robot.py
       hardware.py
       dashboard.py
-      sensors.py
   autonomous/
     Autonomous Driver/
       robot.py
@@ -4498,7 +4494,7 @@ loadConfig().then(refreshStatus);
 const numberText = (value, suffix='°') => Number.isFinite(value) ? `${Number(value).toFixed(1)}${suffix}` : '—';
 function renderImu(imu) {
   const available = Boolean(imu && imu.connected);
-  $('#imuStatus').textContent = !imu ? 'Not configured' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
+  $('#imuStatus').textContent = !imu ? 'Connecting' : !available ? 'Offline' : imu.calibrated ? 'Ready' : 'Calibrating';
   // Yaw counts up turning left (counter-clockwise), as robot code and rotate
   // do. Shown from -180 to 180; the needle turns the way the robot turned.
   const yaw = Number.isFinite(imu?.yaw) ? ((((Number(imu.yaw) + 180) % 360) + 360) % 360) - 180 : null;
@@ -4507,7 +4503,7 @@ function renderImu(imu) {
   $('#imuAccel').textContent = axes(imu?.acceleration_g);
   $('#imuGyro').textContent = axes(imu?.gyro_dps);
   $('#imuYaw').textContent = numberText(yaw); $('#imuPitch').textContent = numberText(imu?.pitch); $('#imuRoll').textContent = numberText(imu?.roll); $('#imuRate').textContent = numberText(imu?.rate, '°/s');
-  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Declare the installed IMU in sensors.py.';
+  $('#headingDial').style.setProperty?.('--yaw', `${-(yaw || 0)}deg`); $('#imuDetail').textContent = imu?.detail || 'Waiting for the built-in MPU6500. No project sensor file is required.';
 }
 
 $('#calibrateImu').addEventListener('click', async () => {

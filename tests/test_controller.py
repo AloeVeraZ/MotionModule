@@ -14,17 +14,37 @@ class ControllerTests(unittest.TestCase):
     def test_default_pi_imu_uses_mpu6500_and_shares_reader(self):
         from motion_module.imu import IMUConfig
 
-        self.gpio.is_hardware = True
-        expected = IMUConfig()
-        with patch("motion_module.pi_imu.find_i2c_gpio_bus", return_value=15), \
-                patch("motion_module.pi_imu.LocalIMU") as reader:
-            reader.return_value.declaration = expected
-            imu = self.module.local_imu()
-            reader.assert_called_once_with(expected, bus=15, auto_address=True)
-            self.assertIs(self.module.local_imu(), imu)
-            self.assertIs(self.module.local_imu(expected), imu)
-            with self.assertRaises(ValueError):
-                self.module.local_imu(IMUConfig(address=0x69))
+        gpio = MockGPIO()
+        gpio.is_hardware = True
+        with patch("motion_module.pi_imu.LocalIMU") as reader:
+            with MotionModule(self.config, gpio=gpio) as module:
+                reader.assert_called_once_with(bus=None, auto_address=True, simulated=False)
+                imu = module.imu
+                self.assertIs(imu, reader.return_value)
+                self.assertIs(module.local_imu(), imu)
+                self.assertIs(module.local_imu(IMUConfig()), imu)
+                self.assertIs(module.local_imu(IMUConfig("Old robot name", address=0x69)), imu)
+            imu.close.assert_called_once_with()
+
+    def test_simulation_has_a_read_only_builtin_imu_without_opening_hardware(self):
+        imu = self.module.imu
+        self.assertIs(self.module.local_imu(), imu)
+        self.assertIsNone(imu._thread)
+        self.assertIsNone(imu.heading())
+        self.assertFalse(imu.reading().connected)
+        self.assertIn("Simulation", imu.describe())
+        with self.assertRaises(AttributeError):
+            self.module.imu = None
+
+    def test_runtime_can_reuse_imu_without_resetting_or_closing_it(self):
+        imu = Mock()
+        with patch("motion_module.pi_imu.LocalIMU") as reader:
+            with MotionModule(self.config, gpio=MockGPIO(), _imu=imu) as replacement:
+                self.assertIs(replacement.imu, imu)
+                replacement.stop_all()
+                self.assertIs(replacement.imu, imu)
+            reader.assert_not_called()
+            imu.close.assert_not_called()
 
     def test_reference_pi_reader_requires_imu_config(self):
         with self.assertRaisesRegex(TypeError, "IMUConfig"):
