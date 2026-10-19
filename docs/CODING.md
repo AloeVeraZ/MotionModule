@@ -260,8 +260,10 @@ the service log; replace them with `IMUConfig(...)` when you next edit them. Ard
 inputs and does not load Pi-side IMU drivers.
 
 The teleop sample shares its Pi IMU reader between `robot.py` and
-`dashboard.py`. The separate Mecanum autonomous folder opens the same Pi IMU
-when selected. No other sensor is predeclared.
+`dashboard.py`. The separate Autonomous Driver folder opens the same Pi IMU
+when selected. Both bundled programs work on MotionModule and MotionModule
+Mini; their robot code is set up for four-wheel mecanum robots. No other sensor
+is predeclared.
 
 ### Heading control (`motion_module.heading`)
 

@@ -275,6 +275,10 @@ done
     --previous-examples "$CURRENT_LINK/examples"
 DEFAULT_PROGRAM="$ROBOT_DIR/teleop/Mecanum"
 [ -f "$DEFAULT_PROGRAM/robot.py" ] || fail "The default Mecanum teleop was not created"
+if [ "$previous_active_target" = "$ROBOT_DIR/autonomous/Mecanum" ] && \
+   [ ! -e "$ROBOT_DIR/autonomous/Mecanum" ]; then
+    DEFAULT_PROGRAM="$ROBOT_DIR/autonomous/Autonomous Driver"
+fi
 
 ACTIVE_LINK="$PROJECT_DIR/active"
 old_active_target="$(readlink -f "$ACTIVE_LINK" 2>/dev/null || true)"

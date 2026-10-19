@@ -257,9 +257,11 @@ The Driver Station runs the selected folder's own `robot.py`. Choose Teleoperate
 or Autonomous, open **Choose program folder**, and click a program once. Folders in `robots/teleop/` appear in Teleop; separate folders in
 `robots/autonomous/` appear in Autonomous. Press
 **Enable** to drive or start the selected autonomous routine; **Disable** stops it.
-The installer includes `teleop/Mecanum` and `autonomous/Mecanum` as separate
-folders. Both use the same four motor channels on MotionModule and MotionModule
-Mini. The autonomous routine uses the Pi gyroscope to turn to 90°, 180°, 270°
+The installer includes `teleop/Mecanum` and `autonomous/Autonomous Driver` as
+separate folders. Both bundled programs work with the regular MotionModule and
+MotionModule Mini because they use the same four motor channels. The bundled
+robot code is set up for four-wheel mecanum robots. The autonomous
+routine uses the Pi gyroscope to turn to 90°, 180°, 270°
 and 360° from its starting heading. Existing flat robot folders remain supported
 outside the Driver Station picker.
 

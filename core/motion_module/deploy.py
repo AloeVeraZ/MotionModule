@@ -34,10 +34,12 @@ EXCLUDED_PARTS = {
 
 
 def validate_project_name(value: str) -> str:
-    if not isinstance(value, str) or not PROJECT_NAME.fullmatch(value) or value == "active":
+    if (not isinstance(value, str) or
+            not (PROJECT_NAME.fullmatch(value) or value == "Autonomous Driver") or value == "active"):
         raise MotionModuleError(
             "Project names must start with a letter or number, use only letters, "
-            "numbers, dots, dashes, or underscores, and cannot be 'active'"
+            "numbers, dots, dashes, or underscores (the bundled Autonomous Driver "
+            "name is also allowed), and cannot be 'active'"
         )
     return value
 

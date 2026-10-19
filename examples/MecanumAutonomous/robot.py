@@ -1,6 +1,6 @@
-"""Entry point for the independent Mecanum autonomous program.
+"""Entry point for the bundled Autonomous Driver program.
 
-MotionModule loads this file from robots/autonomous/Mecanum. The existing
-IMU-guided 90-degree turn routine lives beside it in autonomous.py and creates
+MotionModule loads this file from robots/autonomous/Autonomous Driver. The
+existing IMU-guided 90-degree turn routine lives beside it in autonomous.py and creates
 its own four-wheel drive and Pi gyro reader. Teleop code is not required.
 """

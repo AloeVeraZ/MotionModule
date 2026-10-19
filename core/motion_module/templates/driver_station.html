@@ -60,6 +60,18 @@
 .station-mark img { display: block; width: 100%; height: 100%; }
 .station-brand strong { display: block; overflow: hidden; font: 700 1.125rem/1 var(--font-display); letter-spacing: .06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .station-brand small { display: block; margin-top: .1875rem; color: var(--accent-text); font: 700 .75rem/1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.station-control-panel { flex: 1 0 100%; }
+.station-control-panel .panel-body {
+  display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(16rem, 1fr) minmax(13rem, auto) auto;
+  align-items: center; gap: .75rem;
+}
+.station-control-panel .program-choice { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .25rem .75rem; }
+.station-control-panel .program-choice .eyebrow { grid-column: 1 / -1; margin: 0; }
+.station-control-panel .program-choice strong { min-width: 0; }
+.station-control-panel .program-choice .empty-copy { grid-column: 1 / -1; margin: 0; }
+.station-control-panel .command-pair { min-width: 13rem; }
+.station-control-panel .stop-command { width: auto; min-height: 3rem; padding-inline: 1rem; font-size: .875rem; }
+.station-control-panel .auto-status { grid-column: 1 / -1; }
 .header-center { display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .project-chip, .clock-chip {
   display: flex; align-items: center; gap: .5rem;
@@ -471,6 +483,9 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 /* ------------------------------------------------------------ responsive */
 
 @media (max-width: 1100px) {
+  .station-control-panel .panel-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+  .station-control-panel .command-pair { min-width: 0; }
+  .station-control-panel .stop-command { width: 100%; }
   .station-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .center-column { grid-column: 1 / -1; grid-row: 1; }
   .left-column { grid-column: 1; grid-row: 2; }
@@ -520,11 +535,12 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   .header-center { order: 0; width: auto; }
   .project-chip { max-width: 100%; min-height: 2rem; padding-inline: .625rem; }
   .station-tools { width: 100%; justify-content: space-between; gap: .5rem; }
+  .station-control-panel .panel-body { grid-template-columns: minmax(0, 1fr); }
+  .station-control-panel .program-choice { grid-template-columns: minmax(0, 1fr); }
   .station-tools .exit-link { padding-inline: .625rem; font-size: .625rem; }
   .exit-long { display: none; }
   .exit-short { display: inline; }
   #stopButton { display: none; } /* The fixed mobile Stop stays in reach. */
-  .theme-labeled button { min-width: 44px; padding-inline: .5rem; }
   .signal-strip { padding: .75rem 1rem 0; }
   .station-grid { padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom)); gap: 1rem; }
   .column { gap: 1rem; }
@@ -544,7 +560,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 @media (max-width: 360px) {
   .station-tools { justify-content: stretch; }
   .station-tools .theme-switch, .station-tools .exit-link { flex: 1; }
-  .theme-labeled button { flex: 1; }
+  .station-tools .theme-switch button { flex: 1; }
 }
 
 /* ------------------------------------------------------------ touchscreen */
@@ -566,7 +582,6 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   .exit-short { display: inline; }
   .header-center { order: 0; width: auto; }
   .station-tools { width: auto; margin-left: auto; justify-content: flex-end; }
-  .theme-labeled button { min-width: 44px; padding-inline: .5rem; }
   .camera-frame { aspect-ratio: 16 / 9; }
 
   /* Driving by touch: the sticks sit under the thumbs in the bottom
@@ -637,13 +652,39 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
     <div class="clock-chip" id="localClock">--:--:--</div>
   </div>
   <div class="station-tools">
-    <div class="theme-switch theme-labeled" role="group" aria-label="Colour theme">
-      <button type="button" data-theme-choice="light" aria-label="Light theme">Light</button>
-      <button type="button" data-theme-choice="dark" aria-label="Dark theme">Dark</button>
-      <button type="button" data-theme-choice="system" aria-label="System theme">System</button>
+    <div class="theme-switch" role="group" aria-label="Colour theme">
+      <button type="button" data-theme-choice="system" title="Match the browser setting" aria-label="Match the browser setting">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"></circle><path d="M8 2a6 6 0 0 0 0 12z" fill="currentColor" stroke="none"></path></svg>
+      </button>
+      <button type="button" data-theme-choice="light" title="Light" aria-label="Light">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.1"></circle><path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2L3.1 3.1"></path></svg>
+      </button>
+      <button type="button" data-theme-choice="dark" title="Dark" aria-label="Dark">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"></path></svg>
+      </button>
     </div>
     <a class="button exit-link" href="/drive" aria-label="Exit to MotionModule"><span class="exit-long">Exit to MotionModule</span><span class="exit-short">Exit</span>&nbsp;&nearr;</a>
   </div>
+  <section class="panel station-control-panel" aria-labelledby="robotControlTitle">
+    <div class="panel-head"><h2 id="robotControlTitle">Robot control</h2><span id="watchdogLabel">WATCHDOG</span></div>
+    <div class="panel-body">
+      <div class="mode-switch" role="group" aria-label="Robot mode">
+        <button type="button" id="modeTeleop" class="active" data-mode="teleop">Teleoperated</button>
+        <button type="button" id="modeAuto" data-mode="autonomous">Autonomous</button>
+      </div>
+      <div class="program-choice"><span class="eyebrow" id="programModeLabel">Teleop program</span><strong id="selectedProgram">Loading program…</strong><button class="button" id="chooseProgram" type="button">Choose program folder</button><p class="empty-copy" id="programMessage" role="status"></p></div>
+      <div class="command-pair">
+        <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
+        <button class="command disable" id="disableButton" type="button">DISABLE</button>
+      </div>
+      <button class="stop-button stop-command" id="stopButton" type="button">Stop all outputs</button>
+      <div class="auto-status" id="autoStatus" hidden>
+        <span class="eyebrow">Autonomous routine</span>
+        <strong id="autoState">Idle</strong>
+        <small id="autoDetail">autonomous.py has not been run yet.</small>
+      </div>
+    </div>
+  </section>
 </header>
 
 <div class="robot-state station-state" id="robotState"><strong>DISABLED</strong><small>Driver commands are blocked</small></div>
@@ -662,27 +703,6 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 </dialog>
 <main class="station-grid">
   <aside class="column left-column">
-    <section class="panel">
-      <div class="panel-head"><h2>Robot control</h2><span id="watchdogLabel">WATCHDOG</span></div>
-      <div class="panel-body stack">
-        <div class="mode-switch" role="group" aria-label="Robot mode">
-          <button type="button" id="modeTeleop" class="active" data-mode="teleop">Teleoperated</button>
-          <button type="button" id="modeAuto" data-mode="autonomous">Autonomous</button>
-        </div>
-        <div class="auto-status" id="autoStatus" hidden>
-          <span class="eyebrow">Autonomous routine</span>
-          <strong id="autoState">Idle</strong>
-          <small id="autoDetail">autonomous.py has not been run yet.</small>
-        </div>
-        <div class="program-choice"><span class="eyebrow" id="programModeLabel">Teleop program</span><strong id="selectedProgram">Loading program…</strong><button class="button" id="chooseProgram" type="button">Choose program folder</button><p class="empty-copy" id="programMessage" role="status"></p></div>
-        <div class="command-pair">
-          <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
-          <button class="command disable" id="disableButton" type="button">DISABLE</button>
-        </div>
-        <button class="stop-button stop-command" id="stopButton" type="button">Stop all outputs</button>
-      </div>
-    </section>
-
     <section class="panel" id="autoPanel" hidden>
       <div class="panel-head"><h2>Autonomous commands</h2><span>autonomous.py</span></div>
       <div class="panel-body stack">

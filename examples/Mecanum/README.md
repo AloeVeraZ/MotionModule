@@ -130,11 +130,14 @@ The full Driver Station's `robot.py` behavior is independent of this file.
 
 ## Autonomous programs
 
-The bundled `robots/autonomous/Mecanum/` program turns left to 90°, 180°, 270°
+The bundled `robots/autonomous/Autonomous Driver/` program turns left to 90°, 180°, 270°
 and 360° from its heading at Enable. It uses the Pi MPU6500 and refuses to move
 if the IMU is unavailable. Edit its `autonomous.py` plan or add your own folder
 under `robots/autonomous/YourProgram/`. Disable stops outputs and signals the
-routine to finish. The Autonomous picker shows only autonomous folders.
+routine to finish. The Autonomous picker shows only autonomous folders. Both
+this autonomous program and the Mecanum teleop program work on the regular
+MotionModule and MotionModule Mini; the bundled code controls four-wheel
+mecanum robots.
 
 ## Full Driver Station: cameras, IMU, and sensors
 

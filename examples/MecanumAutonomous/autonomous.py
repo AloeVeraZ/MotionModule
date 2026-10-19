@@ -1,6 +1,6 @@
 """Independent Mecanum autonomous routine: four IMU-guided turns.
 
-Choose Autonomous, select this Mecanum folder, then press Enable to run it.
+Choose Autonomous, select Autonomous Driver, then press Enable to run it.
 
 MotionModule calls `create_autonomous(module, drive)` once at startup, then
 calls `run(stop)` on the object it returns each time the operator starts

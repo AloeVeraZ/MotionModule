@@ -126,8 +126,10 @@ MyRobot/
 └── any_other_python_files.py
 ```
 
-The installer also supplies an independent `robots/autonomous/Mecanum/`
-folder with a gyro-guided routine that turns through four 90° steps.
+The installer also supplies an independent `robots/autonomous/Autonomous Driver/`
+folder with a gyro-guided routine that turns through four 90° steps. Both it
+and `robots/teleop/Mecanum/` work on the regular MotionModule and MotionModule
+Mini. The bundled robot code is for four-wheel mecanum robots.
 
 Edit the local folder in any editor. `hardware.py` owns this robot's pins,
 inversion, PWM, watchdog, and servo board list. `robot.py` defines

@@ -551,13 +551,13 @@
 .module-choices { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: .625rem; }
 .module-choices .button { flex: 1 1 12rem; display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; padding: .875rem 1rem; }
 .module-choices small { font: 500 .75rem/1.5 var(--font-text); text-transform: none; letter-spacing: normal; }
-.installed-module { padding: .875rem 1rem; border: 1px solid var(--green); border-radius: .625rem; background: var(--green-soft); font-weight: 650; }
+.installed-module { padding: .875rem 1rem; border: 1px solid var(--green); border-radius: var(--radius-sm); background: var(--green-soft); font-weight: 650; }
 .parts-table p { max-width: 70ch; margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .parts-table a { display: inline-block; margin-top: .375rem; font-size: .75rem; font-weight: 650; text-decoration: none; }
 .part-status {
   display: inline-block;
   padding: .1875rem .5rem;
-  border-radius: .375rem;
+  border-radius: var(--radius-xs);
   background: var(--control);
   color: var(--muted);
   font: 700 .75rem/1.15 var(--font-display);
@@ -680,6 +680,7 @@
 .doctor-check.info .badge { background: var(--blue-soft); color: var(--blue); }
 .doctor-check strong { font-size: .875rem; font-weight: 650; }
 .doctor-check p { margin-top: .125rem; color: var(--muted); font-size: .8125rem; }
+.doctor-summary { display: block; margin-bottom: .375rem; }
 
 .logs, .terminal-screen, .snippet pre {
   margin: 0;
@@ -695,10 +696,11 @@
   white-space: pre-wrap; word-break: break-word;
 }
 
-.checks-layout { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; align-items: start; }
-.checks-layout .command-list { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1100px) { .checks-layout { grid-template-columns: 1fr 1fr; } .commands-card { grid-column: 1 / -1; grid-row: 1; } .checks-layout .command-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .checks-layout { grid-template-columns: 1fr; } .checks-layout .command-list { grid-template-columns: 1fr; } }
+.checks-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.commands-card { grid-column: 1 / -1; }
+.checks-layout .command-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .checks-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .checks-layout { grid-template-columns: minmax(0, 1fr); } .checks-layout .command-list { grid-template-columns: minmax(0, 1fr); } }
 .command-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
 .command-row {
   display: grid; align-content: start;
@@ -1573,12 +1575,9 @@ heading = imu.heading() if imu is not None else None
           <article class="card">
             <div class="panel-head">
               <h2>MotionModule Doctor</h2>
-              <div class="button-row">
-                <span class="hint" id="doctorSummary">Loading&hellip;</span>
-                <button class="button" id="refreshDoctor" type="button">Run checks</button>
-              </div>
+              <button class="button" id="refreshDoctor" type="button">Run checks</button>
             </div>
-            <p class="lead">These checks never intentionally move a motor or
+            <p class="lead"><strong class="hint doctor-summary" id="doctorSummary">Loading&hellip;</strong>These checks never intentionally move a motor or
               servo. Run them again after changing wiring or code.</p>
             <div class="panel-body check-list" id="doctorChecks"></div>
             <div class="panel-body button-row"><button class="button" id="downloadDiagnostics" type="button">Download diagnostic report</button></div>
@@ -3942,8 +3941,8 @@ function selectProjectFolder(event) {
   if (roots.size !== 1) {
     message = 'Select exactly one folder, not loose files or several folders.';
     isError = true;
-  } else if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(selectedProjectName) || selectedProjectName === 'active') {
-    message = 'Rename the folder: 1–64 letters, numbers, dots, dashes, or underscores.';
+  } else if (!(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(selectedProjectName) || selectedProjectName === 'Autonomous Driver') || selectedProjectName === 'active') {
+    message = 'Rename the folder: 1–64 letters, numbers, dots, dashes, or underscores. Autonomous Driver is also allowed.';
     isError = true;
   } else if (!present.has('robot.py') && !relative.some(path => /(?:^|\/)(?:teleop|autonomous)\/[^/]+\/robot\.py$/i.test(path) || /^[^/]+_(tele|auto)\/robot\.py$/i.test(path))) {
     message = 'Choose a program folder containing robot.py, or separate teleop / autonomous folders containing programs.';

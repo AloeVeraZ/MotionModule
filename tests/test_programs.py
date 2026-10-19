@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from motion_module.config import default_config
 from motion_module.controller import MotionModule
 from motion_module.dashboard import create_app, load_drive, load_autonomous_routine
-from motion_module.deploy import _check_python, deploy_project_files
+from motion_module.deploy import _check_python, deploy_project_files, validate_project_name
 from motion_module.errors import MotionModuleError
 from motion_module.gpio import MockGPIO
 from motion_module.programs import default_program, initialize_library, list_programs, resolve_program, workspace_for
@@ -112,8 +112,12 @@ class ProgramTests(unittest.TestCase):
             target = initialize_library(library, self.workspace / variant / "backups", sample)
             self.assertEqual([row["name"] for row in list_programs(library, "teleop")], ["Mecanum"])
             self.assertEqual([row["id"] for row in list_programs(library, "autonomous")],
-                             ["autonomous/Mecanum"])
-            auto_target = library / "autonomous" / "Mecanum"
+                             ["autonomous/Autonomous Driver"])
+            self.assertEqual([row["name"] for row in list_programs(library, "autonomous")],
+                             ["Autonomous Driver"])
+            auto_target = library / "autonomous" / "Autonomous Driver"
+            self.assertEqual(resolve_program(library, "autonomous/Autonomous Driver", "autonomous"),
+                             auto_target)
             _check_python(target, strict=True)
             _check_python(auto_target, strict=True, mode="autonomous")
             from motion_module.config import load_config
@@ -131,6 +135,33 @@ class ProgramTests(unittest.TestCase):
                                      [["turn", 90], ["turn", 180], ["turn", 270], ["turn", 360]])
                     self.assertFalse(routine.ready())
                     self.assertFalse(any(module.motor_values.values()))
+
+    def test_renamed_autonomous_bundle_retires_only_the_unchanged_previous_copy(self):
+        import shutil
+        sample = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
+        for variant, edited in (("unchanged", False), ("edited", True)):
+            base = self.workspace / variant
+            old_auto = base / "robots" / "autonomous" / "Mecanum"
+            previous = base / "examples" / "MecanumAutonomous"
+            shutil.copytree(sample.parent / "MecanumAutonomous", old_auto)
+            shutil.copytree(sample.parent / "MecanumAutonomous", previous)
+            if edited:
+                (old_auto / "autonomous.py").write_text("# user edit\n", encoding="utf-8")
+            backups = base / "backups"
+            initialize_library(base / "robots", backups, sample, base / "examples")
+            names = [row["name"] for row in list_programs(base / "robots", "autonomous")]
+            self.assertIn("Autonomous Driver", names)
+            self.assertEqual(old_auto.exists(), edited)
+            self.assertEqual(len(list(backups.iterdir())), 0 if edited else 1)
+            if edited:
+                self.assertEqual((old_auto / "autonomous.py").read_text(encoding="utf-8"), "# user edit\n")
+            else:
+                self.assertEqual(names, ["Autonomous Driver"])
+
+    def test_autonomous_driver_is_a_safe_exportable_project_name(self):
+        self.assertEqual(validate_project_name("Autonomous Driver"), "Autonomous Driver")
+        with self.assertRaises(MotionModuleError):
+            validate_project_name("../Autonomous Driver")
 
     def test_legacy_mecanum_class_is_valid_and_loads_without_a_factory(self):
         (self.tele / "robot.py").write_text("class MecanumDrive:\n    def __init__(self, module): pass\n    def drive(self, *args): return {}\n    def stop(self): pass\n", encoding="utf-8")
@@ -163,7 +194,7 @@ class ProgramTests(unittest.TestCase):
         initialize_library(library, backups, sample, previous)
         self.assertEqual([row["id"] for row in list_programs(library, "teleop")], ["teleop/Mecanum"])
         self.assertEqual([row["id"] for row in list_programs(library, "autonomous")],
-                         ["autonomous/Mecanum"])
+                         ["autonomous/Autonomous Driver"])
         self.assertEqual(len(list(backups.iterdir())), 2)
 
     def test_install_preserves_an_edited_autonomous_program(self):

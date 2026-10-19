@@ -105,7 +105,7 @@ def _contents(folder: Path) -> dict[str, bytes]:
 
 
 def initialize_library(robots: Path, backups: Path, sample: Path, previous_examples: Path | None = None) -> Path:
-    """Install separate Mecanum teleop and gyro autonomous samples."""
+    """Install Mecanum teleop and Autonomous Driver for four-wheel mecanum robots."""
     robots.mkdir(parents=True, exist_ok=True)
     backups.mkdir(parents=True, exist_ok=True)
     if backups.resolve().is_relative_to(robots.resolve()):
@@ -124,8 +124,15 @@ def initialize_library(robots: Path, backups: Path, sample: Path, previous_examp
         shutil.copytree(sample, target, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     autonomous_sample = sample.parent / "MecanumAutonomous"
     if not (autonomous_sample / "robot.py").is_file() or not (autonomous_sample / "autonomous.py").is_file():
-        raise MotionModuleError("The bundled Mecanum autonomous program is incomplete")
-    autonomous_target = robots / "autonomous" / "Mecanum"
+        raise MotionModuleError("The bundled Autonomous Driver program is incomplete")
+    old_autonomous = robots / "autonomous" / "Mecanum"
+    old_reference = previous_examples / "MecanumAutonomous" if previous_examples else None
+    if (old_autonomous.is_dir() and not old_autonomous.is_symlink() and old_reference
+            and old_reference.is_dir() and _contents(old_autonomous) == _contents(old_reference)):
+        if old_autonomous.resolve().parent != (robots / "autonomous").resolve():
+            raise MotionModuleError("The old autonomous program is outside the robot library")
+        os.replace(old_autonomous, backups / f"retired-autonomous-Mecanum-{uuid.uuid4().hex[:8]}")
+    autonomous_target = robots / "autonomous" / "Autonomous Driver"
     if not autonomous_target.exists():
         autonomous_target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(autonomous_sample, autonomous_target,

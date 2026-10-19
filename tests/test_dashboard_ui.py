@@ -190,6 +190,27 @@ class DashboardUIBehaviorTests(unittest.TestCase):
     def test_folder_picker_selects_on_one_click_and_waits_for_restart(self):
         self.run_behavior("station-program-picker", self.station_fixture)
 
+    def test_station_shares_theme_icons_and_keeps_robot_actions_in_header(self):
+        for fixture in (self.fixture, self.station_fixture):
+            nodes = fixture["nodes"]
+            choices = [(index, node) for index, node in enumerate(nodes)
+                       if "data-theme-choice" in node["attrs"]]
+            self.assertEqual([node["attrs"]["data-theme-choice"] for _, node in choices],
+                             ["system", "light", "dark"])
+            self.assertTrue(all(any(child["tag"] == "svg" and child["parent"] == index
+                                    for child in nodes) for index, _ in choices))
+
+        nodes = self.station_fixture["nodes"]
+        header = next(index for index, node in enumerate(nodes)
+                      if node["tag"] == "header" and "station-header" in node["attrs"].get("class", ""))
+        for control in ("modeTeleop", "modeAuto", "chooseProgram", "enableButton", "disableButton", "stopButton"):
+            index = next(index for index, node in enumerate(nodes) if node["attrs"].get("id") == control)
+            ancestors = []
+            while nodes[index]["parent"] is not None:
+                index = nodes[index]["parent"]
+                ancestors.append(index)
+            self.assertIn(header, ancestors, control)
+
     def test_project_trigger_limits_and_keyboard_normal_power(self):
         self.run_behavior("station-trigger-speed", self.station_fixture)
 

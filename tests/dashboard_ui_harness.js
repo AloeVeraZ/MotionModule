@@ -451,15 +451,15 @@ async function run(scenario) {
     assert.equal(app.$('#selectedProgram').textContent, other.name, 'One click updates the program name');
     const autoApp = browser();
     await autoApp.context.dashboard.refreshStatus();
-    const auto = {id: 'autonomous/Mecanum', name: 'Mecanum', mode: 'autonomous'};
+    const auto = {id: 'autonomous/Autonomous Driver', name: 'Autonomous Driver', mode: 'autonomous'};
     autoApp.setPrograms({available: true, active: 'teleop/Mecanum', programs: [auto]});
     await autoApp.$('#modeAuto').fire('click');
     await autoApp.$('#chooseProgram').fire('click');
     await autoApp.$('#programFolders').querySelector('button').fire('click');
-    assert.equal(autoApp.$('#selectedProgram').textContent, 'Mecanum');
+    assert.equal(autoApp.$('#selectedProgram').textContent, 'Autonomous Driver');
     assert.equal(autoApp.$('#programModeLabel').textContent, 'Autonomous program');
     assert.deepEqual(autoApp.requests.find(r => r.url === '/api/programs/select').payload,
-      {program: 'autonomous/Mecanum', mode: 'autonomous'});
+      {program: 'autonomous/Autonomous Driver', mode: 'autonomous'});
     const sameApp = browser();
     await sameApp.context.dashboard.refreshStatus();
     sameApp.setPrograms({available: true, active: active.id, programs: [active]});
