@@ -11,6 +11,7 @@ import importlib.util
 import sys
 import threading
 import unittest
+from itertools import product
 from pathlib import Path
 from unittest.mock import patch
 
@@ -170,6 +171,13 @@ class TurnPIDTests(unittest.TestCase):
         pid.update(90, 0, 1)
         pid.update(-90, 0, 1.02)
         self.assertEqual(pid.rate, 0)
+
+    def test_slow_rate_target_brakes_a_fast_return_even_with_large_heading_error(self):
+        slow, cruise = TurnPID(), TurnPID()
+        for pid in (slow, cruise):
+            pid.update(90, 0, 0)
+        self.assertGreater(cruise.update(90, 10, 0.1), 0)
+        self.assertLess(slow.update(90, 10, 0.1, rate_limit=12), 0)
 
 
 class HeadingHoldTests(unittest.TestCase):
@@ -406,8 +414,15 @@ class AutonomousTurnTests(unittest.TestCase):
                     self.assertTrue(any(abs(power) > 0.3 for _, _, power, _ in segment))
                     approach = next(i for i, (_, p, _, _) in enumerate(segment)
                                     if p['turn_phase'] != 'cruise')
-                    self.assertLessEqual(abs(segment[approach][1]['error']), 30)
+                    self.assertLessEqual(abs(segment[approach][1]['error']), routine.APPROACH_DEGREES)
                     self.assertTrue(all(abs(power) <= 0.3 for _, _, power, _ in segment[approach:]))
+                    rates = [p['rate_limit'] for _, p, _, _ in segment[approach:]]
+                    self.assertTrue(all(rate is not None for rate in rates))
+                    self.assertTrue(all(later <= earlier for earlier, later in zip(rates, rates[1:])),
+                                    'Approach and recovery must never speed up again for this marker')
+                    self.assertLess(rates[-1], rates[0], 'Turn rate tapers while approaching')
+                    self.assertLessEqual(rates[-1], routine.FINAL_APPROACH_RATE)
+                    self.assertIsNone(segment[0][1]['rate_limit'], 'Cruise restored for every new marker')
                     arrival, when = arrivals[step]
                     self.assertEqual(arrival['step'], step)
                     self.assertEqual(arrival['target'], wrap180(170 + 90 * (step + 1)))
@@ -451,10 +466,11 @@ class AutonomousTurnTests(unittest.TestCase):
         self.assertLess(robot.now, 1.0)
 
     def test_overshoot_and_undershoot_are_corrected_before_completing_a_turn(self):
-        for direction in (-1, 1):
-            with self.subTest(direction=direction):
+        for direction, friction, overshoot in product((-1, 1), (0.12, 0.25), (20, 60)):
+            with self.subTest(direction=direction, friction=friction, overshoot=overshoot):
                 robot = SimRobot(heading=170 * direction)
                 robot.LAG_SECONDS = 0.2
+                robot.FRICTION = friction
                 drive = MecanumDrive(robot, sensors=robot)
                 routine = sample_autonomous.MecanumAutonomous(robot, drive)
                 target = robot.value + 90 * direction  # Crosses the IMU heading wrap.
@@ -465,7 +481,7 @@ class AutonomousTurnTests(unittest.TestCase):
                     advance(seconds)
                     error = wrap180(target - robot.value)
                     if not disturbances and abs(error) < 10:
-                        robot.value, robot.rate_value = target + 20 * direction, 130 * direction
+                        robot.value, robot.rate_value = target + overshoot * direction, 130 * direction
                         disturbances.append('overshoot')
                     elif (len(disturbances) == 1 and error * direction < 0 and abs(error) < 8):
                         robot.value, robot.rate_value = target - 12 * direction, -100 * direction
@@ -485,8 +501,12 @@ class AutonomousTurnTests(unittest.TestCase):
                     self.assertTrue(any(n == 2 and p['error'] * direction > 3 and power * direction > 0
                                         for n, p, power, _ in samples), 'Reverse again after undershoot')
                     first = next(i for i, (_, p, _, _) in enumerate(samples) if p['turn_phase'] == 'correction')
-                    self.assertTrue(all(max(map(abs, wheels.values())) <= 0.3
+                    self.assertTrue(all(max(map(abs, wheels.values())) <= routine.CORRECTION_SPEED
                                         for _, _, _, wheels in samples[first:]))
+                    self.assertTrue(all(p['rate_limit'] == routine.CORRECTION_RATE
+                                        for _, p, _, _ in samples[first:]),
+                                    'Overshoot stays slow through undershoot and settling')
+                    self.assertLess(routine.CORRECTION_RATE, routine.FINAL_APPROACH_RATE)
                     self.assertEqual(routine.progress['turn_phase'], 'reached')
                     self.assertLessEqual(abs(wrap180(robot.value - target)), 3)
                     self.assertFalse(robot.moving())
@@ -495,6 +515,7 @@ class AutonomousTurnTests(unittest.TestCase):
                     self.assertLessEqual(abs(wrap180(robot.value - target)), 3)
                     before_next_turn = len(samples)
                     self.assertTrue(routine.turn_to(target + 90 * direction, threading.Event()))
+                    self.assertIsNone(samples[before_next_turn][1]['rate_limit'])
                     self.assertTrue(any(abs(power) > 0.3 for _, _, power, _ in samples[before_next_turn:]))
 
     def test_stalled_turn_fails_and_does_not_advance(self):

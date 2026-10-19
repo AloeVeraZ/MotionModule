@@ -104,8 +104,9 @@ class TurnPID(HeadingController):
     """Stateful PID for stationary autonomous turns; reset for each target.
 
     Derivative follows measured heading movement across the angle wrap, rather
-    than a target change or a biased gyro-rate reading. Integral acts only near
-    the target, is bounded in motor power, and clears on arrival or crossing.
+    than a target change or a biased gyro-rate reading. Integral is bounded in
+    motor power and clears on arrival or crossing. With rate_limit, the loop
+    regulates the requested turn rate; otherwise integral acts near the target.
     TeleOp continues using HeadingController independently.
     """
 
@@ -130,7 +131,8 @@ class TurnPID(HeadingController):
         self.rate = self._integral = 0.0
         self._last_heading = self._last_time = self._last_error = None
 
-    def update(self, target: float, heading: float, now: float, *, limit: float | None = None) -> float:
+    def update(self, target: float, heading: float, now: float, *, limit: float | None = None,
+               rate_limit: float | None = None) -> float:
         """Return actual signed motor power, including reverse correction."""
 
         error = self.error(target, heading)
@@ -142,23 +144,32 @@ class TurnPID(HeadingController):
         crossed = self._last_error is not None and self._last_error * error < 0
         self._last_heading, self._last_time, self._last_error = heading, now, error
         limit = self.max_power if limit is None else min(self.max_power, limit)
+        proportional = self.kp * error
+        integration_error = error
+        if rate_limit is not None and self.kd > 0:
+            # P requests a turn rate, D follows the measured rate, and I
+            # supplies the torque needed to sustain it despite friction.
+            # Keep power available for breakaway without demanding a fast turn.
+            rate_power = self.kd * max(0.0, rate_limit)
+            proportional = max(-rate_power, min(rate_power, proportional))
+            integration_error = proportional / self.kd - self.rate
 
         on_target = abs(error) <= self.tolerance
-        if on_target or crossed or abs(error) > self.integral_window:
+        if on_target or crossed or (rate_limit is None and abs(error) > self.integral_window):
             self._integral = 0.0
         elif self.ki > 0 and dt > 0:
             bound = self.integral_power_limit / self.ki
-            candidate = max(-bound, min(bound, self._integral + error * min(dt, 0.1)))
-            raw = self.kp * error + self.ki * candidate - self.kd * self.rate
+            candidate = max(-bound, min(bound, self._integral + integration_error * min(dt, 0.1)))
+            raw = proportional + self.ki * candidate - self.kd * self.rate
             # Don't wind up while pushing into the power cap; allow unwinding.
-            if abs(raw) <= limit or raw * error <= 0:
+            if abs(raw) <= limit or raw * integration_error <= 0:
                 self._integral = candidate
 
         if on_target:
             # Let a stationary robot rest inside the band, brake a fast crossing.
             power = 0.0 if abs(self.rate) <= self.STOPPED_DPS else -self.kd * self.rate
         else:
-            power = self.kp * error + self.ki * self._integral - self.kd * self.rate
+            power = proportional + self.ki * self._integral - self.kd * self.rate
             if abs(self.rate) < self.STOPPED_DPS and power * error > 0:
                 power = math.copysign(max(abs(power), self.min_turn_power), power)
         return max(-limit, min(limit, power))

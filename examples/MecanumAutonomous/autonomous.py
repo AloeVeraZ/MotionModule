@@ -7,9 +7,10 @@ calls `run(stop)` on the object it returns each time the operator starts
 autonomous.
 
 What it does: turn left to 90, 180, 270 and 360 degrees from the starting
-heading, then end. Each turn uses its own PID loop: slow down on approach,
-reverse to correct overshoot, and stay within ±3 degrees at a low measured
-turn rate for 0.3 seconds before advancing. Crossing a marker is not enough.
+heading, then end. Each turn cruises, progressively slows over the last 45
+degrees, and latches an even slower recovery rate if it overshoots. Cruise
+returns only for the next marker. Reverse as needed and stay within ±3 degrees
+at a low measured turn rate for 0.3 seconds before advancing. Crossing a marker is not enough.
 It never translates. Change PLAN to make your own. This program has its own
 folder and does not import teleop code.
 
@@ -47,14 +48,17 @@ class MecanumAutonomous:
     # How long the routine is allowed to run before MotionModule cuts it off.
     # Competition autonomous periods are bounded; so is this. Set it to None
     # for no limit, but then only DISABLE can end a routine that loops.
-    duration_seconds = 60.0
+    duration_seconds = 90.0
 
     DRIVE_SPEED = 0.35      # power limit while driving a step
     TURN_SPEED = 0.40       # actual motor power, not a multiplier
     APPROACH_SPEED = 0.30   # maximum power near each target
-    CORRECTION_SPEED = 0.30 # latched cap after overshoot, in either direction
-    APPROACH_DEGREES = 30.0
-    TURN_TIMEOUT = 12.0    # includes overshoot recovery and settling; never skip a marker
+    CORRECTION_SPEED = 0.28 # lower power cap after overshoot, in either direction
+    APPROACH_DEGREES = 45.0
+    APPROACH_RATE = 60.0    # degrees/second at the start of the approach
+    FINAL_APPROACH_RATE = 20.0  # taper to this as the remaining angle shrinks
+    CORRECTION_RATE = 12.0  # stay this slow after overshoot, even if undershooting
+    TURN_TIMEOUT = 20.0    # allow time for slow recovery; never skip a marker
     LOOP_SECONDS = 0.02     # 50 updates a second
     IMU_READY_TIMEOUT = 5.0  # remain stopped while startup calibration finishes
 
@@ -65,7 +69,7 @@ class MecanumAutonomous:
         self.sensors = getattr(drive, "sensors", None)
         self.heading = getattr(drive, "heading", None) or HeadingController()
         # Dedicated PID state and tuning; no changes to TeleOp heading assist.
-        self.turn_heading = TurnPID(max_power=self.TURN_SPEED)
+        self.turn_heading = TurnPID(max_power=self.TURN_SPEED, integral_power_limit=self.APPROACH_SPEED)
         # move() sets the wheels with no driver assist in the way.
         self.move = getattr(drive, "move", drive.drive)
         self.target = 0.0
@@ -107,6 +111,7 @@ class MecanumAutonomous:
         self.turn_heading.reset()
         settle = Settle(self.turn_heading)
         approaching = False
+        approach_rate = self.APPROACH_RATE
         overshot = False
         direction = None
         previous_error = None
@@ -130,9 +135,18 @@ class MecanumAutonomous:
                 previous_error = error
                 approaching = approaching or abs(error) <= self.APPROACH_DEGREES
                 limit = self.APPROACH_SPEED if approaching else self.TURN_SPEED
+                rate_limit = None
+                if approaching:
+                    fraction = max(0.0, min(1.0,
+                        (abs(error) - self.turn_heading.tolerance)
+                        / (self.APPROACH_DEGREES - self.turn_heading.tolerance)))
+                    approach_rate = min(approach_rate, self.FINAL_APPROACH_RATE
+                                        + (self.APPROACH_RATE - self.FINAL_APPROACH_RATE) * fraction)
+                    rate_limit = approach_rate
                 if overshot:
                     limit = min(limit, self.CORRECTION_SPEED)
-                turn = self.turn_heading.update(self.target, heading, now, limit=limit)
+                    rate_limit = self.CORRECTION_RATE
+                turn = self.turn_heading.update(self.target, heading, now, limit=limit, rate_limit=rate_limit)
                 still = abs(self.turn_heading.rate) <= self.turn_heading.STOPPED_DPS
                 if not still:
                     settle = Settle(self.turn_heading)
@@ -142,6 +156,7 @@ class MecanumAutonomous:
                                  "heading": heading, "error": error,
                                  "tolerance_degrees": self.turn_heading.tolerance,
                                  "turn_phase": phase, "power_limit": limit,
+                                 "rate_limit": rate_limit,
                                  "turn_power": turn, "turn_rate": self.turn_heading.rate}
                 if still and settle.update(self.target, heading, now):
                     self.progress = {**self.progress, "turn_phase": "reached", "turn_power": 0.0}
