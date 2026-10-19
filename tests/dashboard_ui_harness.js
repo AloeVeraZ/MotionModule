@@ -650,6 +650,11 @@ async function run(scenario) {
     assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 1);
     vm.runInContext("autoState = {configured:true,state:'running',elapsed_seconds:1,progress:{steps:[['turn',90]],step:0,target:90,heading:88,error:2}};renderAutoStatus();updateEnableButton()", app.context);
     assert.match(app.$('#autoLive').textContent, /Error 2.0/);
+    vm.runInContext("autoState.progress = {...autoState.progress,target_degrees:90,target:-103,heading:-98,error:-5,tolerance_degrees:3,turn_phase:'correction'};renderAutoStatus()", app.context);
+    assert.match(app.$('#autoLive').textContent, /Marker 90° from start/);
+    assert.match(app.$('#autoLive').textContent, /Target -103.0°/);
+    assert.match(app.$('#autoLive').textContent, /±3° tolerance/);
+    assert.match(app.$('#autoLive').textContent, /correction/);
     assert.equal(app.$('#startAuto'), null);
     await app.$('#disableButton').fire('click');
     assert.equal(app.$('#startAuto'), null);

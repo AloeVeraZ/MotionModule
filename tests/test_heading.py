@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from motion_module.heading import HeadingController, HeadingHold, Settle, nearest_step, wrap180
+from motion_module.heading import HeadingController, HeadingHold, Settle, TurnPID, nearest_step, wrap180
 from motion_module.telemetry import normalize_snapshot
 
 PROJECT_DIR = Path(__file__).resolve().parents[1] / "examples" / "Mecanum"
@@ -138,6 +138,38 @@ class HeadingMathTests(unittest.TestCase):
         self.assertFalse(settle.update(90, 95, 0.08))   # swung out: starts again
         self.assertFalse(settle.update(90, 90, 0.1))
         self.assertTrue(settle.update(90, 90.5, 0.21))
+
+
+class TurnPIDTests(unittest.TestCase):
+    def test_integral_increases_a_stalled_correction_then_clears_on_reversal(self):
+        pid = TurnPID(kp=0.01, ki=0.02, kd=0, min_turn_power=0)
+        initial = pid.update(4, 0, 0)
+        for tick in range(1, 51):
+            correction = pid.update(4, 0, tick * 0.02)
+        self.assertGreater(correction, initial + 0.05)
+        self.assertAlmostEqual(pid.update(-4, 0, 1.02), -initial)
+
+    def test_saturation_and_reset_do_not_leave_stale_integral_or_derivative(self):
+        pid = TurnPID(kp=0.02, ki=0.2, min_turn_power=0)
+        for tick in range(100):
+            self.assertEqual(pid.update(20, 0, tick * 0.02, limit=0.3), 0.3)
+        # A new small error must not inherit a saturated forward command.
+        self.assertLess(pid.update(4, 0, 2, limit=0.3), 0.12)
+        pid.update(10, 5, 2.02)
+        pid.reset()
+        fresh = TurnPID(kp=0.02, ki=0.2, min_turn_power=0)
+        self.assertEqual(pid.update(-10, 0, 3), fresh.update(-10, 0, 3))
+
+    def test_derivative_wraps_heading_and_does_not_kick_when_target_changes(self):
+        pid = TurnPID()
+        pid.update(170, 179, 0)
+        pid.update(170, -179, 0.02)
+        self.assertGreater(pid.rate, 0)  # A two-degree left turn, not -358°.
+        self.assertLess(pid.rate, 100)
+        pid.reset()
+        pid.update(90, 0, 1)
+        pid.update(-90, 0, 1.02)
+        self.assertEqual(pid.rate, 0)
 
 
 class HeadingHoldTests(unittest.TestCase):
@@ -344,19 +376,20 @@ class AutonomousTurnTests(unittest.TestCase):
         self.assertGreaterEqual(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT)
         self.assertLess(robot.now, sample_autonomous.MecanumAutonomous.IMU_READY_TIMEOUT + 0.1)
 
-    def test_each_turn_slows_reaches_its_marker_and_pauses_with_inertia(self):
-        for lag, friction, speed in ((0.08, 0.12, 300), (0.2, 0.18, 500), (0.35, 0.08, 500)):
+    def test_each_turn_settles_within_three_degrees_before_advancing(self):
+        for lag, friction, speed in ((0.08, 0.12, 300), (0.2, 0.18, 500),
+                                     (0.35, 0.08, 500), (0.15, 0.25, 300),
+                                     (0.08, 0.12, 1000), (0.2, 0.12, 1000)):
             with self.subTest(lag=lag, friction=friction, speed=speed):
                 robot = SimRobot(heading=170)
                 robot.LAG_SECONDS, robot.FRICTION, robot.DEGREES_PER_SECOND = lag, friction, speed
                 drive = MecanumDrive(robot, sensors=robot)
                 routine = sample_autonomous.MecanumAutonomous(robot, drive)
-                samples, arrivals, started = [], [], {}
+                samples, arrivals = [], []
                 move, halt = routine.move, drive.stop
 
                 def record(forward, strafe, turn, speed):
-                    started.setdefault(routine.progress['step'], robot.now)
-                    samples.append((dict(routine.progress), turn, robot.rate_value))
+                    samples.append((robot.now, dict(routine.progress), turn, robot.rate_value))
                     return move(forward, strafe, turn, speed=speed)
 
                 def stopped():
@@ -364,31 +397,32 @@ class AutonomousTurnTests(unittest.TestCase):
                         arrivals.append((dict(routine.progress), robot.now))
                     halt()
 
-                routine.move = record
-                drive.stop = stopped
+                routine.move, drive.stop = record, stopped
                 with patch.object(sample_autonomous, "time", FakeTime(robot)):
                     routine.run(threading.Event())
                 self.assertEqual(routine.progress['completed'], 4)
                 for step in range(4):
-                    segment = [(p, power, rate) for p, power, rate in samples if p['step'] == step]
-                    self.assertTrue(any(abs(power) > 0.4 for _, power, _ in segment), 'Speed recovers for every new target')
-                    approach = next(i for i, (p, _, _) in enumerate(segment) if p['turn_phase'] != 'cruise')
-                    self.assertLessEqual(abs(segment[approach][0]['error']), 30)
-                    self.assertTrue(all(abs(power) <= 0.4 for _, power, _ in segment[approach:]))
-                    self.assertTrue(all(p['turn_phase'] != 'cruise' for p, _, _ in segment[approach:]))
-                    self.assertTrue(all(power >= 0 for _, power, _ in segment), 'Never reverse to chase a marker')
+                    segment = [s for s in samples if s[1]['step'] == step]
+                    self.assertTrue(any(abs(power) > 0.3 for _, _, power, _ in segment))
+                    approach = next(i for i, (_, p, _, _) in enumerate(segment)
+                                    if p['turn_phase'] != 'cruise')
+                    self.assertLessEqual(abs(segment[approach][1]['error']), 30)
+                    self.assertTrue(all(abs(power) <= 0.3 for _, _, power, _ in segment[approach:]))
                     arrival, when = arrivals[step]
                     self.assertEqual(arrival['step'], step)
                     self.assertEqual(arrival['target'], wrap180(170 + 90 * (step + 1)))
-                    self.assertLessEqual(abs(arrival['error']), 2)
-                    self.assertEqual(arrival['power_limit'], 0)
-                    if step < 3:
-                        self.assertGreaterEqual(started[step + 1] - when, routine.MARKER_PAUSE_SECONDS)
-                self.assertGreaterEqual(robot.now - arrivals[3][1], routine.MARKER_PAUSE_SECONDS)
-                # With the largest simulated inertia, outputs-off coasting can
-                # carry it past the marker; arrival must not restart correction.
-                self.assertLess(abs(wrap180(robot.value - 170)), 10)
+                    self.assertLessEqual(abs(arrival['error']), 3)
+                    self.assertLessEqual(abs(arrival['turn_rate']), routine.turn_heading.STOPPED_DPS)
+                    # Every sample in the final dwell is in tolerance and at
+                    # rest; a quick pass through a marker cannot advance PLAN.
+                    dwell = [s for s in segment if s[0] >= when - routine.turn_heading.settle_seconds]
+                    self.assertGreaterEqual(len(dwell), 14)
+                    self.assertTrue(all(abs(p['error']) <= 3 and power == 0
+                                        for _, p, power, _ in dwell))
                 self.assertFalse(robot.moving())
+                robot.advance(0.5)  # Remaining inertia must not spoil the final heading.
+                self.assertLessEqual(abs(wrap180(robot.value - 170)), 3)
+                self.assertLess(robot.now, routine.duration_seconds)
 
     def test_noisy_turn_rate_does_not_trap_the_plan_at_the_first_marker(self):
         robot = SimRobot(heading=170)
@@ -416,14 +450,14 @@ class AutonomousTurnTests(unittest.TestCase):
         self.assertFalse(robot.moving())
         self.assertLess(robot.now, 1.0)
 
-    def test_crossing_a_marker_latches_arrival_without_reversing_or_chasing_an_undershoot(self):
+    def test_overshoot_and_undershoot_are_corrected_before_completing_a_turn(self):
         for direction in (-1, 1):
             with self.subTest(direction=direction):
                 robot = SimRobot(heading=170 * direction)
                 robot.LAG_SECONDS = 0.2
                 drive = MecanumDrive(robot, sensors=robot)
                 routine = sample_autonomous.MecanumAutonomous(robot, drive)
-                target = robot.value + 90 * direction  # Also crosses the ±180° heading boundary.
+                target = robot.value + 90 * direction  # Crosses the IMU heading wrap.
                 disturbances, samples = [], []
                 advance, move = robot.advance, routine.move
 
@@ -431,45 +465,46 @@ class AutonomousTurnTests(unittest.TestCase):
                     advance(seconds)
                     error = wrap180(target - robot.value)
                     if not disturbances and abs(error) < 10:
-                        # Momentum carries it well past the target.
                         robot.value, robot.rate_value = target + 20 * direction, 130 * direction
                         disturbances.append('overshoot')
-                    elif len(disturbances) == 1 and routine.progress['turn_phase'] == 'reached':
-                        self.assertFalse(robot.moving(), 'The pause must keep outputs off')
-                        # Even a bounce back across the marker cannot undo arrival.
+                    elif (len(disturbances) == 1 and error * direction < 0 and abs(error) < 8):
                         robot.value, robot.rate_value = target - 12 * direction, -100 * direction
                         disturbances.append('undershoot')
 
                 def record(forward, strafe, turn, speed):
                     result = move(forward, strafe, turn, speed=speed)
-                    samples.append((routine.progress['turn_phase'], turn, dict(robot.outputs)))
+                    samples.append((len(disturbances), dict(routine.progress), turn, dict(robot.outputs)))
                     return result
 
                 robot.advance, routine.move = disturb, record
                 with patch.object(sample_autonomous, 'time', FakeTime(robot)):
                     self.assertTrue(routine.turn_to(target, threading.Event()))
                     self.assertEqual(disturbances, ['overshoot', 'undershoot'])
+                    self.assertTrue(any(n == 1 and p['error'] * direction < -3 and power * direction < 0
+                                        for n, p, power, _ in samples), 'Reverse to correct overshoot')
+                    self.assertTrue(any(n == 2 and p['error'] * direction > 3 and power * direction > 0
+                                        for n, p, power, _ in samples), 'Reverse again after undershoot')
+                    first = next(i for i, (_, p, _, _) in enumerate(samples) if p['turn_phase'] == 'correction')
+                    self.assertTrue(all(max(map(abs, wheels.values())) <= 0.3
+                                        for _, _, _, wheels in samples[first:]))
                     self.assertEqual(routine.progress['turn_phase'], 'reached')
-                    self.assertTrue(all(turn * direction >= 0 for _, turn, _ in samples))
-                    self.assertTrue(all(phase != 'reached' for phase, _, _ in samples),
-                                    'No motor command is sent after arrival')
-                    self.assertLess(routine.progress['error'] * direction, 0,
-                                    'Crossing between samples counts even outside tolerance')
+                    self.assertLessEqual(abs(wrap180(robot.value - target)), 3)
                     self.assertFalse(robot.moving())
-                    # Starting a genuinely new target restores the normal profile.
                     robot.advance = advance
+                    robot.advance(0.5)
+                    self.assertLessEqual(abs(wrap180(robot.value - target)), 3)
                     before_next_turn = len(samples)
                     self.assertTrue(routine.turn_to(target + 90 * direction, threading.Event()))
-                    self.assertTrue(any(max(map(abs, wheels.values())) > 0.4
-                                        for _, _, wheels in samples[before_next_turn:]))
+                    self.assertTrue(any(abs(power) > 0.3 for _, _, power, _ in samples[before_next_turn:]))
 
     def test_stalled_turn_fails_and_does_not_advance(self):
         robot = SimRobot()
         robot.advance = lambda seconds: setattr(robot, 'now', robot.now + seconds)
-        with self.assertRaisesRegex(RuntimeError, 'did not reach its marker'):
+        with self.assertRaisesRegex(RuntimeError, 'did not settle'):
             self.run_plan(robot)
         self.assertFalse(robot.moving())
-        self.assertLess(robot.now, 7)
+        self.assertGreaterEqual(robot.now, sample_autonomous.MecanumAutonomous.TURN_TIMEOUT)
+        self.assertLess(robot.now, sample_autonomous.MecanumAutonomous.TURN_TIMEOUT + 0.1)
 
     def test_turning_away_across_the_error_wrap_does_not_count_as_arrival(self):
         robot = SimRobot()
@@ -479,7 +514,7 @@ class AutonomousTurnTests(unittest.TestCase):
             robot.value = -100  # Error for the +90 target wraps from +90 to -170.
 
         robot.advance = turn_away
-        with self.assertRaisesRegex(RuntimeError, 'did not reach its marker'):
+        with self.assertRaisesRegex(RuntimeError, 'did not settle'):
             self.run_plan(robot)
         self.assertFalse(robot.moving())
 
@@ -493,10 +528,12 @@ class AutonomousTurnTests(unittest.TestCase):
             if any(robot.outputs.values()):
                 recorded.append(dict(robot.outputs))
         robot.set_motors = record
-        for _ in range(2):
-            routine = self.run_plan(robot)
-            self.assertEqual(routine.progress['completed'], 4)
-            self.assertLessEqual(abs(routine.progress['error']), 2)
+        routine = sample_autonomous.MecanumAutonomous(robot, MecanumDrive(robot, sensors=robot))
+        with patch.object(sample_autonomous, 'time', FakeTime(robot)):
+            for _ in range(2):
+                routine.run(threading.Event())
+                self.assertEqual(routine.progress['completed'], 4)
+                self.assertLessEqual(abs(routine.progress['error']), 3)
         self.assertTrue(recorded)
         for outputs in recorded:
             turn = outputs['front_left']
@@ -510,7 +547,7 @@ class AutonomousTurnTests(unittest.TestCase):
         self.run_plan(robot, stop)
         self.assertFalse(robot.moving())
 
-    def test_disable_during_marker_pause_does_not_start_the_next_turn(self):
+    def test_disable_during_settling_does_not_start_the_next_turn(self):
         robot, stop = SimRobot(), threading.Event()
         drive = MecanumDrive(robot, sensors=robot)
         routine = sample_autonomous.MecanumAutonomous(robot, drive)
@@ -518,7 +555,7 @@ class AutonomousTurnTests(unittest.TestCase):
 
         def disable_at_marker(seconds):
             advance(seconds)
-            if routine.progress.get('turn_phase') == 'reached':
+            if routine.progress.get('turn_phase') == 'settling':
                 self.assertFalse(robot.moving())
                 stop.set()
 

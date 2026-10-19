@@ -205,14 +205,15 @@ class MecanumSensorTests(unittest.TestCase):
     def test_autonomous_turns_left_to_ninety_degrees_by_the_imu(self):
         sensors = FakeHeadingSensors()
         module = TurningModule(sensors)
-        # Instantaneous and frictionless: a real breakaway nudge would jump
-        # eight degrees in a single write. Inertia/friction are tested with
-        # SimRobot in test_heading instead.
-        from motion_module.heading import HeadingController
-        drive = MecanumDrive(module, sensors=sensors, heading=HeadingController(min_turn_power=0))
+        # This fixture jumps on each write, with no time-based physics or
+        # friction. Exercise direction using P only; test_heading covers PID
+        # with measured time, inertia, friction and overshoot.
+        from motion_module.heading import TurnPID
+        drive = MecanumDrive(module, sensors=sensors)
         routine = MecanumAutonomous(module, drive)
+        routine.turn_heading = TurnPID(ki=0, kd=0, min_turn_power=0)
         self.assertTrue(routine.turn_to(90, threading.Event()))
-        self.assertAlmostEqual(sensors.value, 90, delta=routine.heading.tolerance + 1)
+        self.assertAlmostEqual(sensors.value, 90, delta=routine.turn_heading.tolerance)
         self.assertEqual(set(module.outputs.values()), {0})
 
     def test_autonomous_waits_without_moving_until_builtin_imu_is_ready(self):
@@ -243,15 +244,16 @@ class MecanumSensorTests(unittest.TestCase):
         sensors = FakeHeadingSensors()
         sensors.value = 170.0
         module = TurningModule(sensors)
-        # This instantaneous, frictionless fixture needs no breakaway power.
-        # The dynamic heading tests exercise the real minimum-power setting.
-        from motion_module.heading import HeadingController
-        drive = MecanumDrive(module, sensors=sensors, heading=HeadingController(min_turn_power=0))
+        # See the P-only direction fixture above; dynamic PID tests live in
+        # test_heading and use the actual autonomous tuning.
+        from motion_module.heading import TurnPID
+        drive = MecanumDrive(module, sensors=sensors)
         routine = MecanumAutonomous(module, drive)
+        routine.turn_heading = TurnPID(ki=0, kd=0, min_turn_power=0)
         routine.turn_to(-170, threading.Event())
         # Turning left 20 degrees from 170 lands on -170 after passing 180.
         self.assertGreater(sensors.value, 180)
-        self.assertAlmostEqual(sensors.value, 190, delta=2)
+        self.assertAlmostEqual(sensors.value, 190, delta=routine.turn_heading.tolerance)
         self.assertEqual(set(module.outputs.values()), {0})
 
     def test_autonomous_turn_stops_when_disabled(self):

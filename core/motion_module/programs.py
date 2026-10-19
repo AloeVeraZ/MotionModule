@@ -16,6 +16,7 @@ MODES = {"teleop", "autonomous"}
 # robot folders unchanged across software updates, so the previous release's
 # example may be newer than the copy still on a robot. Never match by name.
 LEGACY_AUTONOMOUS_BUNDLES = {
+    "3680686eaa5b38a880a3115d689ff4ce4b67acfee2c6b78bf05fb50a31bd923b",
     "f0a93d84622724427410312967f67b31a892e67fdded05f0a807cbc1a316b68d",
     "b9054779c69ea10be0c0b90ff66b4fef6119a8888e0262980353f6fe5c7cd967",
     "2f6c86c5c42e574d719a65a13644d2c117f6f1c2bb1d7d0dad6c8591401e491f",

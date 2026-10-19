@@ -1,7 +1,6 @@
 """Heading control from the IMU: hold a direction, turn to one, snap by 90°.
 
-The IMU heading loop lives in one place so driving and autonomous
-behave the same way:
+HeadingController supplies TeleOp's proportional and derivative loop:
 
     error = target - heading, wrapped to -180..180 so it turns the short way
     power = kP * error - kD * turn_rate
@@ -12,6 +11,9 @@ degree, with damping from the gyro. A turn counts as finished only after the
 heading has stayed within the tolerance for a moment, so a robot swinging
 through the target does not count.
 
+Autonomous uses TurnPID below, with independent gains and a bounded integral
+term to overcome friction near a marker.
+
 Angles are degrees and count up turning left (counter-clockwise), the same
 way a positive ``rotate`` turns, so a positive power turns left. Powers here
 are real motor power (0 to 1), before any speed limit.
@@ -21,7 +23,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 def wrap180(degrees: float) -> float:
@@ -95,6 +97,71 @@ class Settle:
         if self._since is None:
             self._since = now
         return now - self._since >= self.controller.settle_seconds
+
+
+@dataclass
+class TurnPID(HeadingController):
+    """Stateful PID for stationary autonomous turns; reset for each target.
+
+    Derivative follows measured heading movement across the angle wrap, rather
+    than a target change or a biased gyro-rate reading. Integral acts only near
+    the target, is bounded in motor power, and clears on arrival or crossing.
+    TeleOp continues using HeadingController independently.
+    """
+
+    kp: float = 0.018
+    ki: float = 0.006
+    kd: float = 0.004
+    max_power: float = 0.4
+    tolerance: float = 3.0
+    settle_seconds: float = 0.3
+    integral_window: float = 20.0
+    integral_power_limit: float = 0.20
+    derivative_seconds: float = 0.06
+    STOPPED_DPS = 8.0
+
+    rate: float = field(default=0.0, init=False)
+    _integral: float = field(default=0.0, init=False)
+    _last_heading: float | None = field(default=None, init=False)
+    _last_time: float | None = field(default=None, init=False)
+    _last_error: float | None = field(default=None, init=False)
+
+    def reset(self) -> None:
+        self.rate = self._integral = 0.0
+        self._last_heading = self._last_time = self._last_error = None
+
+    def update(self, target: float, heading: float, now: float, *, limit: float | None = None) -> float:
+        """Return actual signed motor power, including reverse correction."""
+
+        error = self.error(target, heading)
+        dt = 0.0 if self._last_time is None else max(0.0, now - self._last_time)
+        if dt > 0 and self._last_heading is not None:
+            measured_rate = wrap180(heading - self._last_heading) / dt
+            alpha = dt / (self.derivative_seconds + dt)
+            self.rate += alpha * (measured_rate - self.rate)
+        crossed = self._last_error is not None and self._last_error * error < 0
+        self._last_heading, self._last_time, self._last_error = heading, now, error
+        limit = self.max_power if limit is None else min(self.max_power, limit)
+
+        on_target = abs(error) <= self.tolerance
+        if on_target or crossed or abs(error) > self.integral_window:
+            self._integral = 0.0
+        elif self.ki > 0 and dt > 0:
+            bound = self.integral_power_limit / self.ki
+            candidate = max(-bound, min(bound, self._integral + error * min(dt, 0.1)))
+            raw = self.kp * error + self.ki * candidate - self.kd * self.rate
+            # Don't wind up while pushing into the power cap; allow unwinding.
+            if abs(raw) <= limit or raw * error <= 0:
+                self._integral = candidate
+
+        if on_target:
+            # Let a stationary robot rest inside the band, brake a fast crossing.
+            power = 0.0 if abs(self.rate) <= self.STOPPED_DPS else -self.kd * self.rate
+        else:
+            power = self.kp * error + self.ki * self._integral - self.kd * self.rate
+            if abs(self.rate) < self.STOPPED_DPS and power * error > 0:
+                power = math.copysign(max(abs(power), self.min_turn_power), power)
+        return max(-limit, min(limit, power))
 
 
 class HeadingHold:

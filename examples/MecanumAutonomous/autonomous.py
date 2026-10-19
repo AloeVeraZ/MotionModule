@@ -7,12 +7,11 @@ calls `run(stop)` on the object it returns each time the operator starts
 autonomous.
 
 What it does: turn left to 90, 180, 270 and 360 degrees from the starting
-direction, stopping briefly at each marker. It never translates.
-Change PLAN to make your own. Each turn cruises at up to 50% power, slows to
-at most 40% for the last 30 degrees, then tapers. Reaching within two degrees
-or crossing the marker completes that turn: it stops, pauses, and advances
-without reversing to chase the old target. After 360 degrees it ends.
-This program has its own folder and does not import teleop code.
+heading, then end. Each turn uses its own PID loop: slow down on approach,
+reverse to correct overshoot, and stay within ±3 degrees at a low measured
+turn rate for 0.3 seconds before advancing. Crossing a marker is not enough.
+It never translates. Change PLAN to make your own. This program has its own
+folder and does not import teleop code.
 
 It never zeroes the IMU. Every angle in PLAN counts from the way the robot
 faces when Enable is pressed, so line the robot up first.
@@ -26,10 +25,10 @@ every output immediately whether or not this code notices, but a routine that
 returns promptly is a routine you can trust.
 """
 
+import math
 import time
-from dataclasses import replace
 
-from motion_module.heading import HeadingController, wrap180
+from motion_module.heading import HeadingController, Settle, TurnPID, wrap180
 
 
 # Each step is one of:
@@ -48,15 +47,14 @@ class MecanumAutonomous:
     # How long the routine is allowed to run before MotionModule cuts it off.
     # Competition autonomous periods are bounded; so is this. Set it to None
     # for no limit, but then only DISABLE can end a routine that loops.
-    duration_seconds = 30.0
+    duration_seconds = 60.0
 
     DRIVE_SPEED = 0.35      # power limit while driving a step
-    TURN_SPEED = 0.50       # cruise power; actual motor power, not a multiplier
-    APPROACH_SPEED = 0.40   # maximum power near each target
+    TURN_SPEED = 0.40       # actual motor power, not a multiplier
+    APPROACH_SPEED = 0.30   # maximum power near each target
+    CORRECTION_SPEED = 0.30 # latched cap after overshoot, in either direction
     APPROACH_DEGREES = 30.0
-    STOPPED_RATE = 15.0     # allow breakaway power despite small gyro-rate noise
-    MARKER_PAUSE_SECONDS = 0.25  # outputs off between markers, including the last
-    TURN_TIMEOUT = 6.0      # seconds before failing a turn, never skipping it
+    TURN_TIMEOUT = 12.0    # includes overshoot recovery and settling; never skip a marker
     LOOP_SECONDS = 0.02     # 50 updates a second
     IMU_READY_TIMEOUT = 5.0  # remain stopped while startup calibration finishes
 
@@ -66,13 +64,8 @@ class MecanumAutonomous:
         # Both programs read the same runtime-managed, built-in Pi IMU.
         self.sensors = getattr(drive, "sensors", None)
         self.heading = getattr(drive, "heading", None) or HeadingController()
-        # More damping for repeated stationary turns. Keep teleop's heading
-        # hold and snap-turn tuning independent.
-        self.turn_heading = replace(
-            self.heading if isinstance(self.heading, HeadingController) else HeadingController(),
-            kd=0.004,
-        )
-        self.turn_heading.STOPPED_DPS = self.STOPPED_RATE
+        # Dedicated PID state and tuning; no changes to TeleOp heading assist.
+        self.turn_heading = TurnPID(max_power=self.TURN_SPEED)
         # move() sets the wheels with no driver assist in the way.
         self.move = getattr(drive, "move", drive.drive)
         self.target = 0.0
@@ -108,57 +101,61 @@ class MecanumAutonomous:
         return True
 
     def turn_to(self, target, stop):
-        """Reach a marker once, stop briefly, then let the plan advance."""
+        """Correct in either direction until this marker is stable within ±3°."""
 
         self.target = wrap180(target)
+        self.turn_heading.reset()
+        settle = Settle(self.turn_heading)
         approaching = False
+        overshot = False
         direction = None
         previous_error = None
         deadline = time.monotonic() + self.TURN_TIMEOUT
-        while time.monotonic() < deadline:
-            if stop.is_set():
-                return False
-            heading = self.sensors.heading()
-            if heading is None:
-                raise RuntimeError("IMU heading lost; autonomous stopped")
-            error = wrap180(self.target - heading)
-            if direction is None:
-                direction = 1 if error >= 0 else -1
-            # A sign change at the opposite side of the ±180° error wrap is
-            # not a target crossing (for example, a robot turning away).
-            crossed = (previous_error is not None
-                       and previous_error * direction > 0 >= error * direction
-                       and abs(error - previous_error) < 180)
-            reached = abs(error) <= self.turn_heading.tolerance or crossed
-            previous_error = error
-            rate_reader = getattr(self.sensors, "rate", None)
-            rate = rate_reader() if callable(rate_reader) else None
-            # Once slow, stay slow until this marker is reached.
-            approaching = approaching or abs(error) <= self.APPROACH_DEGREES
-            limit = self.APPROACH_SPEED if approaching else self.TURN_SPEED
-            limit = min(limit, self.turn_heading.max_power)
-            self.progress = {**self.progress, "target": self.target,
-                             "heading": heading, "error": error,
-                             "turn_phase": "reached" if reached else "approach" if approaching else "cruise",
-                             "power_limit": 0.0 if reached else limit}
-            # Arrival is latched even if momentum carries the robot past the
-            # marker. Never keep correcting a completed turn back and forth.
-            if reached:
-                break
-            turn = self.turn_heading.power(self.target, heading, rate, in_place=True)
-            # Damping can reduce power to zero, but cannot reverse this turn.
-            turn = direction * max(0.0, min(limit, turn * direction))
-            self.move(0, 0, turn, speed=1.0)
-            time.sleep(self.LOOP_SECONDS)
-        else:
-            raise RuntimeError(f"Turn to {self.target:g}° did not reach its marker within {self.TURN_TIMEOUT:g}s")
-        self.drive.stop()
-        pause_until = time.monotonic() + self.MARKER_PAUSE_SECONDS
-        while time.monotonic() < pause_until:
-            if stop.is_set():
-                return False
-            time.sleep(self.LOOP_SECONDS)
-        return True
+        heading = error = None
+        try:
+            while time.monotonic() < deadline:
+                if stop.is_set():
+                    return False
+                heading = self.sensors.heading()
+                if heading is None or not math.isfinite(heading):
+                    raise RuntimeError("IMU heading lost; autonomous stopped")
+                now = time.monotonic()
+                error = wrap180(self.target - heading)
+                if direction is None:
+                    direction = 1 if error >= 0 else -1
+                crossed = (previous_error is not None
+                           and previous_error * direction > 0 >= error * direction
+                           and abs(error - previous_error) < 180)
+                overshot = overshot or crossed
+                previous_error = error
+                approaching = approaching or abs(error) <= self.APPROACH_DEGREES
+                limit = self.APPROACH_SPEED if approaching else self.TURN_SPEED
+                if overshot:
+                    limit = min(limit, self.CORRECTION_SPEED)
+                turn = self.turn_heading.update(self.target, heading, now, limit=limit)
+                still = abs(self.turn_heading.rate) <= self.turn_heading.STOPPED_DPS
+                if not still:
+                    settle = Settle(self.turn_heading)
+                on_target = abs(error) <= self.turn_heading.tolerance
+                phase = "settling" if still and on_target else "correction" if overshot else "approach" if approaching else "cruise"
+                self.progress = {**self.progress, "target": self.target,
+                                 "heading": heading, "error": error,
+                                 "tolerance_degrees": self.turn_heading.tolerance,
+                                 "turn_phase": phase, "power_limit": limit,
+                                 "turn_power": turn, "turn_rate": self.turn_heading.rate}
+                if still and settle.update(self.target, heading, now):
+                    self.progress = {**self.progress, "turn_phase": "reached", "turn_power": 0.0}
+                    return True
+                self.move(0, 0, turn, speed=1.0)
+                time.sleep(self.LOOP_SECONDS)
+            marker = self.progress.get("target_degrees", target)
+            raise RuntimeError(
+                f"Turn to {marker:g}° did not settle within ±{self.turn_heading.tolerance:g}° "
+                f"in {self.TURN_TIMEOUT:g}s (IMU target {self.target:.1f}°, "
+                f"heading {heading:.1f}°, error {error:+.1f}°)"
+            )
+        finally:
+            self.drive.stop()
 
     def hold(self, seconds, stop):
         """Stay still, nudging the heading back if the robot was bumped."""
@@ -201,6 +198,7 @@ class MecanumAutonomous:
                     _, forward, strafe, seconds = step
                     done = self.drive_for(forward, strafe, seconds, stop)
                 elif kind == "turn":
+                    self.progress = {**self.progress, "target_degrees": step[1]}
                     done = self.turn_to(start + step[1], stop)
                 elif kind == "hold":
                     done = self.hold(step[1], stop)

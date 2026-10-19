@@ -1096,7 +1096,7 @@ function renderAutoStatus() {
     return element('li', '', `${done ? '✓ ' : active ? '▶ ' : ''}${step.join(' ')}${step[0] === 'turn' ? '° from start' : ''}`);
   }));
   $('#autoLive').textContent = progress && Number.isFinite(progress.error)
-    ? `Target ${progress.target.toFixed(1)}° · Heading ${progress.heading.toFixed(1)}° · Error ${progress.error.toFixed(1)}° (±2° tolerance)`
+    ? `${Number.isFinite(progress.target_degrees) ? `Marker ${progress.target_degrees}° from start · ` : ''}Target ${progress.target.toFixed(1)}° · Heading ${progress.heading.toFixed(1)}° · Error ${progress.error.toFixed(1)}° (±${Number.isFinite(progress.tolerance_degrees) ? progress.tolerance_degrees : 2}° tolerance)${progress.turn_phase ? ` · ${progress.turn_phase}` : ''}`
     : autoState.configured ? 'Live commands appear when the routine reports progress.' : '';
 }
 
