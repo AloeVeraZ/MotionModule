@@ -58,20 +58,24 @@
   width: 2.25rem; height: 2.25rem; flex: none;
 }
 .station-mark img { display: block; width: 100%; height: 100%; }
-.station-brand strong { display: block; overflow: hidden; font: 700 1.125rem/1 var(--font-display); letter-spacing: .06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.station-brand strong { display: block; overflow: hidden; overflow-wrap: anywhere; font: 700 1.125rem/1 var(--font-display); letter-spacing: .06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .station-brand small { display: block; margin-top: .1875rem; color: var(--accent-text); font: 700 .75rem/1 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
+.station-brand .brand-short { display: none; }
 .station-control-panel { flex: 1 0 100%; }
 .station-control-panel .panel-body {
-  display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(16rem, 1fr) minmax(13rem, auto) auto;
+  display: flex; flex-wrap: wrap;
   align-items: center; gap: .75rem;
 }
+.station-control-panel .panel-body > * { min-width: 0; }
+.station-control-panel .mode-switch { flex: 0 1 16rem; }
+.station-control-panel .program-choice { flex: 1 1 16rem; }
 .station-control-panel .program-choice { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .25rem .75rem; }
 .station-control-panel .program-choice .eyebrow { grid-column: 1 / -1; margin: 0; }
 .station-control-panel .program-choice strong { min-width: 0; }
 .station-control-panel .program-choice .empty-copy { grid-column: 1 / -1; margin: 0; }
-.station-control-panel .command-pair { min-width: 13rem; }
-.station-control-panel .stop-command { width: auto; min-height: 3rem; padding-inline: 1rem; font-size: .875rem; }
-.station-control-panel .auto-status { grid-column: 1 / -1; }
+.station-control-panel .command-pair { flex: 0 1 13rem; }
+.station-control-panel .stop-command { flex: 0 1 auto; width: auto; min-height: 3rem; padding-inline: 1rem; font-size: .875rem; white-space: normal; text-align: center; }
+.station-control-panel .auto-status { flex: 1 0 100%; }
 .header-center { display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .project-chip, .clock-chip {
   display: flex; align-items: center; gap: .5rem;
@@ -104,8 +108,8 @@
 .signal.good i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .signal.warn i { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); }
 .signal.bad i { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
-.signal small { color: var(--faint); font: 700 .6875rem/1.2 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
-.signal strong { overflow: hidden; font: 700 1rem/1.2 var(--font-display); letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+.signal small { min-width: 0; color: var(--faint); font: 700 .6875rem/1.2 var(--font-display); letter-spacing: var(--tracking-label); overflow-wrap: anywhere; text-transform: uppercase; }
+.signal strong { min-width: 0; overflow: hidden; font: 700 1rem/1.2 var(--font-display); letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
 
 .connection-banner { display: none; margin: .625rem .75rem 0; }
 .connection-banner.visible { display: block; }
@@ -113,7 +117,7 @@
 /* ------------------------------------------------------------------ grid */
 
 .station-grid {
-  display: grid; grid-template-columns: 16rem minmax(24rem, 1fr) 19.5rem; align-items: start;
+  display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr) minmax(0, 19.5rem); align-items: start;
   gap: .75rem;
   padding: .75rem .75rem 1.25rem;
 }
@@ -147,20 +151,22 @@
 .mode-switch button {
   position: relative;
   overflow: hidden;
-  min-height: 2.25rem;
+  min-width: 0; min-height: 2.25rem;
   padding: 0 .5rem;
   border: 1px solid transparent;
   border-radius: 999px;
   background: none;
   color: var(--muted);
-  font: 700 .6875rem/1 var(--font-text);
+  font: 700 .6875rem/1.15 var(--font-text);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
+  white-space: normal;
   transition: color .15s ease, background-color .2s ease, border-color .2s ease;
 }
 .mode-switch button:hover:not(:disabled) { color: var(--ink); }
 .mode-switch button.active { border-color: var(--accent-line); background: var(--accent-soft); color: var(--ink); }
 .mode-switch button:disabled { opacity: .5; cursor: not-allowed; }
+.mode-switch .short-label { display: none; }
 .auto-status { display: grid; gap: .3125rem; padding: .625rem .75rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
 .auto-status strong { font: 700 1.125rem/1 var(--font-display); letter-spacing: .04em; }
 .auto-status small { color: var(--faint); font-size: .75rem; line-height: 1.5; }
@@ -193,6 +199,7 @@
   background: var(--control);
   font: 700 1.125rem/1 var(--font-display);
   letter-spacing: .1em;
+  min-width: 0; padding-inline: .25rem; white-space: normal;
   transition: transform .15s var(--ease), opacity .2s ease, box-shadow .2s ease;
 }
 .command:not(:disabled):active { transform: scale(.97); }
@@ -483,9 +490,8 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 /* ------------------------------------------------------------ responsive */
 
 @media (max-width: 1100px) {
-  .station-control-panel .panel-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
-  .station-control-panel .command-pair { min-width: 0; }
-  .station-control-panel .stop-command { width: 100%; }
+  .station-control-panel .mode-switch, .station-control-panel .program-choice { flex: 1 1 17rem; }
+  .station-control-panel .command-pair, .station-control-panel .stop-command { flex: 1 1 13rem; }
   .station-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .center-column { grid-column: 1 / -1; grid-row: 1; }
   .left-column { grid-column: 1; grid-row: 2; }
@@ -512,7 +518,8 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 .station-header { flex-wrap: wrap; }
 .station-tools .exit-link { min-height: 44px; }
 .panel-head { flex-wrap: wrap; }
-.station-mobile-stop { display: none; }
+.station-mobile-stop-dock { display: none; }
+.station-mobile-stop { width: 100%; min-height: 52px; justify-content: center; font-size: 1rem; }
 .exit-short { display: none; }
 .drive-help { font-size: .75rem; color: var(--muted); }
 .drive-help summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; gap: .5rem; }
@@ -523,26 +530,31 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 .safety-check { min-height: 44px; align-items: center; }
 .key-grid { gap: .5rem; }
 @media (min-width: 701px) and (max-width: 1100px) {
-  .station-grid { grid-template-columns: minmax(16rem, .8fr) minmax(0, 1.2fr); }
+  .station-grid { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
   .left-column { grid-column: 1; grid-row: 1 / span 2; }
   .center-column { grid-column: 2; grid-row: 1; }
   .right-column { grid-column: 2; grid-row: 2; }
 }
 @media (max-width: 700px) {
-  .station-header { margin: .75rem 1rem 0; padding: .75rem; gap: .75rem; }
+  .station-header { margin: .75rem 1rem 0; padding: clamp(.5rem, 2.5vw, .75rem); gap: .75rem; }
   .station-brand { flex-basis: 100%; }
   .station-brand strong { white-space: normal; line-height: 1.15; font-size: 1.25rem; }
   .header-center { order: 0; width: auto; }
   .project-chip { max-width: 100%; min-height: 2rem; padding-inline: .625rem; }
   .station-tools { width: 100%; justify-content: space-between; gap: .5rem; }
-  .station-control-panel .panel-body { grid-template-columns: minmax(0, 1fr); }
+  .station-control-panel .panel-body > :not(.auto-status) { flex: 1 1 100%; }
   .station-control-panel .program-choice { grid-template-columns: minmax(0, 1fr); }
+  .station-control-panel .program-choice .button { max-width: 100%; white-space: normal; text-align: center; }
+  .station-control-panel .panel-body { padding: clamp(.5rem, 2.5vw, 1rem); }
+  .mode-switch .long-label { display: none; }
+  .mode-switch .short-label { display: inline; }
+  .command-pair .command { font-size: .875rem; letter-spacing: .04em; }
   .station-tools .exit-link { padding-inline: .625rem; font-size: .625rem; }
   .exit-long { display: none; }
   .exit-short { display: inline; }
   #stopButton { display: none; } /* The fixed mobile Stop stays in reach. */
   .signal-strip { padding: .75rem 1rem 0; }
-  .station-grid { padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom)); gap: 1rem; }
+  .station-grid { padding: 1rem 1rem calc(6.5rem + env(safe-area-inset-bottom)); gap: 1rem; }
   .column { gap: 1rem; }
   .panel-head, .panel-body { padding: 1rem; }
   .empty-copy, .safety-check, .range-label { font-size: .8125rem; }
@@ -550,17 +562,36 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   .camera-controls { width: 100%; }
   .camera-controls button { flex: 1; min-height: 44px; }
   .control-row input[type="range"] { width: min(8rem, 30vw); }
-  .station-mobile-stop {
-    display: flex; position: fixed; z-index: 70;
-    bottom: calc(1rem + env(safe-area-inset-bottom));
-    left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right));
-    min-height: 52px; justify-content: center; font-size: 1rem;
+  .station-mobile-stop-dock {
+    display: block; position: fixed; z-index: 70;
+    bottom: 0; left: 0; right: 0;
+    width: 100vw; max-width: 100vw;
+    padding: .75rem max(1rem, env(safe-area-inset-right)) calc(.75rem + env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+    border-top: 1px solid var(--line);
+    background: var(--bg);
+    box-shadow: 0 -12px 30px -20px rgba(0, 0, 0, .85);
   }
 }
 @media (max-width: 360px) {
+  .header-center { display: none; } /* The selected program already names the running robot. */
   .station-tools { justify-content: stretch; }
   .station-tools .theme-switch, .station-tools .exit-link { flex: 1; }
   .station-tools .theme-switch button { flex: 1; }
+  .mode-switch button { min-width: 0; padding-inline: .25rem; font-size: .625rem; letter-spacing: .04em; white-space: normal; line-height: 1.15; }
+}
+@media (max-width: 420px) {
+  .station-mark { width: 2rem; height: 2rem; }
+  .station-brand strong { font-size: 1.0625rem; overflow-wrap: normal; }
+  .station-brand .brand-full, .station-brand small { display: none; }
+  .station-brand .brand-short { display: inline; }
+  .station-tools .exit-link { flex: 0 0 2.75rem; padding-inline: .25rem; color: var(--ink); }
+  .station-tools { justify-content: flex-end; }
+  .exit-short { display: none; }
+  .station-control-panel .command-pair { grid-template-columns: minmax(0, 1fr); }
+  .station-control-panel .program-choice { padding: .5rem; }
+  .mode-switch { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); border-radius: var(--radius-sm); }
+  .mode-switch button { border-radius: var(--radius-xs); }
+  .station-state strong { font-size: clamp(1.5rem, 8vw, 2.125rem); }
 }
 
 /* ------------------------------------------------------------ touchscreen */
@@ -623,20 +654,24 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
   html[data-input="touch"] .turn-buttons .drive-key { min-height: 0; height: 100%; }
   html[data-input="touch"] .camera-stage { grid-template-columns: minmax(0, 1fr); }
   html[data-input="touch"] #stopButton { display: none; } /* The fixed Stop stays in reach. */
-  html[data-input="touch"] .station-mobile-stop {
-    display: flex; position: fixed; z-index: 70;
-    left: var(--hud-side-left); right: var(--hud-side-right); bottom: var(--hud-bottom);
-    min-height: 48px; justify-content: center; font-size: 1rem;
+  html[data-input="touch"] .station-mobile-stop-dock {
+    display: block; left: var(--hud-side-left); right: var(--hud-side-right); bottom: var(--hud-bottom);
+    width: auto; max-width: none;
+    padding: .25rem; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--surface);
   }
+  html[data-input="touch"] .station-mobile-stop { min-height: 48px; }
 }
-.station-state { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: .75rem; padding: .75rem 1rem; }
+.station-state { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem 1rem; margin: .75rem; padding: .75rem 1rem; }
 .program-choice { display: grid; gap: .625rem; padding: .875rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--well); }
 .program-choice strong { overflow-wrap: anywhere; }
-.program-picker { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); width: min(36rem, calc(100vw - 2rem)); max-height: 80vh; margin: auto; padding: 0; }
+.program-picker { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); width: min(36rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); margin: auto; padding: 0; overflow-y: auto; }
 .program-picker::backdrop { background: rgba(0,0,0,.65); }
-.program-folders { display: grid; gap: .5rem; }
-.program-folder { text-align: left; display: grid; gap: .25rem; width: 100%; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--well); color: var(--ink); cursor: pointer; }
+.program-picker .panel-body, .program-folders { display: grid; grid-template-columns: minmax(0, 1fr); }
+.program-folders { gap: .5rem; }
+.program-folder { min-width: 0; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr); gap: .25rem; width: 100%; padding: 1rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--well); color: var(--ink); cursor: pointer; }
 .program-folder:hover, .program-folder:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.program-folder strong { min-width: 0; overflow-wrap: anywhere; }
 .program-folder small { color: var(--muted); overflow-wrap: anywhere; }
 #keyGrid[hidden], #keyLegend[hidden] { display: none; }
 </style>
@@ -645,7 +680,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 <header class="station-header">
   <div class="station-brand">
     <span class="station-mark" aria-hidden="true"><img src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt=""></span>
-    <div><strong>MotionModule Driver Station</strong><small>Competition console</small></div>
+    <div><strong><span class="brand-full">MotionModule Driver Station</span><span class="brand-short">Driver Station</span></strong><small>Competition console</small></div>
   </div>
   <div class="header-center">
     <div class="project-chip"><span>ROBOT</span><strong>{{ project_name }}</strong></div>
@@ -663,16 +698,16 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 9.6A5.8 5.8 0 0 1 6.4 2.5a5.8 5.8 0 1 0 7.1 7.1z"></path></svg>
       </button>
     </div>
-    <a class="button exit-link" href="/drive" aria-label="Exit to MotionModule"><span class="exit-long">Exit to MotionModule</span><span class="exit-short">Exit</span>&nbsp;&nearr;</a>
+    <a class="button exit-link" href="/drive" aria-label="Exit to MotionModule"><span class="exit-long">Exit to MotionModule</span><span class="exit-short">Exit</span><span aria-hidden="true">&nearr;</span></a>
   </div>
   <section class="panel station-control-panel" aria-labelledby="robotControlTitle">
     <div class="panel-head"><h2 id="robotControlTitle">Robot control</h2><span id="watchdogLabel">WATCHDOG</span></div>
     <div class="panel-body">
       <div class="mode-switch" role="group" aria-label="Robot mode">
-        <button type="button" id="modeTeleop" class="active" data-mode="teleop">Teleoperated</button>
-        <button type="button" id="modeAuto" data-mode="autonomous">Autonomous</button>
+        <button type="button" id="modeTeleop" class="active" data-mode="teleop" aria-label="Teleoperated"><span class="long-label">Teleoperated</span><span class="short-label" aria-hidden="true">Teleop</span></button>
+        <button type="button" id="modeAuto" data-mode="autonomous" aria-label="Autonomous"><span class="long-label">Autonomous</span><span class="short-label" aria-hidden="true">Auto</span></button>
       </div>
-      <div class="program-choice"><span class="eyebrow" id="programModeLabel">Teleop program</span><strong id="selectedProgram">Loading program…</strong><button class="button" id="chooseProgram" type="button">Choose program folder</button><p class="empty-copy" id="programMessage" role="status"></p></div>
+      <div class="program-choice"><span class="eyebrow" id="programModeLabel">Teleop program</span><strong id="selectedProgram">Loading program…</strong><button class="button" id="chooseProgram" type="button" aria-label="Choose program folder">Choose folder</button><p class="empty-copy" id="programMessage" role="status"></p></div>
       <div class="command-pair">
         <button class="command enable" id="enableButton" type="button" disabled>ENABLE</button>
         <button class="command disable" id="disableButton" type="button">DISABLE</button>
@@ -696,7 +731,7 @@ html[data-input="touch"] #keyGrid, html[data-input="touch"] #keyLegend { display
 </div>
 <div class="notice danger connection-banner" id="connectionBanner" role="alert"><strong>Robot connection lost.</strong> Controls are disabled until telemetry returns and the operator deliberately enables again.</div>
 
-<button type="button" class="stop-button station-mobile-stop" id="mobileStop">Stop all outputs</button>
+<div class="station-mobile-stop-dock"><button type="button" class="stop-button station-mobile-stop" id="mobileStop">Stop all outputs</button></div>
 <dialog id="programPicker" class="program-picker" aria-labelledby="programPickerTitle">
   <div class="panel-head"><h2 id="programPickerTitle">Choose a program</h2><button class="button" id="closeProgramPicker" type="button">Close</button></div>
   <div class="panel-body stack"><p class="empty-copy" id="programPickerHelp">Click a folder to select it. Enable runs the selected code.</p><div class="program-folders" id="programFolders"></div></div>
@@ -927,10 +962,12 @@ async function refreshPrograms() {
     $('#selectedProgram').textContent = selected ? selected.name : programAvailable ? 'Choose a program folder' : {{ project_name | tojson }};
     $('#programModeLabel').textContent = mode === 'autonomous' ? 'Autonomous program' : 'Teleop program';
     $('#chooseProgram').disabled = !programAvailable || armed || programLoading;
-    $('#programMessage').textContent = programAvailable ? (selected ? selected.id : 'Choose the code to run in this mode.') : 'Running the local project. Folder selection is available on the installed robot.';
+    $('#chooseProgram').hidden = !programAvailable;
+    $('#programMessage').textContent = programAvailable ? (selected ? '' : 'Choose the code to run in this mode.') : 'Folder choice is available on an installed robot.';
+    $('#programMessage').hidden = Boolean(selected);
     updateEnableButton();
     return data;
-  } catch (error) { $('#programMessage').textContent = error.message; }
+  } catch (error) { $('#programMessage').hidden = false; $('#programMessage').textContent = error.message; }
 }
 
 async function openProgramPicker() {
@@ -956,6 +993,7 @@ async function selectProgram(entry) {
   updateEnableButton();
   $('#selectedProgram').textContent = entry.name;
   $('#programModeLabel').textContent = mode === 'autonomous' ? 'Autonomous program' : 'Teleop program';
+  $('#programMessage').hidden = false;
   $('#programMessage').textContent = `Loading ${entry.name}…`;
   try {
     await jsonFetch('/api/programs/select', {method: 'POST', headers: apiHeaders, body: JSON.stringify({program: entry.id, mode})});
@@ -964,6 +1002,7 @@ async function selectProgram(entry) {
     await Promise.all([refreshPrograms(), refreshStatus(), refreshAutonomous(), loadControls()]);
   } catch (error) {
     programLoading = false;
+    $('#programMessage').hidden = false;
     $('#programMessage').textContent = error.message;
     updateEnableButton();
   }

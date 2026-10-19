@@ -111,7 +111,7 @@ robots/
 
 Choose Teleoperated and click Mecanum once in the program picker. The selected
 folder's name appears in Robot control; Enable runs it. Choose Autonomous to
-select the separate Mecanum gyro-turn program. An autonomous program can also
+select the separate Autonomous Driver gyro-turn program. An autonomous program can also
 define `run(module, stop)` directly in its own `robot.py`, without a teleop
 `create_drive()` factory.
 

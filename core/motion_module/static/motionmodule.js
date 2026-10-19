@@ -112,6 +112,47 @@
     menuButton.addEventListener('click', () => setOpen(!bar.hasAttribute('data-nav-open')));
     document.addEventListener('keydown', event => { if (event.key === 'Escape') setOpen(false); });
     document.addEventListener('click', event => { if (!bar.contains(event.target)) setOpen(false); });
+
+    const inner = bar.querySelector('.topbar-inner');
+    const brand = bar.querySelector('.brand');
+    const nav = bar.querySelector('.nav-panel');
+    const links = bar.querySelector('.nav-links');
+    const display = bar.querySelector('.display-controls');
+    const tools = bar.querySelector('.topbar-tools');
+    if (inner && brand && nav && links && display && tools) {
+      let fitQueued = false;
+      const fitNavigation = () => {
+        fitQueued = false;
+        if (matchMedia('(max-width: 1100px)').matches) {
+          bar.removeAttribute('data-compact');
+          return;
+        }
+        bar.removeAttribute('data-compact');
+        const css = getComputedStyle(inner);
+        const gap = parseFloat(css.columnGap) || 0;
+        const navGap = parseFloat(getComputedStyle(nav).columnGap) || 0;
+        const padding = (parseFloat(css.paddingLeft) || 0) + (parseFloat(css.paddingRight) || 0);
+        const needed = brand.scrollWidth + links.scrollWidth + display.scrollWidth
+          + tools.scrollWidth + navGap + 2 * gap + padding + 2;
+        if (needed > inner.clientWidth) {
+          bar.setAttribute('data-compact', '');
+        } else {
+          setOpen(false);
+        }
+      };
+      const scheduleFit = () => {
+        if (fitQueued) return;
+        fitQueued = true;
+        requestAnimationFrame(fitNavigation);
+      };
+      addEventListener('resize', scheduleFit, {passive: true});
+      if (typeof ResizeObserver !== 'undefined') {
+        const observer = new ResizeObserver(scheduleFit);
+        [inner, brand, links, display, tools].forEach(element => observer.observe(element));
+      }
+      document.fonts?.ready.then(scheduleFit);
+      scheduleFit();
+    }
   }
 
   /* ---- a press blooms outward from where it landed ------------------------ */

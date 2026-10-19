@@ -61,7 +61,7 @@
 
 .brand {
   display: inline-flex; align-items: center; gap: .625rem;
-  min-height: 2.75rem;
+  min-width: 0; min-height: 2.75rem;
   color: var(--ink);
   font: 700 1.125rem/1 var(--font-display);
   letter-spacing: .06em;
@@ -70,6 +70,7 @@
   white-space: nowrap;
   transition: color .15s ease;
 }
+.brand-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .brand:hover, .brand:focus-visible { color: var(--accent); }
 .brand-mark {
   display: grid; place-items: center;
@@ -135,9 +136,17 @@
 .topbar[data-nav-open] .nav-toggle span::before { transform: translateY(5px) rotate(45deg); }
 .topbar[data-nav-open] .nav-toggle span::after { transform: translateY(-5px) rotate(-45deg); }
 
-.mobile-stop {
-  position: fixed; right: 1rem; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); z-index: 70;
+.mobile-stop-dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 70;
   display: none;
+  width: 100vw; max-width: 100vw;
+  padding: .75rem max(1rem, env(safe-area-inset-right)) calc(.75rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left));
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 0 -12px 30px -20px rgba(0, 0, 0, .85);
+}
+.mobile-stop {
+  width: 100%;
   min-height: 3.25rem;
   padding: 0 1.375rem;
   font-size: 1.0625rem;
@@ -146,7 +155,7 @@
 
 /* ------------------------------------------------------------------ page */
 
-.main { min-width: 0; }
+.main { min-width: 0; overflow-x: clip; }
 .content { max-width: 1600px; margin: 0 auto; padding: clamp(1.5rem, 3.5vw, 2.5rem) var(--gutter) 4rem; }
 
 .view:not([hidden]), [data-panel]:not([hidden]) { animation: mm-rise .26s var(--ease) backwards; }
@@ -160,10 +169,13 @@
 .hero h1 {
   font: 700 clamp(2.125rem, 1.5rem + 2vw, 3.25rem)/.92 var(--font-display);
   letter-spacing: var(--tracking-display);
+  overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 .hero p:not(.eyebrow) { max-width: 64ch; margin-top: .625rem; color: var(--muted); font-size: .9375rem; }
-.hero-side { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.hero-side { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; min-width: 0; max-width: 100%; }
+#activeProjectPill { max-width: 100%; min-width: 0; }
+#activeProjectText { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hero.compact { margin-bottom: 1rem; }
 .hero.compact h1 { font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.375rem); }
 
@@ -180,6 +192,7 @@
   text-transform: uppercase;
 }
 .section-heading p:not(.eyebrow) { max-width: 82ch; margin-top: .5rem; color: var(--muted); font-size: .875rem; }
+.section-heading .pill { max-width: 100%; white-space: normal; text-align: center; }
 .subheading { margin-bottom: .75rem; font: 700 1.0625rem/1.1 var(--font-display); letter-spacing: var(--tracking-title); text-transform: uppercase; }
 
 .grid { display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
@@ -202,12 +215,15 @@
 .panel-head h2 {
   font: 700 1.1875rem/1.05 var(--font-display);
   letter-spacing: .04em;
+  min-width: 0;
+  overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 .panel-head > span, .panel-head .hint { color: var(--faint); font-size: .75rem; }
 .panel-head a.hint { color: var(--accent-text); text-decoration: none; }
 .panel-head a.hint:hover { color: var(--ink); text-decoration: underline; }
 .panel-body { padding: 1rem 1.125rem 1.125rem; }
+.panel-body > pre { max-width: 100%; overflow-x: auto; }
 .panel-body.stack { gap: .875rem; }
 .lead { padding: .875rem 1.125rem 0; color: var(--muted); font-size: .8125rem; line-height: 1.65; }
 
@@ -658,6 +674,7 @@
 .test-row strong { font: 600 .8125rem/1.35 var(--font-mono); }
 .test-row small { display: block; color: var(--faint); font-size: .75rem; }
 .test-row input[type="range"] { width: min(12rem, 40vw); }
+.test-row .button { max-width: 100%; padding-inline: .625rem; white-space: normal; text-align: center; }
 .button.hold { min-width: 6rem; touch-action: none; user-select: none; -webkit-user-select: none; }
 
 .check-list { display: grid; gap: .5rem; }
@@ -697,6 +714,7 @@
 }
 
 .checks-layout { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.checks-layout .button-row .button { max-width: 100%; padding-block: .625rem; white-space: normal; text-align: center; }
 .commands-card { grid-column: 1 / -1; }
 .checks-layout .command-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 1100px) { .checks-layout { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -738,7 +756,7 @@
 
 .driver-status { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); margin-bottom: 1rem; }
 .driver-signal {
-  display: grid; grid-template-columns: .625rem 1fr; align-items: center;
+  display: grid; grid-template-columns: .625rem minmax(0, 1fr); align-items: center;
   gap: .75rem;
   padding: .75rem .9375rem;
   border: 1px solid var(--line);
@@ -749,6 +767,7 @@
 .driver-signal i { width: .625rem; height: .625rem; border-radius: 50%; background: var(--faint); transition: background-color .2s ease; }
 .driver-signal.good i { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .driver-signal.bad i { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.driver-signal > div { min-width: 0; }
 .driver-signal small { display: block; color: var(--faint); font: 700 .75rem/1.2 var(--font-display); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .driver-signal strong { display: block; margin-top: .0625rem; overflow: hidden; font: 700 1.125rem/1.15 var(--font-display); letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -780,23 +799,25 @@
   border-radius: var(--radius-sm);
   background: var(--well);
 }
-.file-row { display: flex; justify-content: space-between; gap: .75rem; padding: .125rem 0; color: var(--muted); font: .75rem/1.5 var(--font-mono); }
+.file-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; padding: .125rem 0; color: var(--muted); font: .75rem/1.5 var(--font-mono); }
+.file-row > * { min-width: 0; overflow-wrap: anywhere; }
 .file-row strong { color: var(--ink); font-weight: 500; }
 
 .format-file { padding: .6875rem .8125rem; border: 1px solid var(--line-soft); border-radius: var(--radius-sm); background: var(--well); }
-.format-file code { color: var(--accent-text); font-size: .8125rem; }
+.format-file code { color: var(--accent-text); font-size: .8125rem; overflow-wrap: anywhere; }
 .format-file p { margin-top: .1875rem; color: var(--muted); font-size: .8125rem; }
 .format-file .tag { float: right; color: var(--faint); font: 700 .75rem/1.3 var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
 
 .project-list { display: grid; gap: .375rem; }
 .project-row {
-  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem .75rem;
   padding: .625rem .8125rem;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius-sm);
   background: var(--well);
   font-size: .875rem;
 }
+.project-row > * { min-width: 0; overflow-wrap: anywhere; }
 .project-row span { color: var(--faint); font: 700 .75rem/1 var(--font-display); letter-spacing: .12em; }
 .project-row.active { border-color: var(--accent-line); background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--well); }
 .project-row.active span { color: var(--accent-text); }
@@ -883,12 +904,30 @@
   .driver-intro { grid-template-columns: minmax(0, 1fr); }
   .driver-figure { max-width: 30rem; }
 }
+/* Text enlargement can exhaust the desktop bar before the viewport breakpoint. */
+.topbar[data-compact] .topbar-tools { margin-left: auto; }
+.topbar[data-compact] .nav-toggle { display: grid; }
+.topbar[data-compact] .nav-panel {
+  position: absolute; top: calc(100% + .5rem); left: 0; right: 0;
+  display: none; flex-direction: column; align-items: stretch; gap: .625rem;
+  max-height: calc(100dvh - 6rem); overflow-y: auto;
+  padding: .5rem; border: 1px solid var(--line); border-top-color: var(--edge-top);
+  border-radius: var(--radius); background: var(--surface-2);
+  box-shadow: 0 24px 48px -24px rgba(0, 0, 0, .9);
+}
+.topbar[data-compact][data-nav-open] .nav-panel { display: flex; animation: mm-rise .22s var(--ease) both; }
+.topbar[data-compact] .nav-links { flex-direction: column; align-items: stretch; gap: .125rem; margin: 0; }
+.topbar[data-compact] .nav-links a { display: grid; gap: .0625rem; min-height: 0; padding: .5rem .75rem; border-radius: var(--radius-sm); color: var(--ink); font-size: 1rem; }
+.topbar[data-compact] .nav-links a small { display: block; color: var(--faint); font-size: .75rem; font-weight: 400; }
+.topbar[data-compact] .display-controls { justify-content: space-between; padding: .5rem .75rem 0; border-top: 1px solid var(--line-soft); }
+.topbar[data-compact] .display-label { display: block; color: var(--muted); font-size: .8125rem; }
+.topbar[data-compact] .nav-note { display: block; padding: 0 .75rem .25rem; color: var(--faint); font-size: .75rem; line-height: 1.5; }
 
 @media (max-width: 640px) {
   .topbar { top: .5rem; margin-top: .5rem; }
   .topbar-inner { gap: .625rem; padding-left: .625rem; }
   .bar-stop { display: none; }
-  .mobile-stop { display: inline-flex; }
+  .mobile-stop-dock { display: block; }
   .content { padding: 1.25rem var(--gutter) 6.5rem; }
   .stats { gap: .5rem; }
   .stat { padding: .75rem .875rem; }
@@ -914,13 +953,26 @@
 }
 
 @media (max-width: 420px) {
-  .page-name { display: none; }
+  .topbar-inner { gap: .375rem; }
+  .brand { flex: none; }
+  .brand-mark { width: min(2.25rem, 44px); height: min(2.25rem, 44px); }
+  .brand-name, .build-pill { display: none; }
+  .page-name { display: inline; flex: 1 1 auto; min-width: 0; overflow: hidden; font-size: .8125rem; font-weight: 600; text-overflow: ellipsis; }
+  .nav-toggle { width: min(2.75rem, 52px); height: min(2.75rem, 52px); }
+  .topbar-tools .live { display: none; }
 }
 
 /* Keep the mobile layout deliberate rather than a scaled-down desktop. */
 .hero-side, .panel-head, .button-row { flex-wrap: wrap; }
+.panel-body.stack { grid-template-columns: minmax(0, 1fr); }
+.button-row .button { max-width: 100%; white-space: normal; text-align: center; }
 @media (max-width: 1100px) { .nav-panel { max-height: calc(100dvh - 6rem); overflow-y: auto; } }
-@media (min-width: 1101px) and (max-width: 1280px) { .nav-links a { padding-inline: .625rem; } .topbar-inner, .nav-panel { gap: .625rem; } }
+@media (min-width: 1101px) and (max-width: 1600px) {
+  .nav-links a { padding-inline: .625rem; }
+  .topbar-inner, .nav-panel { gap: .625rem; }
+  .topbar-tools, .display-controls { gap: .375rem; }
+  .bar-stop { padding-inline: .625rem; font-size: .6875rem; }
+}
 .panel-head > *, .hero-side > *, .test-row > *, .kv, .usb-meta dd { min-width: 0; }
 .panel-body p, .hero p, .kv strong, .usb-meta dd, .notice { overflow-wrap: anywhere; }
 .snippet .copy { min-height: 44px; }
@@ -944,7 +996,6 @@
   .driver-signal { padding: .75rem; }
   .keys { max-width: none; gap: .5rem; }
   .password-dialog { max-height: calc(100dvh - 2rem); overflow-y: auto; }
-  .mobile-stop { left: max(1rem, env(safe-area-inset-left)); right: max(1rem, env(safe-area-inset-right)); }
 }
 @media (max-width: 360px) {
   .brand { gap: .375rem; font-size: 1rem; }
@@ -952,6 +1003,7 @@
   .stats { grid-template-columns: minmax(0, 1fr); }
   .test-row { grid-template-columns: 1fr 1fr; }
   .test-row > span { grid-column: 1 / -1; }
+  .test-row > .button { grid-column: 1 / -1; justify-self: stretch; }
 }
 .imu-body { display: grid; justify-items: center; gap: .75rem; }
 .heading-dial {
@@ -997,7 +1049,7 @@
 <!-- ===================================================================== -->
 <header class="topbar" data-bar>
   <div class="topbar-inner">
-    <a class="brand" href="/">
+    <a class="brand" href="/" title="{{ module_name }}" aria-label="{{ module_name }} home">
       <span class="brand-mark" aria-hidden="true"><img src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt=""></span>
       <span class="brand-name">{{ module_name }}</span>
       {% if install_ref %}<span class="build-pill" data-ref="{{ install_ref }}" title="Installed from the {{ install_ref }} branch.">{{ install_ref }}</span>{% endif %}
@@ -1917,7 +1969,7 @@ heading = imu.heading() if imu is not None else None
           <p>Write Python on your computer, send the folder to the robot over
             Wi&#8209;Fi, then drive it. No editor plugin and no SSH needed.</p>
         </div>
-        <div class="hero-side"><span class="pill" id="activeProjectPill">ACTIVE · {{ project_name }}</span></div>
+        <div class="hero-side"><span class="pill" id="activeProjectPill" title="Active robot: {{ project_name }}"><span id="activeProjectText">ACTIVE · {{ project_name }}</span></span></div>
       </div>
 
       <div class="driver-status">
@@ -2000,7 +2052,7 @@ heading = imu.heading() if imu is not None else None
                   <div class="button-row"><button class="button" id="installSample" type="button">Use this sample on the robot</button></div>
                   <p class="message" id="installSampleMessage" hidden></p>
                 </div>
-                <p>Teleop and autonomous programs have separate folders. Click a program once in Driver Station to select it, then Enable to run its code. Mecanum is the only bundled program: teleop for either module type.</p>
+                <p>Teleop and autonomous programs have separate folders. Click a program once in Driver Station to select it, then Enable to run its code. The bundled Mecanum teleop and Autonomous Driver programs work with both the regular MotionModule and Mini four-motor mecanum robots.</p>
                 <pre>robots/
   teleop/
     Mecanum/
@@ -2009,11 +2061,10 @@ heading = imu.heading() if imu is not None else None
       dashboard.py
       sensors.py
   autonomous/
-    YourProgram/
+    Autonomous Driver/
       robot.py
-      hardware.py
-      dashboard.py</pre>
-                <p class="small muted">Write autonomous code in that program's <code>robot.py</code> with <code>run(module, stop)</code> or <code>create_autonomous(module, drive)</code>. A separate <code>autonomous.py</code> inside that autonomous folder also works. No autonomous program is bundled.</p>
+      autonomous.py</pre>
+                <p class="small muted">Autonomous Driver makes four 90° turns using the Pi gyroscope. Its routine is in <code>autonomous.py</code>. Your own autonomous folder can instead define <code>run(module, stop)</code> or <code>create_autonomous(module, drive)</code> in <code>robot.py</code>.</p>
                 <div class="format-file">
                   <span class="tag">Required</span>
                   <code>teleop/Mecanum/robot.py</code> or <code>autonomous/YourProgram/robot.py</code>
@@ -2151,7 +2202,7 @@ def create_drive(module):
   </div>
 </main>
 
-<button class="stop-button mobile-stop" data-stop type="button" aria-label="Stop all motors">Stop</button>
+<div class="mobile-stop-dock"><button class="stop-button mobile-stop" data-stop type="button" aria-label="Stop all motors">Stop</button></div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <dialog class="password-dialog" id="updatePasswordDialog" aria-labelledby="updatePasswordTitle" aria-describedby="updatePasswordLead">
   <!-- method="dialog": without the script, submitting only closes the popup;
@@ -3961,7 +4012,8 @@ async function refreshProjects() {
   try {
     const data = await jsonFetch('/api/projects/status');
     $('#projectCount').textContent = data.available ? `${data.projects.length} installed` : 'Installed Pi only';
-    $('#activeProjectPill').textContent = `ACTIVE · ${data.active}`;
+    $('#activeProjectText').textContent = `ACTIVE · ${data.active}`;
+    $('#activeProjectPill').title = `Active robot: ${data.active}`;
     if (!data.projects.length) {
       replaceWith($('#projectList'), [element('p', 'muted', data.available
         ? 'No robot projects are installed. Deploy one above.'

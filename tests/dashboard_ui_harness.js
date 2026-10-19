@@ -449,6 +449,7 @@ async function run(scenario) {
     assert.equal(app.$('#programPicker').open, false);
     assert.equal(app.requests.filter(r => r.url === '/api/autonomous/start').length, 0, 'Selecting a folder never starts autonomous');
     assert.equal(app.$('#selectedProgram').textContent, other.name, 'One click updates the program name');
+    assert.equal(app.$('#programMessage').hidden, true, 'The selected folder path is not repeated below its name');
     const autoApp = browser();
     await autoApp.context.dashboard.refreshStatus();
     const auto = {id: 'autonomous/Autonomous Driver', name: 'Autonomous Driver', mode: 'autonomous'};
@@ -457,6 +458,7 @@ async function run(scenario) {
     await autoApp.$('#chooseProgram').fire('click');
     await autoApp.$('#programFolders').querySelector('button').fire('click');
     assert.equal(autoApp.$('#selectedProgram').textContent, 'Autonomous Driver');
+    assert.equal(autoApp.$('#programMessage').hidden, true);
     assert.equal(autoApp.$('#programModeLabel').textContent, 'Autonomous program');
     assert.deepEqual(autoApp.requests.find(r => r.url === '/api/programs/select').payload,
       {program: 'autonomous/Autonomous Driver', mode: 'autonomous'});
