@@ -2,6 +2,7 @@
 
 ## October 19, 2026
 
+- **Fresh-install repair:** fixed an unset previous-program variable that could abort installation after stopping the dashboard, leaving a 502 Bad Gateway. To recover over SSH, run `motionmodule install main` without `--fresh`.
 - **Faster autonomous:** 90° → 180° → 270° → 360°, then stop. Fixed gyro feedback direction; PID slows the approach and corrects overshoot. Each marker must settle within ±3° for 0.2 seconds. Five robot runs finished in 3.4–3.7 seconds; battery and traction affect results. [Details](../examples/MecanumAutonomous/README.md).
 - **MotionModule Mini:** four motor outputs, the same servo and IMU support, and a shared runtime with the full eight-motor build. [Build guide](../MotionModuleMini/README.md).
 - **Programs and IMU:** separate Teleop and Autonomous folder pickers, one shared Mecanum sample, and continuous built-in IMU access across program changes.

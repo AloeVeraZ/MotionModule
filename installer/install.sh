@@ -252,6 +252,7 @@ mkdir -p "$PROJECT_DIR" "$ROBOT_DIR" "$CONFIG_DIR"
 # Version 0.3 stored projects directly in ~/MotionModule. Move those folders
 # into the dedicated robots workspace while preserving the active project name.
 previous_active_name=""
+previous_active_target=""
 if [ -L "$PROJECT_DIR/active" ]; then
     previous_active_target="$(readlink -f "$PROJECT_DIR/active" 2>/dev/null || true)"
     [ -n "$previous_active_target" ] && previous_active_name="$(basename "$previous_active_target")"

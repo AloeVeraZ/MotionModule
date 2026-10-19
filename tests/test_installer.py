@@ -61,6 +61,24 @@ def bash_path(path):
 
 
 class InstallerFinishTests(unittest.TestCase):
+    @unittest.skipUnless(BASH, "requires bash")
+    def test_fresh_program_selection_without_previous_active_link(self):
+        script = INSTALLER.read_text(encoding="utf-8")
+        previous = script.split('previous_active_name=""', 1)[1].split('for old_robot_file', 1)[0]
+        selection = script.split('DEFAULT_PROGRAM="$ROBOT_DIR/teleop/Mecanum"', 1)[1].split('ACTIVE_LINK=', 1)[0]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            program = root / "robots" / "teleop" / "Mecanum"
+            program.mkdir(parents=True)
+            (program / "robot.py").write_text("", encoding="utf-8")
+            commands = (f'PROJECT_DIR={bash_path(root)}\nROBOT_DIR="$PROJECT_DIR/robots"\n'
+                        'previous_active_name=""\n' + previous +
+                        '\nDEFAULT_PROGRAM="$ROBOT_DIR/teleop/Mecanum"\n' + selection +
+                        '\nprintf "%s" "$DEFAULT_PROGRAM"\n')
+            result = run_cleanup(commands)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, program.as_posix())
+
     @classmethod
     def setUpClass(cls):
         cls.script = INSTALLER.read_text(encoding="utf-8")
