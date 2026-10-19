@@ -14,16 +14,16 @@ paths stay in place.
 - [Enclosure CAD and assembly](../cad/README.md)
 - [MotionModule Mini](../MotionModuleMini/README.md)
 
-Install the full module from testing on the Pi:
+Install the full module from main on the Pi:
 
 ```bash
-motionmodule install testing --variant standard
+motionmodule install main --variant standard
 ```
 
 For a fresh install from a repository checkout:
 
 ```bash
-bash install.sh --version testing --variant standard
+bash install.sh --version main --variant standard
 ```
 
 The dashboard Updates page shows the installed module and branch. Its module

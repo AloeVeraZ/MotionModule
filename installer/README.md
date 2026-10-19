@@ -211,10 +211,10 @@ installing or starting the service never starts motion.
 
 ## Module variants
 
-Use `motionmodule install testing --variant mini` for four motors on two drivers,
+Use `motionmodule install main --variant mini` for four motors on two drivers,
 or `--variant standard` for eight motors on four drivers. Both keep the same
 sixteen servo outputs and Pi-connected MPU6500. A fresh checkout can use
-`bash install.sh --version testing --variant mini`. The installed module choice
+`bash install.sh --version main --variant mini`. The installed module choice
 is kept in `~/.config/motionmodule/variant` and survives updates.
 
 Changing module keeps the same active robot project and every file. Each update

@@ -8,7 +8,7 @@ Only the hardware profile and build references differ.
 - [Mini bill of materials](BOM.md)
 - [Mini pinout](PINOUT.md)
 - [Hardware definition](hardware.py)
-- [Four-wheel Mecanum sample](../examples/MecanumMini)
+- [Four-wheel Mecanum sample](../examples/Mecanum)
 - [Full MotionModule](../MotionModule/README.md)
 
 ![Complete Mini wiring: two drivers, four motors, PCA9685 and IMU](../docs/images/motionmodule-mini-complete-wiring.png)
@@ -18,13 +18,13 @@ Only the hardware profile and build references differ.
 On an installed Pi:
 
 ```bash
-motionmodule install testing --variant mini
+motionmodule install main --variant mini
 ```
 
 From a repository checkout on a fresh Pi:
 
 ```bash
-bash install.sh --version testing --variant mini
+bash install.sh --version main --variant mini
 ```
 
 The installer starts the MecanumMini sample for a Mini install. The sample's
@@ -60,8 +60,7 @@ MOTIONMODULE_VARIANT=mini python -m motion_module.demo --no-browser
 Updates shows both the installed module and its main/testing branch. Choose
 MotionModule or MotionModule Mini, then install the desired branch. A module
 change keeps the same active robot project and files, saves a pre-update code
-snapshot in `~/MotionModule/backups`, and reboots using the selected hardware limit. The current Mini implementation
-is on testing; main gains it only after review and merge.
+snapshot in `~/MotionModule/backups`, and reboots using the selected hardware limit.
 
 The full module's enclosure STEP model and 22-M3-screw count describe the full
 assembly. Mini-specific enclosure CAD and its final mounting screw total have

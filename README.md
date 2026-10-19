@@ -1,19 +1,6 @@
 # MotionModule
 
-> [!WARNING]
-> **You are on `testing`, the experimental development branch.**
->
-> Changes here are still being developed and tested. Running this branch may
-> introduce bugs, break features that work on `main`, or change how your robot
-> behaves. An update can also introduce new issues, even if an earlier testing
-> version worked for you. Use [`main`](https://github.com/AloeVeraZ/MotionModule/tree/main)
-> for normal robot use; choose `testing` when you want to try experimental changes
-> and troubleshoot problems. Raise the wheels when checking a testing build.
->
-> To return an installed controller to the main branch, run:
-> ```bash
-> motionmodule install main
-> ```
+[Latest updates](docs/RELEASE_NOTES.md) — fast autonomous turns, Mini support, and dashboard improvements.
 
 MotionModule is an open-source Raspberry Pi robot controller for eight brushed
 DC motors, a PCA9685 servo board with sixteen outputs, and a Pi-connected IMU.
@@ -95,9 +82,9 @@ compartment to keep the wiring cleaner.
 Both builds share the same runtime, dashboard and robot API. Mini keeps channels
 1–4 on the locked reference pins and omits Drivers 3 and 4. Its folder includes
 the hardware profile, parts list and two-driver wiring diagram. On the Pi, run
-`motionmodule install testing --variant mini` to try Mini, or select the module
+`motionmodule install main --variant mini` to try Mini, or select the module
 in the dashboard Updates section. The installer preserves that choice across
-updates. Change back with `--variant standard`; changing module keeps the same active robot project and every existing file. Mini is on testing pending review.
+updates. Change back with `--variant standard`; changing module keeps the same active robot project and every existing file.
 
 ### Download the CAD
 
