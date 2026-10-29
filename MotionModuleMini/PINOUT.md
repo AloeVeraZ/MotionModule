@@ -5,7 +5,7 @@ motor drivers for four motors**. Drivers 3 and 4 are omitted; no remaining
 connection is moved. Physical pin numbers refer to the Pi 40-pin header;
 GPIO numbers are BCM.
 
-![Complete Mini wiring](../docs/images/motionmodule-mini-complete-wiring.png)
+<picture><img src="../docs/images/motionmodule-mini-complete-wiring.png" alt="Complete Mini wiring"></picture>
 
 | Channel | Default name | Mecanum wheel | Driver / output | Forward wire | Reverse wire | Driver ground |
 | ---: | --- | --- | --- | --- | --- | --- |

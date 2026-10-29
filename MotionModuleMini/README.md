@@ -11,7 +11,7 @@ Only the hardware profile and build references differ.
 - [Four-wheel Mecanum sample](../examples/Mecanum)
 - [Full MotionModule](../MotionModule/README.md)
 
-![Complete Mini wiring: two drivers, four motors, PCA9685 and IMU](../docs/images/motionmodule-mini-complete-wiring.png)
+<picture><img src="../docs/images/motionmodule-mini-complete-wiring.png" alt="Complete Mini wiring: two drivers, four motors, PCA9685 and IMU"></picture>
 
 ## Install and try
 

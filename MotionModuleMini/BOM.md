@@ -16,7 +16,7 @@ This list is also available offline in the Mini dashboard under Debug → Parts 
 | Up to 4 | Motor bullet leads | [goBILDA MH-FC to bare wire](https://www.gobilda.com/3-5mm-bullet-lead-mh-fc-300mm-length/) |
 | Up to 16 | Servos | Same servo choices and regulated power requirements as the full module |
 
-![Fasvicna self-tapping screw assortment](../docs/images/fasvicna-self-tapping-screws.png)
+<picture><img src="../docs/images/fasvicna-self-tapping-screws.png" alt="Fasvicna self-tapping screw assortment"></picture>
 
 Use **four M2.3 × 5 mm self-tapping screws** for the Pi. Use **M3 × 5 mm**
 for the two motor-driver boards, PCA9685 and IMU, one per mounting hole.

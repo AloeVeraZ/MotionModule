@@ -2,7 +2,7 @@
 
 These STEP models come from the owner's personal Mecanum testing robot.
 
-![Current motion-module enclosure CAD preview](motion-module.png)
+<picture><img src="motion-module.png" alt="Current motion-module enclosure CAD preview"></picture>
 
 | File | Assembly |
 | --- | --- |

@@ -35,7 +35,7 @@ Follow the signal** in the dashboard, which also includes this diagram below
 or use the [scalable SVG](docs/images/motionmodule-complete-wiring.svg).
 See the [pinout guide](docs/PINOUT.md) for the connection tables and power details.
 
-![Complete MotionModule wiring diagram](docs/images/motionmodule-complete-wiring.png)
+<picture><img src="docs/images/motionmodule-complete-wiring.png" alt="Complete MotionModule wiring diagram"></picture>
 
 ## Built for a personal Mecanum test robot
 
@@ -45,7 +45,7 @@ of what the controller can run.
 
 | Installed motion module | Controller with the cover removed |
 | --- | --- |
-| ![MotionModule mounted in the Mecanum robot](docs/images/robot/motion-module-installed.jpg) | ![Pi, four motor drivers and PCA9685 inside the module, without the IMU plugged in](docs/images/robot/motion-module-internals-no-imu.jpg) |
+| <picture><img src="docs/images/robot/motion-module-installed.jpg" alt="MotionModule mounted in the Mecanum robot"></picture> | <picture><img src="docs/images/robot/motion-module-internals-no-imu.jpg" alt="Pi, four motor drivers and PCA9685 inside the module, without the IMU plugged in"></picture> |
 
 The open-module photo shows the build **without the IMU plugged in**. The
 current build adds a Pi-connected MPU6500, supported by the included sensor
@@ -55,7 +55,7 @@ motor-driver terminals and servo channels accessible.
 <details>
 <summary>Another view of the motion-module cover</summary>
 
-![Labelled motion-module cover and accessible connectors](docs/images/robot/motion-module-cover.jpg)
+<picture><img src="docs/images/robot/motion-module-cover.jpg" alt="Labelled motion-module cover and accessible connectors"></picture>
 
 </details>
 
@@ -63,7 +63,7 @@ motor-driver terminals and servo channels accessible.
 
 | Battery module on the robot | Switch and battery lead |
 | --- | --- |
-| ![Battery module mounted on the Mecanum chassis](docs/images/robot/battery-module-mounted.jpg) | ![Electronics box with the rocker switch and outgoing battery lead](docs/images/robot/battery-module-switch-and-lead.jpg) |
+| <picture><img src="docs/images/robot/battery-module-mounted.jpg" alt="Battery module mounted on the Mecanum chassis"></picture> | <picture><img src="docs/images/robot/battery-module-switch-and-lead.jpg" alt="Electronics box with the rocker switch and outgoing battery lead"></picture> |
 
 The electronics box accommodates both the **REV Slim and goBILDA 12 V NiMH
 batteries** listed in the [bill of materials](BOM.md). One part holds the
@@ -88,7 +88,7 @@ updates. Change back with `--variant standard`; changing module keeps the same a
 
 ### Download the CAD
 
-![Current motion-module enclosure CAD preview](cad/motion-module.png)
+<picture><img src="cad/motion-module.png" alt="Current motion-module enclosure CAD preview"></picture>
 
 | STEP model | What it contains |
 | --- | --- |

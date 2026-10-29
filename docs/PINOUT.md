@@ -384,4 +384,4 @@ never changed.
 
 ## Complete wiring diagram
 
-![Complete MotionModule wiring diagram](images/motionmodule-complete-wiring.png)
+<picture><img src="images/motionmodule-complete-wiring.png" alt="Complete MotionModule wiring diagram"></picture>

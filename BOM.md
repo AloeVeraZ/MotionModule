@@ -30,7 +30,7 @@ servos, wire — is a recommendation, not a requirement.
 
 ### Motion-module mounting screws
 
-![Fasvicna self-tapping screw assortment](docs/images/fasvicna-self-tapping-screws.png)
+<picture><img src="docs/images/fasvicna-self-tapping-screws.png" alt="Fasvicna self-tapping screw assortment"></picture>
 
 Use the self-tapping screws from the assortment for the supplied enclosure:
 
