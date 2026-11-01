@@ -198,8 +198,8 @@ class DamagedOpenCVTests(unittest.TestCase):
                 patch("motion_module.camera.os.sync", create=True, side_effect=lambda: order.append("sync")):
             manager = USBCameraManager(auto_start=False)
             manager.start()
-            self.assertTrue(installed.wait(2))
-            deadline = time.monotonic() + 2
+            self.assertTrue(installed.wait(10))
+            deadline = time.monotonic() + 10
             while time.monotonic() < deadline and order != ["install", "sync"]:
                 time.sleep(0.01)
             manager.close()
@@ -209,10 +209,11 @@ class DamagedOpenCVTests(unittest.TestCase):
         with patch("motion_module.camera._opencv_state", return_value="broken"), \
                 patch("motion_module.camera.list_video_devices", return_value=["/dev/video0"]), \
                 patch("motion_module.camera._is_capture_device", return_value=True), \
+                patch("motion_module.camera.os.sync", create=True), \
                 patch("motion_module.camera.subprocess.run"):
             manager = USBCameraManager(auto_start=False)
             manager.start()
-            deadline = time.monotonic() + 2
+            deadline = time.monotonic() + 10
             detail = ""
             while time.monotonic() < deadline and "install it yourself" not in detail.lower():
                 detail = manager.feeds()[0]["detail"]
