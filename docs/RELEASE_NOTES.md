@@ -2,6 +2,7 @@
 
 ## November 1, 2026
 
+- **A damaged camera library no longer stops the robot:** a power cut soon after OpenCV installed itself could leave its library cut short, and loading it then crashed the dashboard on every start, showing 502 Bad Gateway. MotionModule now tests OpenCV in a separate process first, repairs it when a camera is plugged in, and writes the install fully to the SD card.
 - **Fewer 502 Bad Gateway pages:** the dashboard now opens in recovery mode, showing the reason, when the active robot folder is missing, when robot code calls `sys.exit()`, and when robot code has not finished loading after 60 seconds. systemd also never stops restarting it, a failed fresh install starts it again, and a damaged module-variant file no longer blocks starting or installing. To pick this up, run `motionmodule install main` over SSH.
 
 ## October 19, 2026

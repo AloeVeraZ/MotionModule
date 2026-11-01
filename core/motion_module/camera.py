@@ -21,6 +21,8 @@ stays a clearly labelled offline placeholder instead of an error.
 from __future__ import annotations
 
 import glob
+import importlib
+import importlib.util
 import os
 import struct
 import subprocess
@@ -36,8 +38,13 @@ _JPEG_QUALITY = 80
 _CAPTURE_FPS = 15.0
 _RETRY_SECONDS = 5.0
 _INSTALL_TIMEOUT = 600.0
+_PROBE_TIMEOUT = 60.0
 _INSTALLING = "Setting up camera support the first time this runs - this can take a few minutes."
 _NO_OPENCV = "Install opencv-python-headless to stream a USB camera: pip install opencv-python-headless."
+_BROKEN_OPENCV = (
+    "OpenCV is damaged on this Pi, so cameras are off. Repair it: "
+    "pip install --force-reinstall --no-deps opencv-python-headless, then restart the dashboard."
+)
 _INSTALL_FAILED = (
     "Couldn't install opencv-python-headless automatically (is the Pi online?). "
     "Install it yourself: pip install opencv-python-headless, then restart the dashboard."
@@ -56,6 +63,31 @@ _V4L2_CAP_VIDEO_CAPTURE = 0x00000001
 _V4L2_CAP_DEVICE_CAPS = 0x80000000
 _V4L2_CAPABILITY_FORMAT = "16s32s32sIII12s"
 _V4L2_CAPABILITY_SIZE = struct.calcsize(_V4L2_CAPABILITY_FORMAT)
+
+
+def _opencv_state() -> str:
+    """"ok", "missing" or "broken", found without risking this process.
+
+    A truncated library kills whichever process loads it with SIGBUS, which no
+    except clause can catch. A power cut soon after an install can leave one,
+    so the first import happens in a throwaway process, not the dashboard.
+    """
+
+    loaded = sys.modules.get("cv2", False)
+    if loaded is None:
+        return "missing"
+    if loaded is not False:
+        return "ok"
+    if importlib.util.find_spec("cv2") is None:
+        return "missing"
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-c", "import cv2"],
+            capture_output=True, timeout=_PROBE_TIMEOUT, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "broken"
+    return "ok" if probe.returncode == 0 else "broken"
 
 
 def list_video_devices(dev_root: str = "/dev") -> list[str]:
@@ -194,6 +226,7 @@ class USBCameraManager:
     def __init__(self, *, dev_root: str = "/dev", auto_start: bool = True, auto_install: bool = True):
         self._dev_root = dev_root
         self._auto_install = auto_install
+        self._reinstall = False
         self._streams: dict[str, _DeviceStream] = {}
         self._lock = threading.Lock()
         self._status = ""
@@ -207,12 +240,14 @@ class USBCameraManager:
             if self._thread is not None or self._stop.is_set():
                 return
             target = self._run
-            try:
+            state = _opencv_state()
+            if state == "ok":
                 import cv2  # noqa: F401  # Only a USB camera needs this.
-            except ImportError:
-                if not self._auto_install:
-                    self._status = _NO_OPENCV
-                    return
+            elif not self._auto_install:
+                self._status = _NO_OPENCV if state == "missing" else _BROKEN_OPENCV
+                return
+            else:
+                self._reinstall = state == "broken"
                 target = self._install_then_run
             self._thread = threading.Thread(target=target, daemon=True)
             self._thread.start()
@@ -229,15 +264,20 @@ class USBCameraManager:
             return
         with self._lock:
             self._status = _INSTALLING
+        repair = ["--force-reinstall", "--no-deps"] if self._reinstall else []
         try:
             subprocess.run(
-                [sys.executable, "-m", "pip", "install", "--quiet", "opencv-python-headless"],
+                [sys.executable, "-m", "pip", "install", "--quiet", *repair, "opencv-python-headless"],
                 check=True, timeout=_INSTALL_TIMEOUT,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
-            import importlib
+            # pip returns before its files reach the SD card, and a robot's
+            # power switch can cut at any moment. That truncates the library.
+            if hasattr(os, "sync"):
+                os.sync()
             importlib.invalidate_caches()
-            import cv2  # noqa: F401
+            if _opencv_state() != "ok":
+                raise RuntimeError("OpenCV still does not load after installing it")
         except Exception:
             with self._lock:
                 self._status = _INSTALL_FAILED

@@ -1,3 +1,5 @@
+import importlib
+import os
 import struct
 import threading
 import sys
@@ -12,6 +14,7 @@ from motion_module.camera import (
     USBCameraManager,
     _DeviceStream,
     _is_capture_device,
+    _opencv_state,
     _V4L2_CAP_DEVICE_CAPS,
     _V4L2_CAP_VIDEO_CAPTURE,
     _V4L2_CAPABILITY_FORMAT,
@@ -129,6 +132,93 @@ class USBCameraManagerTests(unittest.TestCase):
 
     def test_close_before_start_does_not_raise(self):
         USBCameraManager(auto_start=False).close()
+
+
+class DamagedOpenCVTests(unittest.TestCase):
+    """A truncated cv2 library kills the process that loads it, once took the
+    dashboard with it on every start, and left nginx answering 502."""
+
+    def state_with_opencv_that_runs(self, source):
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "cv2.py").write_text(source, encoding="utf-8")
+            search = os.pathsep.join([directory, os.environ.get("PYTHONPATH", "")])
+            with patch.object(sys, "path", [directory, *sys.path]), \
+                    patch.dict(os.environ, {"PYTHONPATH": search}), \
+                    patch.dict(sys.modules):
+                sys.modules.pop("cv2", None)
+                importlib.invalidate_caches()
+                state = _opencv_state()
+                self.assertNotIn("cv2", sys.modules, "The first import must not happen in this process")
+                return state
+
+    def test_a_library_that_kills_its_process_is_broken_and_this_process_survives(self):
+        self.assertEqual(self.state_with_opencv_that_runs("import os\nos._exit(135)\n"), "broken")
+
+    def test_a_library_that_fails_to_import_is_broken(self):
+        self.assertEqual(self.state_with_opencv_that_runs("raise ImportError('libGL')\n"), "broken")
+
+    def test_a_working_library_is_ok(self):
+        self.assertEqual(self.state_with_opencv_that_runs(""), "ok")
+
+    def test_no_library_is_missing_without_starting_a_process(self):
+        with patch.dict(sys.modules), \
+                patch("motion_module.camera.importlib.util.find_spec", return_value=None), \
+                patch("motion_module.camera.subprocess.run") as run:
+            sys.modules.pop("cv2", None)
+            self.assertEqual(_opencv_state(), "missing")
+        run.assert_not_called()
+
+    def test_a_loaded_library_is_ok_without_starting_a_process(self):
+        with patch.dict(sys.modules, {"cv2": Mock()}), patch("motion_module.camera.subprocess.run") as run:
+            self.assertEqual(_opencv_state(), "ok")
+        run.assert_not_called()
+
+    def test_broken_opencv_without_auto_install_says_how_to_repair_it(self):
+        manager = USBCameraManager(auto_start=False, auto_install=False)
+        with patch("motion_module.camera._opencv_state", return_value="broken"):
+            manager.start()
+        self.assertIn("--force-reinstall", manager.feeds()[0]["detail"])
+        manager.close()
+
+    def test_broken_opencv_is_reinstalled_and_flushed_to_the_card(self):
+        installed = threading.Event()
+        order = []
+
+        def install(command, **_kwargs):
+            order.append("install")
+            installed.set()
+            self.assertIn("--force-reinstall", command)
+            self.assertIn("--no-deps", command)
+
+        with patch("motion_module.camera._opencv_state", side_effect=["broken", "ok"]), \
+                patch("motion_module.camera.list_video_devices", return_value=["/dev/video0"]), \
+                patch("motion_module.camera._is_capture_device", return_value=True), \
+                patch("motion_module.camera._DeviceStream"), \
+                patch("motion_module.camera.subprocess.run", side_effect=install), \
+                patch("motion_module.camera.os.sync", create=True, side_effect=lambda: order.append("sync")):
+            manager = USBCameraManager(auto_start=False)
+            manager.start()
+            self.assertTrue(installed.wait(2))
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline and order != ["install", "sync"]:
+                time.sleep(0.01)
+            manager.close()
+        self.assertEqual(order, ["install", "sync"])
+
+    def test_a_reinstall_that_still_does_not_load_falls_back_to_a_clear_message(self):
+        with patch("motion_module.camera._opencv_state", return_value="broken"), \
+                patch("motion_module.camera.list_video_devices", return_value=["/dev/video0"]), \
+                patch("motion_module.camera._is_capture_device", return_value=True), \
+                patch("motion_module.camera.subprocess.run"):
+            manager = USBCameraManager(auto_start=False)
+            manager.start()
+            deadline = time.monotonic() + 2
+            detail = ""
+            while time.monotonic() < deadline and "install it yourself" not in detail.lower():
+                detail = manager.feeds()[0]["detail"]
+                time.sleep(0.01)
+            manager.close()
+        self.assertIn("install it yourself", detail.lower())
 
 
 class CameraLifecycleTests(unittest.TestCase):
