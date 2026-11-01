@@ -6,11 +6,15 @@ project="${2:?Student robot.py path is required}"
 python="$runtime/.venv/bin/python"
 
 [ -x "$python" ] || { printf '[MotionModule ERROR] Runtime Python is missing: %s\n' "$python" >&2; exit 1; }
-[ -f "$project" ] || { printf '[MotionModule ERROR] Student project is missing: %s\n' "$project" >&2; exit 1; }
 
 if [ -f "$runtime/core/motion_module/dashboard.py" ] || [ -f "$runtime/motion_module/dashboard.py" ]; then
+    # A missing project opens recovery mode, so the page that can fix it stays
+    # reachable. Exiting here would leave nginx with only a 502 to show.
+    [ -f "$project" ] || printf '[MotionModule] Student project is missing: %s. Opening recovery mode.\n' "$project" >&2
     exec "$python" -m motion_module.dashboard --project "$project"
 fi
+
+[ -f "$project" ] || { printf '[MotionModule ERROR] Student project is missing: %s\n' "$project" >&2; exit 1; }
 
 # Releases installed before Dashboard 0.2.0 hosted their page from robot.py.
 # Keeping this fallback makes explicit rollback to one of those releases work.

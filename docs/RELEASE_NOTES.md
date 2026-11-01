@@ -1,5 +1,9 @@
 # Release notes
 
+## November 1, 2026
+
+- **Fewer 502 Bad Gateway pages:** the dashboard now opens in recovery mode, showing the reason, when the active robot folder is missing, when robot code calls `sys.exit()`, and when robot code has not finished loading after 60 seconds. systemd also never stops restarting it, a failed fresh install starts it again, and a damaged module-variant file no longer blocks starting or installing. To pick this up, run `motionmodule install main` over SSH.
+
 ## October 19, 2026
 
 - **Fresh-install repair:** fixed an unset previous-program variable that could abort installation after stopping the dashboard, leaving a 502 Bad Gateway. To recover over SSH, run `motionmodule install main` without `--fresh`.

@@ -79,6 +79,56 @@ class InstallerFinishTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout, program.as_posix())
 
+    @unittest.skipUnless(BASH, "requires bash")
+    def test_failed_fresh_install_starts_the_stopped_dashboard_again(self):
+        script = INSTALLER.read_text(encoding="utf-8")
+        guard = script.split("dashboard_stopped=false", 1)[1].split("trap restart_stopped_dashboard EXIT", 1)[0]
+        cases = (
+            ("true", 1, "systemctl start motionmodule.service\n"),
+            ("false", 1, ""),
+            ("true", 0, ""),
+        )
+        for stopped, status, expected in cases:
+            with self.subTest(stopped=stopped, status=status):
+                commands = ('sudo() { printf "%s\\n" "$*"; }\n' + "dashboard_stopped=false" + guard +
+                            "trap restart_stopped_dashboard EXIT\n" +
+                            f"dashboard_stopped={stopped}\nexit {status}\n")
+                result = run_cleanup(commands)
+                self.assertEqual(result.returncode, status, result.stderr)
+                self.assertEqual(result.stdout, expected)
+
+    @unittest.skipUnless(BASH, "requires bash")
+    def test_launcher_opens_recovery_mode_when_the_project_is_missing(self):
+        launcher = (INSTALLER.parent / "dashboard_launcher").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as temporary:
+            runtime = Path(temporary) / "runtime"
+            (runtime / ".venv" / "bin").mkdir(parents=True)
+            python = runtime / ".venv" / "bin" / "python"
+            python.write_bytes(b'#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n')
+            python.chmod(0o755)
+            missing = Path(temporary) / "MotionModule" / "active" / "robot.py"
+
+            def launch():
+                return subprocess.run(
+                    [BASH, "-s", "--", runtime.as_posix(), missing.as_posix()],
+                    input=launcher, capture_output=True, text=True, encoding="utf-8",
+                    timeout=30, check=False,
+                )
+
+            # A release without the dashboard hosts its page from robot.py, so
+            # it has nothing to show without a project.
+            legacy = launch()
+            self.assertEqual(legacy.returncode, 1)
+            self.assertIn("Student project is missing", legacy.stderr)
+
+            (runtime / "core" / "motion_module").mkdir(parents=True)
+            (runtime / "core" / "motion_module" / "dashboard.py").touch()
+            current = launch()
+            self.assertEqual(current.returncode, 0, current.stderr)
+            self.assertIn("motion_module.dashboard", current.stdout)
+            self.assertIn(missing.as_posix(), current.stdout)
+            self.assertIn("Opening recovery mode", current.stderr)
+
     @classmethod
     def setUpClass(cls):
         cls.script = INSTALLER.read_text(encoding="utf-8")
@@ -126,6 +176,8 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn("client_max_body_size 12m", self.script)
         self.assertIn("Environment=MOTIONMODULE_ACTIVE_PROJECT=$PROJECT_DIR/active", self.script)
         self.assertIn("Restart=always", self.script)
+        self.assertIn("StartLimitIntervalSec=0", self.script)
+        self.assertIn('*) PREVIOUS_VARIANT="standard"', self.script)
 
     def test_first_install_assigns_hostname_through_constrained_helper(self):
         self.assertIn('TARGET_HOSTNAME="motionmodule"', self.script)
@@ -164,7 +216,7 @@ class InstallerFinishTests(unittest.TestCase):
         self.assertIn('ROBOT_DIR="${MOTIONMODULE_ROBOT_DIR:-$PROJECT_DIR/robots}"', self.script)
         self.assertIn('mv "$old_robot_template" "$ROBOT_DIR/$old_robot_name"', self.script)
         self.assertIn('ACTIVE_LINK="$PROJECT_DIR/active"', self.script)
-        self.assertIn('WorkingDirectory=$PROJECT_DIR/active', self.script)
+        self.assertIn('WorkingDirectory=-$PROJECT_DIR/active', self.script)
         manager = (INSTALLER.parent / "motionmodule").read_text(encoding="utf-8")
         self.assertIn('project)', manager)
         self.assertIn('motionmodule project [list|PROJECT_NAME]', manager)

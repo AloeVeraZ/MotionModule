@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import getpass
 import hashlib
 import io
@@ -168,6 +169,55 @@ def servo_profile_command(config, profile_id: str, value: float, custom_range=No
             f"{config.minimum_pulse_us}-{config.maximum_pulse_us} microsecond safety envelope"
         )
     return profile, pulse_us
+
+
+# Project code runs before the dashboard binds its port, so code that never
+# returns would leave nginx with nothing behind it (502 Bad Gateway).
+PROJECT_LOAD_TIMEOUT_SECONDS = 60.0
+
+
+class ProjectLoadTimeout(BaseException):
+    """Ends project code that outlived the limit; its own except Exception cannot catch it."""
+
+
+def run_project_code(load):
+    """Return load(), or raise an ordinary Exception, within the load time limit.
+
+    sys.exit() in a project would otherwise end the whole dashboard, because it
+    is not an Exception. Program switches already load projects off the main
+    thread, so this worker is not a new place for project code to run.
+    """
+
+    outcome = {}
+
+    def work():
+        try:
+            outcome["value"] = load()
+        except BaseException as error:
+            outcome["error"] = error
+
+    worker = threading.Thread(target=work, name="project-load", daemon=True)
+    worker.start()
+    worker.join(PROJECT_LOAD_TIMEOUT_SECONDS)
+    if worker.is_alive():
+        # Python cannot kill a thread. This at least ends a running loop so it
+        # stops commanding outputs; a blocked call ends when it next returns.
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_ulong(worker.ident), ctypes.py_object(ProjectLoadTimeout)
+        )
+        worker.join(1.0)
+        raise TimeoutError(
+            f"The robot project did not finish loading within {PROJECT_LOAD_TIMEOUT_SECONDS:g} seconds. "
+            "Importing it and create_drive() must return; start long-running work after that."
+        )
+    error = outcome.get("error")
+    if isinstance(error, Exception):
+        raise error
+    if error is not None:
+        raise RuntimeError(
+            f"The robot project ended the program with {type(error).__name__}({error})"
+        ).with_traceback(error.__traceback__)
+    return outcome["value"]
 
 
 class RecoveryDrive:
@@ -876,7 +926,9 @@ def create_app(
                     new_drive, new_telemetry, failure = load_project_hooks(replacement, folder / "robot.py")
                     if failure:
                         raise MotionModuleError(failure)
-                    new_routine = load_autonomous_routine(replacement, new_drive, folder / "robot.py")
+                    new_routine = run_project_code(
+                        lambda: load_autonomous_routine(replacement, new_drive, folder / "robot.py")
+                    )
                     activate_project(folder, workspace / "active")
                 except Exception as error:
                     for resource in (locals().get("new_telemetry"), locals().get("new_drive")):
@@ -1758,15 +1810,19 @@ def load_project_hooks(module, project_path: Path | None = None):
     drive is substituted.
     """
 
-    drive = dashboard_telemetry = None
+    loaded = {}
+
+    def load():
+        loaded["drive"] = load_drive(module, project_path)
+        loaded["telemetry"] = load_dashboard_telemetry(module, loaded["drive"], project_path)
+
     try:
-        drive = load_drive(module, project_path)
-        dashboard_telemetry = load_dashboard_telemetry(module, drive, project_path)
-        return drive, dashboard_telemetry, ""
+        run_project_code(load)
+        return loaded["drive"], loaded["telemetry"], ""
     except Exception as error:
         traceback.print_exc()
         reason = project_load_error(error, project_path) + " Your robot code is preserved in its project folder; this runtime or module may need compatible code."
-    for partial in (dashboard_telemetry, drive):
+    for partial in (loaded.get("telemetry"), loaded.get("drive")):
         for name in ("stop", "close"):
             hook = getattr(partial, name, None)
             if callable(hook):
@@ -1789,7 +1845,11 @@ def serve(
     runtime_imu = getattr(module, "imu", None)
     project_name = project_path.parent.name if project_path else "No project"
     workspace = workspace_for(project_path) if project_path else None
-    if workspace and project_path:
+    if workspace is None and project_path and project_path.parent.name == "active":
+        # With the active link missing, keep Deploy and the program picker
+        # working: they are how this gets fixed from the browser.
+        workspace = project_path.parent.parent
+    if workspace and project_path and project_path.is_relative_to(workspace / "robots"):
         project_name = project_path.parent.relative_to(workspace / "robots").as_posix()
     if recovery_error:
         drive, dashboard_telemetry = RecoveryDrive(module, recovery_error), None
@@ -1803,7 +1863,9 @@ def serve(
         # autonomous.py is optional, so a broken one loses the autonomous mode
         # rather than the whole dashboard. The reason shows up on the page.
         try:
-            autonomous_routine = load_autonomous_routine(module, drive, project_path)
+            autonomous_routine = run_project_code(
+                lambda: load_autonomous_routine(module, drive, project_path)
+            )
         except Exception as error:
             autonomous_error = f"autonomous.py could not be loaded: {error}"
             print(autonomous_error)

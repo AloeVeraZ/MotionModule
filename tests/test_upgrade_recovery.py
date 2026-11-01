@@ -10,6 +10,7 @@ import sys
 import tempfile
 import textwrap
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -78,6 +79,23 @@ from motion_module.imu import SomethingThatWasRemoved
 
 def create_sensors(module):
     return None
+"""
+
+
+WORKING_ROBOT = """
+class Drive:
+    def __init__(self, module):
+        self.module = module
+
+    def drive(self, forward, strafe, rotate, speed=0.5):
+        return {"outputs": {}, "speed": speed}
+
+    def stop(self):
+        self.module.stop_all()
+
+
+def create_drive(module):
+    return Drive(module)
 """
 
 
@@ -254,6 +272,64 @@ class ServeStaysUp(unittest.TestCase):
             self.assertIn("No pins are being driven", error)
             app = self.run_serve(module, path, error)
         self.assertEqual(app.config["RECOVERY"]["error"], error)
+
+    def write_project(self, source, **extra):
+        robot = Path(tempfile.mkdtemp()) / "Mecanum"
+        robot.mkdir()
+        (robot / "robot.py").write_text(textwrap.dedent(source), encoding="utf-8")
+        for name, text in extra.items():
+            (robot / f"{name}.py").write_text(textwrap.dedent(text), encoding="utf-8")
+        return robot / "robot.py"
+
+    def serve_error(self, path):
+        with MotionModule(default_config(), gpio=MockGPIO()) as module:
+            return self.run_serve(module, path).config["RECOVERY"]["error"]
+
+    def test_a_project_calling_sys_exit_still_binds_the_dashboard(self):
+        sources = {
+            "at import": "import sys\nsys.exit(3)\n",
+            "in create_drive": "import sys\n\n\ndef create_drive(module):\n    sys.exit(3)\n",
+        }
+        for name, source in sources.items():
+            with self.subTest(name):
+                error = self.serve_error(self.write_project(source))
+                self.assertIn("SystemExit(3)", error)
+                self.assertIn("robot.py, line", error)
+
+    def test_a_dashboard_py_calling_sys_exit_still_binds_the_dashboard(self):
+        path = self.write_project(WORKING_ROBOT, dashboard="import sys\nsys.exit(1)\n")
+        self.assertIn("SystemExit(1)", self.serve_error(path))
+
+    def test_an_autonomous_py_calling_sys_exit_only_loses_autonomous(self):
+        path = self.write_project(WORKING_ROBOT, autonomous="import sys\nsys.exit(1)\n")
+        self.assertEqual(self.serve_error(path), "")
+
+    def test_a_project_that_never_returns_still_binds_the_dashboard(self):
+        sources = {
+            "at import": "while True:\n    pass\n",
+            "in create_drive": ("import time\n\n\ndef create_drive(module):\n"
+                                "    while True:\n        time.sleep(0.01)\n"),
+        }
+        for name, source in sources.items():
+            with self.subTest(name), mock.patch.object(dashboard, "PROJECT_LOAD_TIMEOUT_SECONDS", 0.2):
+                self.assertIn("did not finish loading", self.serve_error(self.write_project(source)))
+                # The stuck code is stopped too, so it cannot keep commanding outputs.
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline and any(
+                    thread.name == "project-load" for thread in threading.enumerate()
+                ):
+                    time.sleep(0.01)
+                self.assertFalse([t for t in threading.enumerate() if t.name == "project-load"])
+
+    def test_a_missing_active_link_opens_recovery_with_deploy_available(self):
+        path = Path(tempfile.mkdtemp()) / "MotionModule" / "active" / "robot.py"
+        with MotionModule(default_config(), gpio=MockGPIO()) as module:
+            app = self.run_serve(module, path)
+            self.assertIn("Robot project was not found", app.config["RECOVERY"]["error"])
+            deploy = app.test_client().post(
+                "/api/projects/deploy", headers={"X-MotionModule-Token": app.config["DASHBOARD_TOKEN"]}
+            )
+            self.assertNotIn(deploy.status_code, (423, 503))
 
 
 if __name__ == "__main__":

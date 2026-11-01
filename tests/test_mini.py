@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from motion_module.config import (DEFAULT_HARDWARE_PATH, MINI_HARDWARE_PATH,
-                                  hardware_source, load_config, load_hardware_file)
+                                  hardware_source, installed_variant, load_config, load_hardware_file)
 from motion_module.controller import MotionModule
 from motion_module.dashboard import IdleDrive, create_app, load_drive
 from motion_module.errors import ConfigurationError
@@ -58,6 +58,14 @@ class MiniTests(unittest.TestCase):
                     for key in ('MOTIONMODULE_VARIANT', 'MOTIONMODULE_CONFIG', 'MOTIONMODULE_ACTIVE_PROJECT'):
                         os.environ.pop(key, None)
                     self.assertEqual(load_config(), self.mini)
+
+    def test_damaged_variant_marker_falls_back_to_standard(self):
+        for damage in (b'', b'\0' * 64, b'\xff\xfe', b'bogus\n'):
+            with self.subTest(damage=damage), tempfile.TemporaryDirectory() as folder:
+                Path(folder, 'variant').write_bytes(damage)
+                with patch.dict(os.environ, {'MOTIONMODULE_CONFIG_DIR': folder}):
+                    os.environ.pop('MOTIONMODULE_VARIANT', None)
+                    self.assertEqual(installed_variant(), 'standard')
 
     def test_guide_has_only_two_drivers_and_preserves_servo_and_imu_reference(self):
         guide = hardware_guide(self.mini)

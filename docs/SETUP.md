@@ -251,6 +251,13 @@ curl http://127.0.0.1:8080/healthz
 sudo nginx -t
 ```
 
+A `502 Bad Gateway` means the Pi and Nginx are fine but the dashboard behind
+Nginx is not running. Read why with `sudo journalctl -u motionmodule.service -n 100 --no-pager`,
+then repair the installed software with `motionmodule install main`; your robot
+projects and Wi-Fi settings are kept. Do not add `--fresh`, which erases them.
+Robot code that fails to load, exits, or has not returned after 60 seconds no
+longer causes this: the dashboard opens in recovery mode and shows the reason.
+
 ### A deployment is rejected
 
 The selected folder must contain a top-level `robot.py` and may contain only

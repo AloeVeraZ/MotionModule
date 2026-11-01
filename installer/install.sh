@@ -74,6 +74,17 @@ fi
 say() { printf '\n\033[1;36m[MotionModule]\033[0m %s\n' "$*"; }
 fail() { printf '\n\033[1;31m[MotionModule ERROR]\033[0m %s\n' "$*" >&2; exit 1; }
 trap 'fail "Installation stopped on line $LINENO. Read the error above and rerun the same command."' ERR
+# A fresh install stops the dashboard before erasing the robot workspace. If
+# anything then fails, start it again: the launcher opens recovery mode with no
+# project, so the Update page stays reachable instead of nginx answering 502.
+dashboard_stopped=false
+restart_stopped_dashboard() {
+    local status=$?
+    if [ "$status" -ne 0 ] && [ "$dashboard_stopped" = true ]; then
+        sudo systemctl start motionmodule.service || true
+    fi
+}
+trap restart_stopped_dashboard EXIT
 
 [ "$(id -u)" -ne 0 ] || fail "Run this as the normal Pi user, without sudo."
 [ -n "$SOURCE_DIR" ] || fail "The installer source directory was not provided. Run the repository install.sh."
@@ -109,6 +120,8 @@ LEGACY_CONFIG_FILE="$CONFIG_DIR/config.toml"
 VARIANT_FILE="$CONFIG_DIR/variant"
 PREVIOUS_VARIANT="standard"
 [ ! -f "$VARIANT_FILE" ] || PREVIOUS_VARIANT="$(cat "$VARIANT_FILE")"
+# A damaged marker must not block the install that would repair the robot.
+case "$PREVIOUS_VARIANT" in standard|mini) ;; *) PREVIOUS_VARIANT="standard" ;; esac
 MODULE_VARIANT="${MODULE_VARIANT:-$PREVIOUS_VARIANT}"
 case "$MODULE_VARIANT" in standard|mini) ;; *) fail "Module variant must be standard or mini." ;; esac
 DEFAULT_HARDWARE="hardware.py"
@@ -239,6 +252,7 @@ touch "$release_dir/.complete"
 
 if [ "$FRESH_INSTALL" = true ]; then
     say "Resetting MotionModule robot programs and local configuration; preserving NetworkManager and hostname settings..."
+    dashboard_stopped=true
     sudo systemctl stop motionmodule.service
     rm -rf -- "$PROJECT_DIR" "$CONFIG_DIR"
 fi
@@ -469,11 +483,16 @@ cat > "$service_temp" <<EOF
 Description=MotionModule robot dashboard and runtime
 After=motionmodule-network.service
 Wants=motionmodule-network.service
+# Never give up restarting: once systemd stops trying, only SSH can bring the
+# dashboard back, and a passing fault at boot would become a lasting 502.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$PROJECT_DIR/active
+# The leading - lets the service start when the active project is missing, so
+# the launcher can open recovery mode instead of failing before it runs.
+WorkingDirectory=-$PROJECT_DIR/active
 Environment=PYTHONUNBUFFERED=1
 Environment=MOTIONMODULE_CONFIG=$CONFIG_FILE
 Environment=MOTIONMODULE_CONFIG_DIR=$CONFIG_DIR

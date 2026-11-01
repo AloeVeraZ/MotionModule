@@ -434,7 +434,13 @@ def installed_variant() -> str:
     if variant is None:
         folder = Path(os.environ.get("MOTIONMODULE_CONFIG_DIR", "~/.config/motionmodule")).expanduser()
         marker = folder / "variant"
-        variant = marker.read_text(encoding="utf-8").strip() if marker.is_file() else "standard"
+        # A marker damaged by a power cut must not stop the robot from starting.
+        # Both builds share channels 1-4, so standard is safe on either.
+        try:
+            variant = marker.read_text(encoding="utf-8").strip() if marker.is_file() else "standard"
+        except (OSError, UnicodeError):
+            variant = "standard"
+        return variant if variant in {"standard", "mini"} else "standard"
     if variant not in {"standard", "mini"}:
         raise ConfigurationError("MOTIONMODULE_VARIANT must be standard or mini")
     return variant
